@@ -1,15 +1,16 @@
 from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor
 from asyncio import get_running_loop
-import aiohttp
 
 from config import GetClients
 from models.Tracks import YandexTrack, YoutubeTrack
 from providers import PathProvider
 
+import aiohttp
 from yt_dlp import YoutubeDL
 
 class AsyncDownloaderInterface(ABC):
+    """Абстрактный класс для Downloader'ов"""
     
     @abstractmethod
     async def download_track(self, track: YandexTrack | YoutubeTrack) -> None:
@@ -21,7 +22,8 @@ class AsyncDownloaderInterface(ABC):
         
 
 class AsyncYandexDownloader(AsyncDownloaderInterface):
-    
+    """Класс для асинхронного скачивания треков и обложек с яндекса"""
+
     def __init__(self):
         self.path_provider = PathProvider()
         self.client = GetClients().get_yandex_client()
@@ -33,15 +35,6 @@ class AsyncYandexDownloader(AsyncDownloaderInterface):
         except:
             print("Тут должен быть дебаг")
 
-    async def get_stream_url(self, track: YandexTrack) -> str:
-        try:
-            track_info = await self.client.tracks(track.track_id)
-            download_info = await track_info[0].get_download_info_async()
-            url = await download_info[0].get_direct_link_async()
-            return url
-        except:
-            print("Тут должен быть дебаг")
-
     async def download_cover(self, track: YandexTrack | YoutubeTrack) -> None:
         try:
             track_info = await self.client.tracks(track.track_id)
@@ -50,6 +43,7 @@ class AsyncYandexDownloader(AsyncDownloaderInterface):
             print("Тут должен быть дебаг")
         
 class AsyncYoutubeDownloader(AsyncDownloaderInterface):
+    """Класс для асинхронного скачивания треков и обложек с ютуба"""
     
     def __init__(self):
         self.opts = {
@@ -65,12 +59,6 @@ class AsyncYoutubeDownloader(AsyncDownloaderInterface):
         adv_opts["skip_download"] = True
         self.yt = YoutubeDL(adv_opts)
         self.path_provider = PathProvider()
-
-    async def get_stream_url(self, track : YoutubeTrack) -> str:
-        ydl_opts = {**self.opts, "format": "m4a/bestaudio[ext=m4a]", "skip_download": True}
-        with ThreadPoolExecutor() as pool:
-            url = await get_running_loop().run_in_executor(pool, self.sync_stream,self.yt, track.track_id)
-        return url
     
     async def download_track(self, track: YoutubeTrack) -> None:
         self.opts["outtmpl"] = f"assets/music/{track.track_id}.%(ext)s"
@@ -100,13 +88,4 @@ class AsyncYoutubeDownloader(AsyncDownloaderInterface):
                     download=True
                 )
         except:
-            pass
-
-    @staticmethod
-    def sync_stream(yt, track_id: str) -> str:
-        info = yt.extract_info(
-                    f"https://www.youtube.com/watch?v={track_id}", download=False
-                )
-        url = info.get("url")
-        if url:
-            return url
+            print("Тут должен быть дебаг!!!")
