@@ -69,7 +69,7 @@ class GetClients:
         self.__youtube: YTMusic
         self.__lastfm: LastFMNetwork
         for name, client in zip(["__yandex", "__youtube", "__lastfm"], InitClients().return_clients()):
-            setattr(self, name, client)
+            setattr(self, "_GetClients" + name, client)
     
     def get_yandex_client(self) -> ClientAsync:
         return self.__yandex
