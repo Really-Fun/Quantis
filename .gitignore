@@ -1,0 +1,11 @@
+.venv
+.venv/*
+
+.idea
+.idea/*
+
+assets/music/*
+assets/covers/*
+__pycache__.py
+__pycache__
+__pycache__*
