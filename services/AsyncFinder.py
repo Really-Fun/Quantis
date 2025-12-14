@@ -21,7 +21,7 @@ class AsyncFinderInterface(ABC):
         ...
 
     @abstractmethod
-    async def get_track(self, id: int) -> Track:
+    async def get_track(self, id: int) -> Track | None:
         ...
 
 
@@ -44,8 +44,18 @@ class AsyncYandexFinder(AsyncFinderInterface):
         except yandex_music.exceptions.YandexMusicError:
             return []
 
-    async def get_track(self, id: int) -> Track:
-        pass
+    async def get_track(self, id: int) -> Track | None:
+        try:
+            track = await self.client.tracks(id)
+            return YandexTrack(track['id'],
+                                track["title"],
+                                " & ".join(artist["name"] for artist in track["artists"])
+                                )
+        except yandex_music.exceptions.YandexMusicError:
+            #TODO legger
+            return None
+        except yandex_music.exceptions.YandexMusicError:
+            return None
 
 
 class AsyncYoutubeFinder(AsyncFinderInterface):
@@ -54,10 +64,24 @@ class AsyncYoutubeFinder(AsyncFinderInterface):
         self.client = GetClients().get_youtube_client()
 
     async def get_tracks(self, title: str, value: int = 5) -> list[Track]:
-        return []
+        with ThreadPoolExecutor() as pool:
+            loop = get_running_loop()
+            tracks = await loop.run_in_executor(pool, self.sync_get_tracks, title, value)
+        return tracks
 
     async def get_track(self, id: int) -> Track:
         pass
+
+    @staticmethod
+    def sync_get_tracks(title: str, value: int = 5) -> list[Track]:
+        results = self.client.search(query=title, filter="songs", limit=value)
+        tracks = []
+        for track in results:
+            track_id = track.get("videoId")
+            track_title = track.get("title")
+            authors = " | ".join([author["name"] for author in track["artists"]])
+            tracks.append(YoutubeTrack(track_id=track_id, title=track_title, author=authors))
+        return tracks
 
 
 class AsyncFinder(AsyncFinderInterface):
