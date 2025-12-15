@@ -59,3 +59,21 @@ class AsyncYoutubeStreamer(AsyncStreamerInterface):
         url = info.get("url")
         if url:
             return url
+
+
+class AsyncStreamer(AsyncStreamerInterface):
+
+    def __init__(self):
+        self._async_yandex_streamer = AsyncYandexStreamer()
+        self._async_youtube_streamer = AsyncYoutubeStreamer()
+
+    async def get_stream_url(self, track: Track) -> str | None:
+        match track.source:
+            case "youtube":
+                url = await self._async_youtube_streamer.get_stream_url(track)
+                return url
+            case "yandex":
+                url = await self._async_yandex_streamer.get_stream_url(track)
+                return url
+            case _:
+                raise NameError("Неизвестный source  у трека")

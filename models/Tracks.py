@@ -6,8 +6,7 @@ class Track:
     title: str
     author: str
     source: str
-    _track_path: str | None = None
-    _cover_path: str | None = None
+    downloaded: bool
     
     def __repr__(self):
         return f"{self.source}:{self.track_id}"
