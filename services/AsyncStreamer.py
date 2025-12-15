@@ -1,12 +1,31 @@
 from abc import ABC, abstractmethod
 from asyncio import get_running_loop
 from concurrent.futures import ThreadPoolExecutor
+from functools import wraps
+from time import time
 
 from config import GetClients
 from models import Track
 
 from yt_dlp import YoutubeDL
 
+
+def url_cache(func):
+    urls = {}
+
+    @wraps(func)
+    async def wrapper(*args, **kwargs):
+        nonlocal urls
+        if len(args) == 1:
+            track = kwargs['track']
+        else:
+            track = args[1]
+        track_url = urls.get(track.track_id, None)
+        if (track_url is None) or (time() - track_url[1] >= 30 * 60):
+            track_url = urls[track.track_id] = (await func(*args, **kwargs), time())
+        return track_url[0]
+
+    return wrapper
 
 class AsyncStreamerInterface(ABC):
 
@@ -46,7 +65,6 @@ class AsyncYoutubeStreamer(AsyncStreamerInterface):
         self.yt = YoutubeDL(adv_opts)
 
     async def get_stream_url(self, track: Track) -> str:
-        ydl_opts = {**self.opts, "format": "m4a/bestaudio[ext=m4a]", "skip_download": True}
         with ThreadPoolExecutor() as pool:
             url = await get_running_loop().run_in_executor(pool, self.sync_stream, self.yt, track.track_id)
         return url
@@ -57,8 +75,7 @@ class AsyncYoutubeStreamer(AsyncStreamerInterface):
             f"https://www.youtube.com/watch?v={track_id}", download=False
         )
         url = info.get("url")
-        if url:
-            return url
+        return url
 
 
 class AsyncStreamer(AsyncStreamerInterface):
@@ -67,6 +84,7 @@ class AsyncStreamer(AsyncStreamerInterface):
         self._async_yandex_streamer = AsyncYandexStreamer()
         self._async_youtube_streamer = AsyncYoutubeStreamer()
 
+    @url_cache
     async def get_stream_url(self, track: Track) -> str | None:
         match track.source:
             case "youtube":
