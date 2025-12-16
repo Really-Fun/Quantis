@@ -16,6 +16,7 @@ class NeonMusic(QMainWindow):
         self.setMaximumWidth(1920)
 
         self.main_layout = QVBoxLayout(self)
+        self.main_layout.addStretch()
         self.main_layout.addWidget(PlayMenu(self))
 
 if __name__ == "__main__":
