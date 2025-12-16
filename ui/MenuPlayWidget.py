@@ -39,4 +39,12 @@ class PlayMenu(QWidget):
         btn.setAttribute(Qt.WA_TranslucentBackground)
         btn.setCursor(Qt.PointingHandCursor)
 
+        btn.setStyleSheet(f"""
+                QToolButton {{
+                    border-radius: {size // 2}px;
+                    border: 2px solid #3a3a3a;
+                    background: transparent;
+                    border: none;
+                }}""")
+
         return btn

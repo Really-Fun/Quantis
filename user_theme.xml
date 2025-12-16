@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<resources>
+
+    <!-- НЕОНОВЫЙ ГОЛУБОЙ (основной акцент) -->
+    <color name="primaryColor">#2ED1CE</color>
+    <color name="primaryLightColor">#9cf6ff</color>
+    <color name="primaryDarkColor">#2ED1CE</color>
+
+    <!-- НЕОН-РОЗОВО-ГОЛУБОЙ ГРАДИЕНТ (вторичный акцент) -->
+    <!-- Розовый — начало перелива -->
+    <color name="secondaryColor">#191616</color>
+    <!-- Голубой — конец перелива -->
+    <color name="secondaryLightColor">#000000</color>
+    <!-- Тёмный вариант микса -->
+    <color name="secondaryDarkColor">#0f0f0f</color>
+
+    <!-- ПРИЯТНО ЧЁРНЫЙ ФОН -->
+    <color name="backgroundColor">#000000</color>
+    <color name="surfaceColor">#0f0f0f</color>
+
+    <!-- ТЕКСТ -->
+    <color name="primaryTextColor">#ffffff</color>
+    <color name="secondaryTextColor">#d0d0d0</color>
+    <color name="disabledTextColor">#555555</color>
+
+    <!-- ПРОЧЕЕ -->
+    <color name="dividerColor">#333333</color>
+    <color name="errorColor">#ff5370</color>
+
+</resources>

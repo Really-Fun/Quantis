@@ -3,6 +3,8 @@ import asyncio
 
 from qasync import QEventLoop
 from PySide6.QtWidgets import QApplication
+from qt_material import apply_stylesheet
+
 from ui import NeonMusic
 
 
@@ -18,6 +20,8 @@ async def main():
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+    apply_stylesheet(app, "user_theme.xml")
+
     loop = QEventLoop(app)
     asyncio.set_event_loop(loop)
 
