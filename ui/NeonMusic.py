@@ -1,7 +1,7 @@
 """Главная страница"""
 import sys
 
-from PySide6.QtWidgets import QMainWindow, QApplication, QVBoxLayout
+from PySide6.QtWidgets import QMainWindow, QApplication, QVBoxLayout, QWidget
 
 from ui.MenuPlayWidget import PlayMenu
 
@@ -15,9 +15,12 @@ class NeonMusic(QMainWindow):
         self.setMaximumHeight(1080)
         self.setMaximumWidth(1920)
 
-        self.main_layout = QVBoxLayout(self)
+        central = QWidget()
+        self.main_layout = QVBoxLayout(central)
         self.main_layout.addStretch()
-        self.main_layout.addWidget(PlayMenu(self))
+        self.main_layout.addWidget(PlayMenu(central))
+
+        self.setCentralWidget(central)
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
