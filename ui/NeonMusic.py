@@ -4,6 +4,7 @@ import sys
 from PySide6.QtWidgets import QMainWindow, QApplication, QVBoxLayout, QWidget
 
 from ui.MenuPlayWidget import PlayMenu
+from ui.MenuTabsWidget import MenuTabs
 
 
 class NeonMusic(QMainWindow):
@@ -17,6 +18,7 @@ class NeonMusic(QMainWindow):
 
         central = QWidget()
         self.main_layout = QVBoxLayout(central)
+        self.main_layout.addWidget(MenuTabs(central))
         self.main_layout.addStretch()
         self.main_layout.addWidget(PlayMenu(central))
 
