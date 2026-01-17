@@ -1,6 +1,6 @@
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QIcon
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QToolButton
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QToolButton, QSlider
 
 
 class PlayMenu(QWidget):
@@ -20,13 +20,16 @@ class PlayMenu(QWidget):
         self.btn_repeat = self.create_button("assets/icons/repeat_playlist.png", 40)
         self.btn_download = self.create_button("assets/icons/download.png", 40)
 
+        self.volume_slider = QSlider(Qt.Horizontal)
+
         self.tool_layout.addWidget(self.btn_wave)
         self.tool_layout.addWidget(self.btn_repeat)
-        self.tool_layout.addStretch(45)
+        self.tool_layout.addWidget(self.volume_slider)
+        self.tool_layout.addStretch(40)
         self.tool_layout.addWidget(self.btn_prev)
         self.tool_layout.addWidget(self.btn_play)
         self.tool_layout.addWidget(self.btn_next)
-        self.tool_layout.addStretch(55)
+        self.tool_layout.addStretch(60)
         self.tool_layout.addWidget(self.btn_download)
 
     @staticmethod
