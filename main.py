@@ -20,7 +20,7 @@ async def main():
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    apply_stylesheet(app, "user_theme.xml")
+    apply_stylesheet(app, "user_theme.xml", invert_secondary=True)
 
     loop = QEventLoop(app)
     asyncio.set_event_loop(loop)

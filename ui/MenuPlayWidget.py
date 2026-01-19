@@ -21,6 +21,7 @@ class PlayMenu(QWidget):
         self.btn_download = self.create_button("assets/icons/download.png", 40)
 
         self.volume_slider = QSlider(Qt.Horizontal)
+        self.volume_slider.setRange(0, 100)
 
         self.tool_layout.addWidget(self.btn_wave)
         self.tool_layout.addWidget(self.btn_repeat)
