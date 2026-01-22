@@ -44,11 +44,27 @@ class Player(QObject):
             try:
                path = self.path_provider.get_track_path(track)
                loaded_track = self.vlc_instance.media_new(path)
+               self.current_loaded_track = loaded_track
             except FileNotFoundError:
                 print("DEBUG(Трек не скачан)")
         else:
             stream_url = await self.async_streamer.get_stream_url(track)
             loaded_track = self.vlc_instance.media_new(stream_url)
+            self.current_loaded_track = loaded_track
 
-        self.media_player.set_media(loaded_track)
+        self.media_player.set_media(self.current_loaded_track)
         self.media_player.play()
+
+
+    @property
+    def volume(self) -> int:
+        """Уровень громкости
+
+        Returns:
+            int: громкость типом int
+        """
+        return self.media_player.audio_get_volume()
+
+    @volume.setter
+    def volume(self, value):
+        self.media_player.audio_set_volume(value)

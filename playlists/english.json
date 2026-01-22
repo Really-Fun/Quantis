@@ -1,0 +1,26 @@
+{
+    "name": "Зима",
+    "id": 7,
+    "tracks": [
+        {
+            "id": "5972843",
+            "title": "Jingle Bells",
+            "author": "Frank Sinatra"
+        },
+        {
+            "id": "631110",
+            "title": "Last Christmas",
+            "author": "Wham!"
+        },
+        {
+            "id": "87346400",
+            "title": "Зима в сердце",
+            "author": "Моя Мишель"
+        },
+        {
+            "id": "28123289",
+            "title": "Зима-холода",
+            "author": "Андрей Губин"
+        }
+    ]
+}

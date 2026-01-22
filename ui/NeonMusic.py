@@ -16,7 +16,7 @@ from PySide6.QtCore import Qt
 
 from ui.MenuPlayWidget import PlayMenu
 from ui.MenuTabsWidget import MenuTabs
-
+from ui.Stack import Stack
 
 class NeonMusic(QMainWindow):
 
@@ -42,7 +42,7 @@ class NeonMusic(QMainWindow):
         self.dark_overlay = QFrame(central)
         self.dark_overlay.setStyleSheet("""
             QFrame {
-                background-color: rgba(0, 0, 0, 190);  /* 0–255 */
+                background-color: rgba(0, 0, 0, 150);  /* 0–255 */
             }
         """)
         self.dark_overlay.lower()
@@ -69,6 +69,9 @@ class NeonMusic(QMainWindow):
         right_layout = QVBoxLayout()
         right_layout.setContentsMargins(0, 0, 0, 0)
         right_layout.setSpacing(0)
+
+        self.stack = Stack()
+        right_layout.addWidget(self.stack)
 
         # тут будет основной контент
         right_layout.addStretch(1)

@@ -3,10 +3,11 @@ from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
     QPushButton,
-    QFrame, QToolButton, QHBoxLayout,
+    QFrame, QToolButton, QHBoxLayout, QStackedWidget,
 )
 from PySide6.QtGui import QIcon
 
+from ui.HomePage import HomePage
 
 
 class MenuTabs(QWidget):
@@ -19,6 +20,12 @@ class MenuTabs(QWidget):
         # ================= PANEL =================
         panel = QFrame(self)
         panel.setObjectName("navPanel")
+
+        self.stack = QStackedWidget()
+
+        self.home_page = HomePage()
+
+        self.stack.addWidget(self.home_page)
 
         panel_layout = QVBoxLayout(panel)
         panel_layout.setContentsMargins(12, 16, 12, 16)
@@ -37,6 +44,8 @@ class MenuTabs(QWidget):
             btn.setFixedHeight(44)
             btn.setCursor(Qt.PointingHandCursor)
             btn.setObjectName("navButton")
+
+        self.btn_home.clicked.connect(lambda : self.stack.setCurrentWidget(self.home_page))
 
         panel_layout.addWidget(self.btn_home)
         panel_layout.addWidget(self.btn_search)
@@ -60,10 +69,21 @@ class MenuTabs(QWidget):
         self.btn_account.setCursor(Qt.PointingHandCursor)
         self.btn_account.setObjectName("roundButton")
 
+        # ===== ACCOUNT BUTTON =====
+        self.btn_folder = QToolButton()
+        self.btn_folder.setIcon(QIcon("assets/icons/folder.png"))
+        self.btn_folder.setIconSize(QSize(40, 40))
+        self.btn_folder.setFixedSize(40, 40)
+        self.btn_folder.setAutoRaise(True)
+        self.btn_folder.setCursor(Qt.PointingHandCursor)
+        self.btn_folder.setObjectName("roundButton")
+
         panel_layout.addStretch(1)
         self.nizh_layout = QHBoxLayout()
         self.nizh_layout.addWidget(self.btn_settings)
-        self.nizh_layout.addStretch(1)
+        self.nizh_layout.addStretch()
+        self.nizh_layout.addWidget(self.btn_folder)
+        self.nizh_layout.addStretch()
         self.nizh_layout.addWidget(self.btn_account)
         panel_layout.addLayout(self.nizh_layout)
         root = QVBoxLayout(self)

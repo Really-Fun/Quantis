@@ -5,8 +5,8 @@ class Track:
     track_id: int | str
     title: str
     author: str
-    source: str
     downloaded: bool
+    source: str
     
     def __repr__(self):
         return f"{self.source}:{self.track_id}"
