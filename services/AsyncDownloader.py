@@ -38,9 +38,9 @@ class AsyncYandexDownloader(AsyncDownloaderInterface):
     async def download_cover(self, track: Track) -> None:
         try:
             track_info = await self.client.tracks(track.track_id)
-            await track_info[0].downloadCoverAsync(self.path_provider.get_cover_path(track))
-        except:
-            print("Тут должен быть дебаг")
+            await track_info[0].downloadCoverAsync(self.path_provider.get_cover_path(track), "200x200")
+        except BaseException as error:
+            print("Тут должен быть дебаг", error)
         
 class AsyncYoutubeDownloader(AsyncDownloaderInterface):
     """Класс для асинхронного скачивания треков и обложек с ютуба"""
@@ -107,6 +107,6 @@ class AsyncDownloader(AsyncDownloaderInterface):
     async def download_cover(self, track: Track) -> None:
         match track.source:
             case "yandex":
-                await self._yandex_downloader.download_track(track)
+                await self._yandex_downloader.download_cover(track)
             case "youtube":
-                await  self._youtube_downloader.download_track(track)
+                await  self._youtube_downloader.download_cover(track)
