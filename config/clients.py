@@ -15,7 +15,7 @@ USER: str = "NEON_APP"
 class InitClients:
     """Класс, инициализирующий клиенты:
     _yandex_client - Асинхронная версия яндекс музыки
-    _ytmsuci_client - синхронный клиент ютуб музыки
+    _ytmusic_client - синхронный клиент ютуб музыки
     _lastfm_client - синхронный клиент LastFm
     """
 

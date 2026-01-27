@@ -11,6 +11,8 @@ covers/*
 __pycache__.py
 __pycache__
 __pycache__*
+__pycache__/
+*.pyc
 
 playlists/*
 playlists/
