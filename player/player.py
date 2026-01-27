@@ -55,6 +55,13 @@ class Player(QObject):
         self.media_player.set_media(self.current_loaded_track)
         self.media_player.play()
 
+    def is_playing(self) -> bool:
+        """Возвращает флаг проигрывания трека
+
+        Returns:
+            bool:
+        """
+        return self.media_player.is_playing()
 
     @property
     def volume(self) -> int:

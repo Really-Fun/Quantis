@@ -34,6 +34,8 @@ class PlayMenu(QWidget):
         self.volume_slider.setRange(0, 100)
         self.volume_slider.valueChanged.connect(self.change_volume)
 
+        self.btn_play.clicked.connect(self.pause)
+        self.btn_prev.clicked.connect(self.play_previous_track)
         self.btn_next.clicked.connect(self.play_next_track)
         self.btn_download.clicked.connect(self.download_track)
 
@@ -48,12 +50,20 @@ class PlayMenu(QWidget):
         self.tool_layout.addWidget(self.btn_download)
 
     @asyncSlot()
+    async def pause(self):
+        self.player.pause()
+
+    @asyncSlot()
+    async def play_previous_track(self):
+        await self.player.play_track(self.current_playlist.move_previous_track())
+
+    @asyncSlot()
     async def play_next_track(self):
         await self.player.play_track(self.current_playlist.move_next_track())
 
     @asyncSlot()
     async def download_track(self):
-        await self.downloader.download_cover(self.current_playlist.get_current_track())
+        await self.downloader.download_track(self.current_playlist.get_current_track())
 
     def change_volume(self):
         self.player.volume = self.volume_slider.value()
