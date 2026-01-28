@@ -6,6 +6,7 @@ from qasync import asyncSlot
 from models import UserPlaylist
 from player import Player
 from services import AsyncDownloader
+from ui.MiniTrackWidget import MiniTrackWidget
 
 
 class PlayMenu(QWidget):
@@ -34,6 +35,8 @@ class PlayMenu(QWidget):
         self.volume_slider.setRange(0, 100)
         self.volume_slider.valueChanged.connect(self.change_volume)
 
+        self.mini_widget = MiniTrackWidget()
+
         self.btn_play.clicked.connect(self.pause)
         self.btn_prev.clicked.connect(self.play_previous_track)
         self.btn_next.clicked.connect(self.play_next_track)
@@ -42,11 +45,12 @@ class PlayMenu(QWidget):
         self.tool_layout.addWidget(self.btn_wave)
         self.tool_layout.addWidget(self.btn_repeat)
         self.tool_layout.addWidget(self.volume_slider)
-        self.tool_layout.addStretch(40)
+        self.tool_layout.addStretch(55)
         self.tool_layout.addWidget(self.btn_prev)
         self.tool_layout.addWidget(self.btn_play)
         self.tool_layout.addWidget(self.btn_next)
-        self.tool_layout.addStretch(60)
+        self.tool_layout.addStretch(45)
+        self.tool_layout.addWidget(self.mini_widget)
         self.tool_layout.addWidget(self.btn_download)
 
     @asyncSlot()
@@ -56,10 +60,12 @@ class PlayMenu(QWidget):
     @asyncSlot()
     async def play_previous_track(self):
         await self.player.play_track(self.current_playlist.move_previous_track())
+        #await self.mini_widget.update_widget(self.current_playlist.get_current_track())
 
     @asyncSlot()
     async def play_next_track(self):
         await self.player.play_track(self.current_playlist.move_next_track())
+        #await self.mini_widget.update_widget(self.current_playlist.get_current_track())
 
     @asyncSlot()
     async def download_track(self):
