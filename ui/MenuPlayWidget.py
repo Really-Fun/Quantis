@@ -3,9 +3,9 @@ from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QToolButton, QSlider
 from qasync import asyncSlot
 
-from models import UserPlaylist
 from player import Player
 from services import AsyncDownloader
+from providers import PlaylistManager
 from ui.MiniTrackWidget import MiniTrackWidget
 
 
@@ -20,7 +20,7 @@ class PlayMenu(QWidget):
         self.main_layout.addLayout(self.tool_layout)
 
         #main logic
-        self.current_playlist = UserPlaylist.get_playlist_from_path("playlists/english.json")
+        self.playlist_manager = PlaylistManager()
         self.player = Player()
         self.downloader = AsyncDownloader()
 
@@ -59,17 +59,17 @@ class PlayMenu(QWidget):
 
     @asyncSlot()
     async def play_previous_track(self):
-        await self.player.play_track(self.current_playlist.move_previous_track())
-        #await self.mini_widget.update_widget(self.current_playlist.get_current_track())
+        await self.player.play_track(self.playlist_manager.current_playlist.move_previous_track())
+        await self.mini_widget.update_widget(self.playlist_manager.current_playlist.get_current_track())
 
     @asyncSlot()
     async def play_next_track(self):
-        await self.player.play_track(self.current_playlist.move_next_track())
-        #await self.mini_widget.update_widget(self.current_playlist.get_current_track())
+        await self.player.play_track(self.playlist_manager.current_playlist.move_next_track())
+        await self.mini_widget.update_widget(self.playlist_manager.current_playlist.get_current_track())
 
     @asyncSlot()
     async def download_track(self):
-        await self.downloader.download_track(self.current_playlist.get_current_track())
+        await self.downloader.download_track(self.playlist_manager.current_playlist.get_current_track())
 
     def change_volume(self):
         self.player.volume = self.volume_slider.value()

@@ -1,16 +1,20 @@
 import colorsys
+import os
 
 from PySide6.QtGui import QColor
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel, QSizePolicy, QGraphicsDropShadowEffect
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QSizePolicy, QGraphicsDropShadowEffect
 from PySide6.QtCore import Qt, QTimer
 
 from models import UserPlaylist
+from providers import PlaylistManager
 from ui.PlaylistPreview import PlaylistPreview
 
 class HomePage(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+
+        self.playlist_manager = PlaylistManager()
 
         self.setObjectName("HomePage")
 
@@ -26,7 +30,15 @@ class HomePage(QWidget):
 
         self.main_layout.addWidget(self.main_label)
         self.main_layout.addStretch()
-        self.main_layout.addWidget(PlaylistPreview(UserPlaylist.get_playlist_from_path("playlists/english.json")))
+
+        self.playlist_layout = QHBoxLayout()
+
+        for playlist_path in os.listdir("playlists/"):
+            preview = PlaylistPreview(UserPlaylist.get_playlist_from_path(f"playlists/{playlist_path}"))
+            preview.clicked.connect(self.change_playlist)
+            self.playlist_layout.addWidget(preview)
+
+        self.main_layout.addLayout(self.playlist_layout)
 
         # ---------- базовый стиль ----------
         self.main_label.setStyleSheet("""
@@ -79,3 +91,7 @@ class HomePage(QWidget):
             background: transparent;
         }}
         """)
+
+    def change_playlist(self, playlist):
+        print(playlist)
+        self.playlist_manager.set_playlist(playlist)

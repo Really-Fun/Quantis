@@ -6,12 +6,14 @@ from PySide6.QtWidgets import (
     QSizePolicy
 )
 from PySide6.QtGui import QPixmap
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 
 from providers import PathProvider
 
 
 class PlaylistPreview(QWidget):
+    clicked = Signal(object)
+
     def __init__(self, playlist, parent=None):
         super().__init__(parent)
 
@@ -90,3 +92,7 @@ class PlaylistPreview(QWidget):
             background-color: #222;
         }
         """)
+
+    def mousePressEvent(self, event, /):
+        if event.button() == Qt.LeftButton:
+            self.clicked.emit(self.playlist)
