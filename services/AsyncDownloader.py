@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor
 from asyncio import get_running_loop
+from pathlib import Path
 
 from config import GetClients
 from models.Tracks import Track
@@ -61,21 +62,21 @@ class AsyncYoutubeDownloader(AsyncDownloaderInterface):
         self.path_provider = PathProvider()
     
     async def download_track(self, track: Track) -> None:
-        self.opts["outtmpl"] = f"assets/music/{track.track_id}.%(ext)s"
+        self.opts["outtmpl"] = f"music/{track.track_id}.%(ext)s"
         with ThreadPoolExecutor() as pool:
             await get_running_loop().run_in_executor(pool, self.sync_download, self.opts, track.track_id) 
         track.track_path = self.opts["outtmpl"]
             
     async def download_cover(self, track: Track) -> None:
         cover_url = f"https://img.youtube.com/vi/{track.track_id}/hqdefault.jpg"
-        track.cover_path = f"assets/covers/{track.track_id}.jpg"
-        
+        track.cover_path = f"covers/{track.track_id}.jpg"
+
         async with aiohttp.ClientSession() as session:
             async with session.get(cover_url) as response:
                 if response.status != 200:
-                    pass
+                    return
                 data = await response.read()
-                
+
                 with open(track.cover_path, "wb") as file:
                     file.write(data)
     
@@ -109,4 +110,4 @@ class AsyncDownloader(AsyncDownloaderInterface):
             case "yandex":
                 await self._yandex_downloader.download_cover(track)
             case "youtube":
-                await  self._youtube_downloader.download_cover(track)
+                await self._youtube_downloader.download_cover(track)

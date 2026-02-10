@@ -33,9 +33,11 @@ class AsyncYandexFinder(AsyncFinderInterface):
     async def get_tracks(self, title: str, value: int = 5) -> list[Track]:
         try:
             tracks = await self.client.search(title)
-            return [YandexTrack(track['id'],
+            return [YandexTrack(
+                                track["id"],
                                 track["title"],
-                                " & ".join(artist["name"] for artist in track["artists"])
+                                " & ".join(artist["name"] for artist in track["artists"]),
+                                downloaded=False
                                 )
                     for track in tracks["tracks"]["results"]]
         except yandex_music.exceptions.NetworkError:
@@ -46,15 +48,16 @@ class AsyncYandexFinder(AsyncFinderInterface):
 
     async def get_track(self, id: int) -> Track | None:
         try:
-            track = await self.client.tracks(id)
-            return YandexTrack(track['id'],
+            track_info = await self.client.tracks(id)
+            track = track_info[0]
+            return YandexTrack(
+                                track["id"],
                                 track["title"],
-                                " & ".join(artist["name"] for artist in track["artists"])
+                                " & ".join(artist["name"] for artist in track["artists"]),
+                                downloaded=False
                                 )
         except yandex_music.exceptions.YandexMusicError:
             #TODO legger
-            return None
-        except yandex_music.exceptions.YandexMusicError:
             return None
 
 
@@ -69,19 +72,37 @@ class AsyncYoutubeFinder(AsyncFinderInterface):
             tracks = await loop.run_in_executor(pool, self.sync_get_tracks, title, value)
         return tracks
 
-    async def get_track(self, id: int) -> Track:
-        pass
+    async def get_track(self, id: int) -> Track | None:
+        with ThreadPoolExecutor() as pool:
+            loop = get_running_loop()
+            track = await loop.run_in_executor(pool, self.sync_get_track, id)
+        return track
 
-    @staticmethod
-    def sync_get_tracks(title: str, value: int = 5) -> list[Track]:
+    def sync_get_tracks(self, title: str, value: int = 5) -> list[Track]:
         results = self.client.search(query=title, filter="songs", limit=value)
         tracks = []
         for track in results:
             track_id = track.get("videoId")
             track_title = track.get("title")
             authors = " | ".join([author["name"] for author in track["artists"]])
-            tracks.append(YoutubeTrack(track_id=track_id, title=track_title, author=authors))
+            tracks.append(
+                YoutubeTrack(
+                    track_id=track_id,
+                    title=track_title,
+                    author=authors,
+                    downloaded=False
+                )
+            )
         return tracks
+
+    def sync_get_track(self, id: int) -> Track | None:
+        results = self.client.get_song(id)
+        if not results:
+            return None
+        track_id = results.get("videoId") or id
+        track_title = results.get("title", "")
+        authors = " | ".join([author["name"] for author in results.get("artists", [])])
+        return YoutubeTrack(track_id=track_id, title=track_title, author=authors, downloaded=False)
 
 
 class AsyncFinder(AsyncFinderInterface):
@@ -96,4 +117,7 @@ class AsyncFinder(AsyncFinderInterface):
         return yandex_tracks + youtube_tracks
 
     async def get_track(self, id: int) -> Track:
-        pass
+        yandex_track = await self._yandex_finder.get_track(id)
+        if yandex_track is not None:
+            return yandex_track
+        return await self._youtube_finder.get_track(id)

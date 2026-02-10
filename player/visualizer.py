@@ -1,231 +1,176 @@
-import asyncio
-from qasync import asyncSlot
+"""Захват PCM-данных и FFT-анализ.
+
+Подключается к VLCEngine через audio-callbacks.
+Не управляет воспроизведением — только читает аудиопоток.
+
+Паттерн: Singleton
+Single Responsibility: только захват и анализ аудио.
+Dependency Inversion: зависит от VLCEngine, а не от Player.
+"""
+
+from __future__ import annotations
+
+import ctypes
+import threading
+from typing import Optional, Tuple
 
 import numpy as np
-import ctypes
 
-from vlc import Instance, MediaPlayer
-from typing import Optional, Tuple
-import threading
+from player.engine import VLCEngine
+
+# --- Константы ---
+DEFAULT_SAMPLE_RATE: int = 44100
+DEFAULT_CHANNELS: int = 2
+BYTES_PER_SAMPLE: int = 2
+DEFAULT_FFT_SIZE: int = 1024
+MIN_FFT_SIZE: int = 32
+BUFFER_DURATION_SEC: float = 2.0
+
 
 class VizualPlayer:
+    """Синглтон. Захватывает PCM из VLC и отдаёт FFT-спектр."""
 
-    _instance = None
+    _instance: VizualPlayer | None = None
 
-    def __new__(cls, *args, **kwargs):
+    def __new__(cls, *args, **kwargs) -> VizualPlayer:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
 
     def __init__(
         self,
-        instance: Optional[Instance] = None,
-        media_player: Optional[MediaPlayer] = None,
-        sample_rate: int = 44100,
-        channels: int = 2,
-        samples_per_read: int = 1024,
-    ):
-        self.sample_rate = int(sample_rate)
-        self.channels = int(channels)
-        self.bytes_per_sample = 2
-        self.samples_per_read = int(samples_per_read)
+        sample_rate: int = DEFAULT_SAMPLE_RATE,
+        channels: int = DEFAULT_CHANNELS,
+        samples_per_read: int = DEFAULT_FFT_SIZE,
+    ) -> None:
+        if getattr(self, "_initialized", False):
+            return
+
+        self._sample_rate = int(sample_rate)
+        self._channels = int(channels)
+        self._samples_per_read = int(samples_per_read)
 
         self._buffer = bytearray()
         self._lock = threading.Lock()
 
-        self._cb_play = None
+        self._engine = VLCEngine()
         self._opaque = ctypes.c_void_p(0)
 
-
-        if media_player is not None:
-            self.player = media_player
-        else:
-            if instance is None:
-                raise ValueError("Either 'media_player' or 'instance' must be provided")
-            self.player = instance.media_player_new()
-
-        CMPFUNC = ctypes.CFUNCTYPE(
+        # C-callback должен жить столько же, сколько объект — сохраняем ссылку.
+        self._cb_play = ctypes.CFUNCTYPE(
             None, ctypes.c_void_p, ctypes.c_void_p, ctypes.c_uint, ctypes.c_int64
-        )
-        self._cb_play = CMPFUNC(self._play_callback)
+        )(self._play_callback)
 
-        try:
-            self.player.audio_set_format("S16N", self.sample_rate, self.channels)
-            print("audio_set_format ok: %s Hz, %s ch", self.sample_rate, self.channels)
-        except Exception as e:
-            print("audio_set_format failed: %s", e)
+        self._attach()
+        self._initialized = True
 
-        # Регистрируем callbacks (play, pause, resume, flush, drain, opaque)
-        try:
-            self.player.audio_set_callbacks(
-                self._cb_play, None, None, None, None, self._opaque
-            )
-            print("audio callbacks registered")
-        except Exception as e:
-            print("audio_set_callbacks failed: %s", e)
+    # --- Public API ---
 
-    # Позволяет прикрепиться к другому media_player после создания
-    def _attach_media_player(self, media_player: MediaPlayer):
-        with self._lock:
-            # Попробуем удалить callbacks от старого плеера (если возможно)
-            try:
-                if self.player is not None:
-                    # Снять колбэки — установить None (некоторые binding-версии поддерживают)
-                    try:
-                        self.player.audio_set_callbacks(None, None, None, None, None, self._opaque)
-                    except Exception:
-                        pass
-            except Exception:
-                pass
-
-            self.player = media_player
-            # установить формат и callbacks на новом плеере
-            try:
-                self.player.audio_set_format("S16N", self.sample_rate, self.channels)
-            except Exception:
-                pass
-            try:
-                self.player.audio_set_callbacks(
-                    self._cb_play, None, None, None, None, self._opaque
-                )
-            except Exception:
-                pass
-
-    @asyncSlot()
-    async def set_media(self, some_track):
-        self.player.set_media(some_track)
-        await asyncio.sleep(delay=1.25)
-        self.player.play()
-
-    # --- VLC audio-play callback ---
-    def _play_callback(self, opaque, samples_ptr, count, pts):
-        """
-        Callback от VLC: копируем указанный блок PCM в внутренний байтовый буфер.
-        count — число сэмплов (frames) (по каналам).
-        """
-        try:
-            if not samples_ptr:
-                return
-            cnt = int(count)
-            if cnt <= 0:
-                return
-            size_bytes = cnt * self.channels * self.bytes_per_sample
-            # безопасно читаем память
-            raw = ctypes.string_at(samples_ptr, size_bytes)
-            if not raw:
-                return
-            with self._lock:
-                self._buffer.extend(raw)
-                # ограничение буфера (например, 2 секунды)
-                max_size = int(self.sample_rate * self.channels * self.bytes_per_sample * 2)
-                if len(self._buffer) > max_size:
-                    # сохраняем только последние max_size байт
-                    self._buffer = self._buffer[-max_size:]
-        except Exception as e:
-            # В callback нельзя кидать исключения наружу — логируем
-            try:
-                print("Exception in audio callback: %s", e)
-            except Exception:
-                pass
-
-    # --- Получение спектра ---
     def get_fft(self) -> Optional[Tuple[np.ndarray, np.ndarray]]:
-        """
-        Возвращает (freqs, magnitudes) или None, если данных недостаточно.
-        Работает с тем, что в буфере может быть произвольное количество байт.
-        """
-        with self._lock:
-            if len(self._buffer) == 0:
-                return None
-            # копируем последние байты, чтобы не держать lock во время numpy-операций
-            buf = bytes(self._buffer)
-
-        # Конвертируем байты в int16
-        try:
-            arr = np.frombuffer(buf, dtype=np.int16)
-        except Exception:
+        """Возвращает (freqs, magnitudes) или None, если данных недостаточно."""
+        buf = self._snapshot_buffer()
+        if buf is None:
             return None
 
-        # Если стерео, берём один канал (левый)
-        if self.channels == 2:
-            if arr.size < 2:
-                return None
-            samples = arr[::2]
-        else:
-            samples = arr
-
-        n_samples = samples.size
-        if n_samples < 32:
-            # слишком мало данных для FFT
+        samples = self._pcm_to_mono(buf)
+        if samples is None or samples.size < MIN_FFT_SIZE:
             return None
 
-        # Выбираем длину для FFT: prefer samples_per_read, иначе ближайшее меньшее значение
-        n_fft = min(self.samples_per_read, n_samples)
-        # сделать n_fft чётным и >= 32
-        if n_fft < 32:
-            return None
-        if n_fft % 2 != 0:
-            n_fft -= 1
-        if n_fft < 32:
+        n_fft = self._pick_fft_size(samples.size)
+        if n_fft is None:
             return None
 
-        # Берём последние n_fft сэмплов
         windowed = samples[-n_fft:] * np.hanning(n_fft)
+        magnitudes = np.abs(np.fft.rfft(windowed))
+        freqs = np.fft.rfftfreq(n_fft, d=1.0 / self._sample_rate)
 
-        fft_vals = np.fft.rfft(windowed)
-        magnitudes = np.abs(fft_vals)
-
-        freqs = np.fft.rfftfreq(n_fft, d=1.0 / self.sample_rate)
-
-        # Нормализуем магнitudes (чтобы не было очень больших чисел) — optional
         mag_max = magnitudes.max()
         if mag_max > 0:
             magnitudes = magnitudes / mag_max
 
         return freqs, magnitudes
 
-    def clear_buffer(self):
+    def clear_buffer(self) -> None:
         """Очищает внутренний буфер аудио-данных."""
         with self._lock:
             self._buffer = bytearray()
 
-    def detach(self):
-        """Отключает callbacks от media_player (если поддерживается)."""
-        try:
-            if self.player is not None:
-                self.player.audio_set_callbacks(None, None, None, None, None, self._opaque)
-                print("audio callbacks detached")
-        except Exception:
-            print("Failed to detach callbacks")
-
-    # Утилиты
     def available_bytes(self) -> int:
         with self._lock:
             return len(self._buffer)
 
+    def detach(self) -> None:
+        """Отключает callbacks от analysis_player."""
+        try:
+            self._engine.analysis_player.audio_set_callbacks(
+                None, None, None, None, None, self._opaque
+            )
+        except Exception:
+            pass
 
-# Пример использования (в основном модуле):
-if __name__ == "__main__":
-    import time
+    # --- VLC callback ---
 
-    inst = Instance()
-    mp = inst.media_player_new()
-    # Замените на реальный локальный файл или URL, который VLC умеет проигрывать.
-    media = inst.media_new("example.mp3")  # <- path or url
-    mp.set_media(media)
+    def _play_callback(self, opaque, samples_ptr, count, pts) -> None:
+        """Callback от VLC: копирует блок PCM во внутренний буфер."""
+        try:
+            if not samples_ptr:
+                return
+            cnt = int(count)
+            if cnt <= 0:
+                return
 
-    viz = VizualPlayer(media_player=mp)
-    print("Starting playback...")
-    mp.play()
-    # Даем немного времени на буферизацию и колбэки
-    for i in range(100):
-        time.sleep(0.1)
-        res = viz.get_fft()
-        if res is not None:
-            freqs, mags = res
-            print("FFT length:", len(freqs))
-            break
-    else:
-        print("No FFT data received. Проверьте, что media успешно проигрывается и callback вызывается.")
-    mp.stop()
-    viz.detach()
+            size_bytes = cnt * self._channels * BYTES_PER_SAMPLE
+            raw = ctypes.string_at(samples_ptr, size_bytes)
+            if not raw:
+                return
+
+            max_size = int(
+                self._sample_rate * self._channels * BYTES_PER_SAMPLE * BUFFER_DURATION_SEC
+            )
+            with self._lock:
+                self._buffer.extend(raw)
+                if len(self._buffer) > max_size:
+                    self._buffer = self._buffer[-max_size:]
+        except Exception:
+            pass
+
+    # --- Internal helpers ---
+
+    def _attach(self) -> None:
+        """Регистрирует audio-callbacks на engine.analysis_player."""
+        mp = self._engine.analysis_player
+        try:
+            mp.audio_set_format("S16N", self._sample_rate, self._channels)
+        except Exception:
+            pass
+        try:
+            mp.audio_set_callbacks(
+                self._cb_play, None, None, None, None, self._opaque
+            )
+        except Exception:
+            pass
+
+    def _snapshot_buffer(self) -> Optional[bytes]:
+        with self._lock:
+            if len(self._buffer) == 0:
+                return None
+            return bytes(self._buffer)
+
+    def _pcm_to_mono(self, buf: bytes) -> Optional[np.ndarray]:
+        try:
+            arr = np.frombuffer(buf, dtype=np.int16)
+        except Exception:
+            return None
+        if self._channels == 2:
+            if arr.size < 2:
+                return None
+            return arr[::2]
+        return arr
+
+    def _pick_fft_size(self, n_samples: int) -> Optional[int]:
+        n_fft = min(self._samples_per_read, n_samples)
+        if n_fft < MIN_FFT_SIZE:
+            return None
+        if n_fft % 2 != 0:
+            n_fft -= 1
+        return n_fft if n_fft >= MIN_FFT_SIZE else None

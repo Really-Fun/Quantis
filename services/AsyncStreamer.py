@@ -57,25 +57,24 @@ class AsyncYoutubeStreamer(AsyncStreamerInterface):
             "extract_flat": False,
             "no_warnings": True,
             "nocheckcertificate": True,
-            "format": "bestaudio",
             "postprocessors": [],
+            "format": "m4a/bestaudio[ext=m4a]",
         }
         adv_opts = self.opts
         adv_opts["skip_download"] = True
         self.yt = YoutubeDL(adv_opts)
 
-    async def get_stream_url(self, track: Track) -> str:
+    async def get_stream_url(self, track: Track) -> str | None:
         with ThreadPoolExecutor() as pool:
             url = await get_running_loop().run_in_executor(pool, self.sync_stream, self.yt, track.track_id)
         return url
 
     @staticmethod
-    def sync_stream(yt, track_id: str) -> str:
+    def sync_stream(yt, track_id: str) -> str | None:
         info = yt.extract_info(
             f"https://www.youtube.com/watch?v={track_id}", download=False
         )
-        url = info.get("url")
-        return url
+        return info.get("url")
 
 
 class AsyncStreamer(AsyncStreamerInterface):
@@ -88,10 +87,8 @@ class AsyncStreamer(AsyncStreamerInterface):
     async def get_stream_url(self, track: Track) -> str | None:
         match track.source:
             case "youtube":
-                url = await self._async_youtube_streamer.get_stream_url(track)
-                return url
+                return await self._async_youtube_streamer.get_stream_url(track)
             case "yandex":
-                url = await self._async_yandex_streamer.get_stream_url(track)
-                return url
+                return await self._async_yandex_streamer.get_stream_url(track)
             case _:
-                raise NameError("Неизвестный source  у трека")
+                raise NameError("Неизвестный source у трека")

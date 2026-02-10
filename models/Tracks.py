@@ -1,12 +1,26 @@
+"""Модель трека
+
+Треки могут быть двух типов:
+1. Треки Яндекса
+2. Треки YouTube
+
+Классы:
+1. Track - абстрактный класс трека
+2. YandexTrack - класс трека Яндекса
+3. YoutubeTrack - класс трека YouTube
+"""
+
 from dataclasses import dataclass
 
 @dataclass
 class Track:
+    """Абстрактный класс трека"""
+    __slots__ = ("track_id", "title", "author", "downloaded", "source")
     track_id: int | str
     title: str
     author: str
-    downloaded: bool
-    source: str
+    downloaded: bool = False
+    source: str = ""
     
     def __repr__(self):
         return f"{self.source}:{self.track_id}"
@@ -27,8 +41,10 @@ class Track:
     
 @dataclass
 class YandexTrack(Track):
+    """Класс трека Яндекса"""
     source: str = "yandex"
     
 @dataclass
 class YoutubeTrack(Track):
+    """Класс трека YouTube"""
     source: str = "youtube"
