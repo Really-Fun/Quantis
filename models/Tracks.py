@@ -15,7 +15,6 @@ from dataclasses import dataclass
 @dataclass
 class Track:
     """Абстрактный класс трека"""
-    __slots__ = ("track_id", "title", "author", "downloaded", "source")
     track_id: int | str
     title: str
     author: str
