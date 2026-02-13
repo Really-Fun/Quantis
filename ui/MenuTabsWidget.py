@@ -1,3 +1,6 @@
+import sys
+from pathlib import Path
+
 from PySide6.QtCore import Qt, QSize, Signal
 from PySide6.QtWidgets import (
     QWidget,
@@ -5,18 +8,21 @@ from PySide6.QtWidgets import (
     QPushButton,
     QFrame, QToolButton, QHBoxLayout,
 )
-from PySide6.QtGui import QIcon
+from PySide6.QtGui import QIcon, QDesktopServices
+from PySide6.QtCore import QUrl
 
 
 class MenuTabs(QWidget):
-    """Left navigation panel. Emits page_changed(int) when a nav button is clicked."""
+    """Левая панель навигации. Сигнал ``page_changed(int)`` при клике."""
 
     page_changed = Signal(int)
 
-    # Page indices (must match Stack)
+    # Индексы страниц (должны совпадать со Stack)
     HOME = 0
     SEARCH = 1
     LIBRARY = 2
+    SETTINGS = 3
+    USER = 4
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -24,7 +30,7 @@ class MenuTabs(QWidget):
         self.setFixedWidth(88)
         self.setAttribute(Qt.WA_TranslucentBackground)
 
-        # ================= PANEL =================
+        # ================= ПАНЕЛЬ =================
         panel = QFrame(self)
         panel.setObjectName("navPanel")
 
@@ -33,7 +39,7 @@ class MenuTabs(QWidget):
         panel_layout.setSpacing(10)
         panel_layout.setAlignment(Qt.AlignTop)
 
-        # --- nav buttons ---
+        # --- кнопки навигации ---
         self.btn_home = self._make_nav_button("🏠")
         self.btn_search = self._make_nav_button("🔍")
         self.btn_library = self._make_nav_button("🎵")
@@ -48,10 +54,13 @@ class MenuTabs(QWidget):
         panel_layout.addWidget(self.btn_search)
         panel_layout.addWidget(self.btn_library)
 
-        # --- bottom tool buttons ---
+        # --- нижние кнопки инструментов ---
         self.btn_settings = self._make_tool_button("assets/icons/setting.png")
+        self.btn_settings.clicked.connect(lambda: self._switch(self.SETTINGS))
         self.btn_folder = self._make_tool_button("assets/icons/folder.png")
+        self.btn_folder.clicked.connect(self._open_app_folder)
         self.btn_account = self._make_tool_button("assets/icons/account.png")
+        self.btn_account.clicked.connect(lambda: self._switch(self.USER))
 
         panel_layout.addStretch(1)
 
@@ -69,7 +78,7 @@ class MenuTabs(QWidget):
 
         self._nav_buttons = [self.btn_home, self.btn_search, self.btn_library]
 
-        # ================= STYLE =================
+        # ================= СТИЛИ =================
         self.setStyleSheet("""
             QFrame#navPanel {
                 background: rgba(0, 0, 0, 160);
@@ -106,14 +115,14 @@ class MenuTabs(QWidget):
             }
         """)
 
-    # --- switching ---
+    # --- переключение ---
 
     def _switch(self, index: int) -> None:
         for i, btn in enumerate(self._nav_buttons):
             btn.setChecked(i == index)
         self.page_changed.emit(index)
 
-    # --- factories ---
+    # --- фабрики виджетов ---
 
     @staticmethod
     def _make_nav_button(text: str) -> QPushButton:
@@ -134,3 +143,12 @@ class MenuTabs(QWidget):
         btn.setCursor(Qt.PointingHandCursor)
         btn.setObjectName("roundButton")
         return btn
+
+    @staticmethod
+    def _open_app_folder() -> None:
+        """Открывает папку приложения (рядом с music/covers/assets)."""
+        if getattr(sys, "frozen", False):
+            app_dir = Path(sys.executable).resolve().parent
+        else:
+            app_dir = Path(__file__).resolve().parent.parent
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(app_dir)))

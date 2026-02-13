@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLineEdit,
-    QLabel, QSizePolicy, QScrollArea, QFrame,
+    QLabel, QMessageBox, QSizePolicy, QScrollArea, QFrame, QInputDialog,
 )
 from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtCore import Qt, QTimeLine, QRectF, Signal
@@ -9,6 +9,7 @@ from qasync import asyncSlot
 from services import AsyncFinder, AsyncDownloader
 from player import Player
 from ui.TrackCard import TrackCard
+from utils import add_track_to_user_playlist, list_user_playlist_names
 
 _LINE_COLOR = QColor(0, 220, 255)
 _LINE_WIDTH = 2
@@ -184,11 +185,52 @@ class SearchPage(QWidget):
             card = TrackCard(track, index=i)
             card.play_requested.connect(self._play_track)
             card.download_requested.connect(self._download_track)
+            card.add_to_playlist_requested.connect(self._add_track_to_playlist)
             await card.load_cover()
             self._results_layout.insertWidget(self._results_layout.count() - 1, card)
 
     @asyncSlot(object)
     async def _play_track(self, track) -> None:
-        await self._player.play_track(track)    @asyncSlot(object)
+        await self._player.play_track(track)
+
+    @asyncSlot(object)
     async def _download_track(self, track) -> None:
         await self._downloader.download_track(track)
+
+    @asyncSlot(object)
+    async def _add_track_to_playlist(self, track) -> None:
+        names = list_user_playlist_names()
+        if not names:
+            QMessageBox.information(
+                self,
+                "Нет плейлистов",
+                "Сначала создайте пользовательский плейлист на главной странице.",
+            )
+            return
+
+        selected, ok = QInputDialog.getItem(
+            self,
+            "Добавить в плейлист",
+            "Выберите плейлист:",
+            names,
+            0,
+            False,
+        )
+        if not ok:
+            return
+
+        try:
+            added = add_track_to_user_playlist(
+                selected,
+                track_id=track.track_id,
+                title=track.title,
+                author=track.author,
+            )
+        except Exception:
+            QMessageBox.warning(self, "Ошибка", "Не удалось добавить трек в плейлист.")
+            return
+
+        if added:
+            QMessageBox.information(self, "Готово", f"Трек добавлен в '{selected}'.")
+        else:
+            QMessageBox.information(self, "Уже есть", f"Трек уже находится в '{selected}'.")

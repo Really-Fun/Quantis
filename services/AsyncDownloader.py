@@ -1,6 +1,9 @@
 from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor
 from asyncio import get_running_loop
+from typing import Callable, TypeVar, Any
+import functools
+import logging
 from pathlib import Path
 
 from config import GetClients
@@ -9,6 +12,26 @@ from providers import PathProvider
 
 import aiohttp
 from yt_dlp import YoutubeDL
+
+F = TypeVar('F', bound=Callable[..., Any])
+logger = logging.getLogger(__name__)
+
+def log(method: F) -> F:
+    logger = logging.getLogger(method.__module__)
+
+    @functools.wraps(method)
+    def wrapper(*args: Any, **kwargs: Any) -> Any:  # noqa: ANN401:
+        logger.debug(f'Entering: {method.__name__}')
+
+        result = method(*args, **kwargs)
+        logger.debug(result)
+
+        logger.debug(f'Exiting: {method.__name__}')
+
+        return result
+
+    return wrapper
+
 
 class AsyncDownloaderInterface(ABC):
     """Абстрактный класс для Downloader'ов"""
@@ -33,15 +56,15 @@ class AsyncYandexDownloader(AsyncDownloaderInterface):
         try:
             track_info = await self.client.tracks(track.track_id)
             await track_info[0].download_async(self.path_provider.get_track_path(track))
-        except:
-            print("Тут должен быть дебаг")
+        except Exception:
+            logger.exception("Не удалось скачать трек с Яндекс.Музыки: %s", track)
 
     async def download_cover(self, track: Track) -> None:
         try:
             track_info = await self.client.tracks(track.track_id)
             await track_info[0].downloadCoverAsync(self.path_provider.get_cover_path(track), "200x200")
-        except BaseException as error:
-            print("Тут должен быть дебаг", error)
+        except Exception:
+            logger.exception("Не удалось скачать обложку с Яндекс.Музыки: %s", track)
         
 class AsyncYoutubeDownloader(AsyncDownloaderInterface):
     """Класс для асинхронного скачивания треков и обложек с ютуба"""
@@ -62,14 +85,15 @@ class AsyncYoutubeDownloader(AsyncDownloaderInterface):
         self.path_provider = PathProvider()
     
     async def download_track(self, track: Track) -> None:
-        self.opts["outtmpl"] = f"music/{track.track_id}.%(ext)s"
+        # Формируем единый шаблон имени файла для корректного чтения плейлистов.
+        self.opts["outtmpl"] = self.path_provider.get_track_path(track, extension="%(ext)s")
         with ThreadPoolExecutor() as pool:
-            await get_running_loop().run_in_executor(pool, self.sync_download, self.opts, track.track_id) 
+            await get_running_loop().run_in_executor(pool, self.sync_download, self.opts, track.track_id)
         track.track_path = self.opts["outtmpl"]
             
     async def download_cover(self, track: Track) -> None:
         cover_url = f"https://img.youtube.com/vi/{track.track_id}/hqdefault.jpg"
-        track.cover_path = f"covers/{track.track_id}.jpg"
+        track.cover_path = self.path_provider.get_cover_path(track)
 
         async with aiohttp.ClientSession() as session:
             async with session.get(cover_url) as response:
@@ -77,6 +101,7 @@ class AsyncYoutubeDownloader(AsyncDownloaderInterface):
                     return
                 data = await response.read()
 
+                Path(track.cover_path).parent.mkdir(parents=True, exist_ok=True)
                 with open(track.cover_path, "wb") as file:
                     file.write(data)
     
@@ -88,8 +113,8 @@ class AsyncYoutubeDownloader(AsyncDownloaderInterface):
                     f"https://youtube.com/watch?v={track_id}",
                     download=True
                 )
-        except:
-            print("Тут должен быть дебаг!!!")
+        except Exception:
+            logger.exception("Не удалось скачать трек с YouTube: %s", track_id)
 
 
 class AsyncDownloader(AsyncDownloaderInterface):

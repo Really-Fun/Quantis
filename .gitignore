@@ -1,18 +1,43 @@
-.venv
-.venv/*
+# Виртуальное окружение
+.venv/
+.env
+.env.*
 
-.idea
-.idea/*
+# IDE и редакторы
+.idea/
+.vscode/
 
-assets/music/*
-assets/covers/*
+# Python кэш и инструменты
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Артефакты runtime
+*.log
+*.pid
+
+# Пользовательские данные
+music/
+covers/
 music/*
 covers/*
-__pycache__.py
-__pycache__
-__pycache__*
-__pycache__/
-*.pyc
+database/*.db
+database/*.sqlite
+database/*.sqlite3
 
-playlists/*
+# Legacy asset output dirs (if used)
+
+
+# Local playlists storage
 playlists/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+assets/backgrounds/*
+assets/icons/*

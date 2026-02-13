@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 
 from PySide6.QtWidgets import (
-    QWidget, QLabel, QVBoxLayout, QSizePolicy, QGraphicsDropShadowEffect,
+    QWidget, QLabel, QVBoxLayout, QSizePolicy, QGraphicsDropShadowEffect, QMenu,
 )
 from PySide6.QtGui import (
     QPixmap, QColor, QPainter, QPen, QLinearGradient, QBrush, QFont, QPainterPath,
@@ -25,6 +25,8 @@ class PlaylistPreview(QWidget):
     """Карточка плейлиста для главной страницы."""
 
     clicked = Signal(object)
+    rename_requested = Signal(object)
+    delete_requested = Signal(object)
 
     def __init__(self, playlist, parent=None):
         super().__init__(parent)
@@ -62,7 +64,7 @@ class PlaylistPreview(QWidget):
 
         # ── count ──
         count = len(playlist.tracks.values) if playlist else 0
-        self._count = QLabel(get_ru_words_for_number(count))
+        self._count = QLabel(self._build_subtitle(count))
         self._count.setAlignment(Qt.AlignLeft)
         self._count.setStyleSheet(
             "color: rgba(255,255,255,90); font-size: 11px; background: transparent;"
@@ -84,6 +86,31 @@ class PlaylistPreview(QWidget):
         self._tl.valueChanged.connect(self._anim_tick)
         self._anim_from = 0.0
         self._anim_to = 0.0
+
+    def _build_subtitle(self, track_count: int) -> str:
+        """Собирает подпись карточки плейлиста."""
+        base = get_ru_words_for_number(track_count)
+        if not self._playlist:
+            return base
+        total_listens = sum(max(0, int(getattr(t, "listen_count", 0))) for t in self._playlist.tracks.values)
+        if total_listens <= 0:
+            return base
+        return f"{base} · {self._format_listens(total_listens)}"
+
+    @staticmethod
+    def _format_listens(listens: int) -> str:
+        """Возвращает текст с корректным склонением прослушиваний."""
+        tail_100 = listens % 100
+        tail_10 = listens % 10
+        if 11 <= tail_100 <= 14:
+            word = "прослушиваний"
+        elif tail_10 == 1:
+            word = "прослушивание"
+        elif 2 <= tail_10 <= 4:
+            word = "прослушивания"
+        else:
+            word = "прослушиваний"
+        return f"{listens} {word}"
 
     # ── cover loading ──
 
@@ -219,4 +246,17 @@ class PlaylistPreview(QWidget):
     def mousePressEvent(self, event) -> None:
         if event.button() == Qt.LeftButton and self._playlist:
             self.clicked.emit(self._playlist)
+        elif event.button() == Qt.RightButton and self._playlist:
+            self._show_context_menu(event.globalPos())
         super().mousePressEvent(event)
+
+    def _show_context_menu(self, global_pos) -> None:
+        """Показывает контекстное меню карточки плейлиста."""
+        menu = QMenu(self)
+        rename_action = menu.addAction("Переименовать")
+        delete_action = menu.addAction("Удалить")
+        chosen = menu.exec(global_pos)
+        if chosen == rename_action:
+            self.rename_requested.emit(self._playlist)
+        elif chosen == delete_action:
+            self.delete_requested.emit(self._playlist)

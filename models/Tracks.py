@@ -20,6 +20,7 @@ class Track:
     author: str
     downloaded: bool = False
     source: str = ""
+    listen_count: int = 0
     
     def __repr__(self):
         return f"{self.source}:{self.track_id}"

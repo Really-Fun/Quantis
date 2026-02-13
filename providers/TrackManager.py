@@ -1,6 +1,7 @@
 from models import YandexTrack, YoutubeTrack
 from pathlib import Path
 
+
 class TrackManager:
 
     _instance = None
@@ -22,6 +23,8 @@ class TrackManager:
 
     def _load_ids(self):
         ids = set()
+        if not self.music_dir.exists():
+            return ids
         for track_file in self.music_dir.iterdir():
             if track_file.suffix in (".mp3", ".m4a"):
                 track_id = track_file.stem.split("_")[0]

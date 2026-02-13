@@ -3,11 +3,14 @@ from asyncio import get_running_loop
 from concurrent.futures import ThreadPoolExecutor
 from functools import wraps
 from time import time
+import logging
 
 from config import GetClients
 from models import Track
 
 from yt_dlp import YoutubeDL
+
+logger = logging.getLogger(__name__)
 
 
 def url_cache(func):
@@ -39,14 +42,14 @@ class AsyncYandexStreamer(AsyncStreamerInterface):
         self.client = GetClients().get_yandex_client()
 
     async def get_stream_url(self, track: Track) -> str | None:
-            try:
-                track_info = await self.client.tracks(track.track_id)
-                download_info = await track_info[0].get_download_info_async()
-                url = await download_info[0].get_direct_link_async()
-                return url
-            except:
-                print("Тут должен быть дебаг")
-                return None
+        try:
+            track_info = await self.client.tracks(track.track_id)
+            download_info = await track_info[0].get_download_info_async()
+            url = await download_info[0].get_direct_link_async()
+            return url
+        except Exception:
+            logger.exception("Не удалось получить URL потока Яндекс.Музыки: %s", track)
+            return None
 
 class AsyncYoutubeStreamer(AsyncStreamerInterface):
 
@@ -71,10 +74,14 @@ class AsyncYoutubeStreamer(AsyncStreamerInterface):
 
     @staticmethod
     def sync_stream(yt, track_id: str) -> str | None:
-        info = yt.extract_info(
-            f"https://www.youtube.com/watch?v={track_id}", download=False
-        )
-        return info.get("url")
+        try:
+            info = yt.extract_info(
+                f"https://www.youtube.com/watch?v={track_id}", download=False
+            )
+            return info.get("url")
+        except Exception:
+            logger.exception("Не удалось получить URL потока YouTube: %s", track_id)
+            return None
 
 
 class AsyncStreamer(AsyncStreamerInterface):

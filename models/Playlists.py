@@ -13,10 +13,11 @@
 1. Playlist - абстрактный класс плейлиста
 2. UserPlaylist - класс плейлиста пользователя
 3. DownloadPlaylist - класс плейлиста системы
+4. RecentlyPlayedPlaylist - системный плейлист недавно прослушанных
 """
 
 import json
-from os import path
+import os
 import os.path
 from typing import Iterable, Tuple
 from abc import ABC, abstractmethod
@@ -55,16 +56,20 @@ class Playlist(ABC):
         """
         return self.tracks.peek_current()
 
-    def delete_track(self, track: Track):
-        """Удаляем трек из плейлиста
+    def delete_track(self, track: Track) -> bool:
+        """Удаляем трек из плейлиста.
 
         Args:
             track (Track): трек для удаления
+
+        Returns:
+            bool: ``True`` если трек найден и удален, иначе ``False``.
         """
         try:
             del self.tracks.values[self.tracks.values.index(track)]
+            return True
         except ValueError:
-            print("Произошла ошибка во время удаления трека из плейлиста")
+            return False
     
     @staticmethod
     def load_playlist(playlist_path: str):
@@ -138,8 +143,8 @@ class UserPlaylist(Playlist):
 class DownloadPlaylist(Playlist):
     """плейлист скачанных треков из music """
 
-    def __init__(self, name: str = "Downloaded Tracks", tracks: Iterable[Track] = None, cover_path: str | None = None) -> None:
-        super().__init__(name, tracks, cover_path)
+    def __init__(self, name: str = "Скачанные", tracks: Iterable[Track] | None = None, cover_path: str  = "playlist_covers/download.png") -> None:
+        super().__init__(name, tracks or (), cover_path)
 
     def get_tracks(self) -> Tuple[Track]:
         """Получаем список треков из плейлиста
@@ -159,7 +164,7 @@ class DownloadPlaylist(Playlist):
         Returns:
             DownloadPlaylist: плейлист
         """
-        return DownloadPlaylist(name="Downloaded Tracks", tracks=cls.get_tracks_from_music_dir())
+        return DownloadPlaylist(name="Скачанные", tracks=cls.get_tracks_from_music_dir())
 
     @staticmethod
     def get_tracks_from_music_dir() -> Tuple[Track]:
@@ -168,12 +173,42 @@ class DownloadPlaylist(Playlist):
         Returns:
             Tuple[Track]: список треков
         """
+        music_dir = "music"
+        if not os.path.isdir(music_dir):
+            return ()
         tracks = []
-        for track_file in path.listdir("music"):
-            if track_file.endswith(".mp3"):
-                track_id, track_title, track_author = track_file.split("_")
-                tracks.append(YandexTrack(track_id=track_id, title=track_title, author=track_author))
-            elif track_file.endswith(".m4a"):
-                track_id, track_title, track_author = track_file.split("_")
-                tracks.append(YoutubeTrack(track_id=track_id, title=track_title, author=track_author))
-        return tracks
+        for track_file in os.listdir(music_dir):
+            try:
+                name, ext = os.path.splitext(track_file)
+                parts = name.split("_", 2)
+                if len(parts) < 3:
+                    continue
+                track_id, track_title, track_author = parts
+                if ext == ".mp3":
+                    tracks.append(YandexTrack(track_id=track_id, title=track_title, author=track_author, downloaded=True))
+                elif ext == ".m4a":
+                    tracks.append(YoutubeTrack(track_id=track_id, title=track_title, author=track_author, downloaded=True))
+            except Exception:
+                continue
+        return tuple(tracks)
+
+
+class RecentlyPlayedPlaylist(Playlist):
+    """Системный плейлист недавно прослушанных треков."""
+
+    def __init__(
+        self,
+        name: str = "Недавно прослушанные",
+        tracks: Iterable[Track] | None = None,
+        cover_path: str = "playlist_covers/heart.png",
+    ) -> None:
+        super().__init__(name, tracks or (), cover_path)
+
+    def get_tracks(self) -> Tuple[Track]:
+        """Возвращает треки недавно прослушанного плейлиста."""
+        return tuple(self.tracks.values)
+
+    @classmethod
+    def get_playlist_from_path(cls, path_to_playlist: str) -> "RecentlyPlayedPlaylist | None":
+        """Плейлист строится из БД, поэтому чтение с диска не используется."""
+        return None

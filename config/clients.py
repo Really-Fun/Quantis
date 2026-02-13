@@ -1,3 +1,4 @@
+import os
 from typing import List, Union
 
 from yandex_music import ClientAsync
@@ -11,6 +12,7 @@ SERVICE_NAME_YANDEX: str = "YANDEX_TOKEN_NEON_APP"
 SERVICE_NAME_LASTFM_API: str = "LASTFM_API_NEON_APP"
 SERVICE_NAME_LASTFM_SECRET: str = "LASTFM_SECRET_NEON_APP"
 USER: str = "NEON_APP"
+
 
 class InitClients:
     """Класс, инициализирующий клиенты:

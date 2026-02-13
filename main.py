@@ -5,17 +5,8 @@ from qasync import QEventLoop
 from PySide6.QtWidgets import QApplication
 from qt_material import apply_stylesheet
 
+from services import TrackHistoryService
 from ui import NeonMusic
-
-
-async def main():
-    main_app = QApplication(sys.argv)
-
-    main_window = NeonMusic()
-    main_window.show()
-
-    main_loop = asyncio.get_running_loop()
-    await main_loop.run_in_executor(None, main_app.exec)
 
 
 if __name__ == "__main__":
@@ -29,4 +20,8 @@ if __name__ == "__main__":
     window.show()
 
     with loop:
-        loop.run_forever()
+        try:
+            loop.run_forever()
+        finally:
+            # Закрываем соединение с SQLite, чтобы процесс завершался корректно.
+            loop.run_until_complete(TrackHistoryService().close())

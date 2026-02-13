@@ -1,5 +1,5 @@
-from PySide6.QtCore import QSize, Qt, QTimer
-from PySide6.QtGui import QIcon, QPixmap
+from PySide6.QtCore import QSize, Qt, QTimer, QRectF
+from PySide6.QtGui import QIcon, QPixmap, QColor, QPainter, QPainterPath
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QToolButton, QSlider, QLabel,
     QSizePolicy,
@@ -12,8 +12,11 @@ from providers import PlaylistManager, PathProvider
 from models import Track
 import os
 
+_BG_COLOR = QColor(0, 0, 0, 200)
+_BG_RADIUS = 18
 
-# ── style fragments ──
+
+# ── фрагменты стилей ──
 
 _SLIDER_QSS = """
     QSlider::groove:horizontal {
@@ -62,7 +65,7 @@ _ARTIST_QSS = "color: rgba(255,255,255,110); font-size: 11px; background: transp
 
 
 class PlayMenu(QWidget):
-    """Spotify-style bottom player bar."""
+    """Нижняя панель управления плеером."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -72,14 +75,14 @@ class PlayMenu(QWidget):
         self.downloader = AsyncDownloader()
         self._path_provider = PathProvider()
 
-        self._seeking = False  # True while user drags seek slider
+        self._seeking = False  # True, пока пользователь двигает ползунок перемотки
 
-        # ────────── root: three columns ──────────
+        # ────────── корневой layout: 3 колонки ──────────
         root = QHBoxLayout(self)
         root.setContentsMargins(12, 4, 12, 6)
         root.setSpacing(0)
 
-        # ══════ LEFT: cover + text ══════
+        # ══════ СЛЕВА: обложка + текст ══════
         left = QHBoxLayout()
         left.setSpacing(10)
         left.setContentsMargins(0, 0, 0, 0)
@@ -115,12 +118,12 @@ class PlayMenu(QWidget):
         left_w.setLayout(left)
         left_w.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
-        # ══════ CENTER: buttons + seek ══════
+        # ══════ ЦЕНТР: кнопки + перемотка ══════
         center = QVBoxLayout()
         center.setSpacing(2)
         center.setContentsMargins(0, 2, 0, 2)
 
-        # buttons row
+        # ряд кнопок
         btns = QHBoxLayout()
         btns.setSpacing(8)
         btns.setAlignment(Qt.AlignCenter)
@@ -139,7 +142,7 @@ class PlayMenu(QWidget):
 
         center.addLayout(btns)
 
-        # seek row: time - slider - time
+        # ряд перемотки: время - ползунок - время
         seek_row = QHBoxLayout()
         seek_row.setSpacing(6)
         seek_row.setContentsMargins(0, 0, 0, 0)
@@ -173,7 +176,7 @@ class PlayMenu(QWidget):
         center_w.setLayout(center)
         center_w.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
-        # ══════ RIGHT: volume ══════
+        # ══════ СПРАВА: громкость ══════
         right = QHBoxLayout()
         right.setSpacing(6)
         right.setContentsMargins(0, 0, 0, 0)
@@ -200,23 +203,47 @@ class PlayMenu(QWidget):
         right_w.setLayout(right)
         right_w.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
 
-        # ── assemble columns ──
+        # ── собираем колонки ──
         root.addWidget(left_w, stretch=1)
         root.addWidget(center_w, stretch=2)
         root.addWidget(right_w, stretch=1)
 
-        # ── connections ──
-        self.btn_play.clicked.connect(self.pause)
+        # ── сигналы ──
+        self.btn_play.clicked.connect(self.toggle_playback)
         self.btn_prev.clicked.connect(self.play_previous_track)
         self.btn_next.clicked.connect(self.play_next_track)
         self.btn_download.clicked.connect(self.download_track)
 
-        # ── tick timer ──
+        # ── реакция на завершение трека ──
+        self.player.track_finished.connect(self.play_next_track)
+
+        # ── таймер обновления ──
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._tick)
         self._timer.start(250)
 
-    # ── update track info ──
+        # ── реакция на смену трека ──
+        self.player.track_changed.connect(self._on_track_changed)
+
+    # ── темный овальный фон ──
+
+    def paintEvent(self, event) -> None:
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing, True)
+        p.setPen(Qt.NoPen)
+        p.setBrush(_BG_COLOR)
+        p.drawRoundedRect(QRectF(0, 0, self.width(), self.height()), _BG_RADIUS, _BG_RADIUS)
+        p.end()
+        super().paintEvent(event)
+
+    # ── трек сменился из любого места приложения ──
+
+    @asyncSlot(object)
+    async def _on_track_changed(self, track) -> None:
+        await self.set_track(track)
+        self.btn_play.setIcon(QIcon("assets/icons/pause.png"))
+
+    # ── обновление информации о треке ──
 
     async def set_track(self, track: Track) -> None:
         self._title.setText(_elide(track.title, 22))
@@ -230,7 +257,7 @@ class PlayMenu(QWidget):
             )
             self._cover.setPixmap(pm)
 
-    # ── tick ──
+    # ── тик таймера ──
 
     def _tick(self) -> None:
         if self._seeking:
@@ -242,7 +269,7 @@ class PlayMenu(QWidget):
             self._lbl_cur.setText(_fmt(t))
             self._lbl_tot.setText(_fmt(d))
 
-    # ── seek interaction ──
+    # ── взаимодействие с перемоткой ──
 
     def _on_seek_press(self) -> None:
         self._seeking = True
@@ -254,23 +281,30 @@ class PlayMenu(QWidget):
             self.player.time = int(ratio * d)
         self._seeking = False
 
-    # ── slots ──
+    # ── слоты ──
 
     @asyncSlot()
-    async def pause(self):
-        self.player.pause()
+    async def toggle_playback(self):
+        if self.player.is_playing():
+            self.player.pause()
+            self.btn_play.setIcon(QIcon("assets/icons/play.png"))
+            return
+        self.player.resume()
+        self.btn_play.setIcon(QIcon("assets/icons/pause.png"))
 
     @asyncSlot()
     async def play_previous_track(self):
         track = self.playlist_manager.current_playlist.move_previous_track()
         await self.player.play_track(track)
         await self.set_track(track)
+        self.btn_play.setIcon(QIcon("assets/icons/pause.png"))
 
     @asyncSlot()
     async def play_next_track(self):
         track = self.playlist_manager.current_playlist.move_next_track()
         await self.player.play_track(track)
         await self.set_track(track)
+        self.btn_play.setIcon(QIcon("assets/icons/pause.png"))
 
     @asyncSlot()
     async def download_track(self):
@@ -281,7 +315,7 @@ class PlayMenu(QWidget):
     def _on_volume(self) -> None:
         self.player.volume = self._vol.value()
 
-    # ── factory ──
+    # ── фабрика кнопок ──
 
     @staticmethod
     def _btn(icon_path: str, size: int = 50) -> QToolButton:
@@ -303,7 +337,7 @@ class PlayMenu(QWidget):
         return b
 
 
-# ── helpers ──
+# ── вспомогательные функции ──
 
 def _fmt(ms: int) -> str:
     s = max(0, ms // 1000)

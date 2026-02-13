@@ -17,7 +17,7 @@ from typing import Optional
 
 from PySide6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout,
-    QLabel, QSizePolicy, QToolButton,
+    QLabel, QMenu, QSizePolicy, QToolButton,
 )
 from PySide6.QtGui import QPixmap, QColor, QPainter, QIcon
 from PySide6.QtCore import Qt, Signal, QSize
@@ -91,15 +91,28 @@ class TrackCard(QWidget):
 
     play_requested = Signal(object)
     download_requested = Signal(object)
+    add_to_playlist_requested = Signal(object)
+    remove_from_playlist_requested = Signal(object)
+    _shared_downloader: AsyncDownloader | None = None
 
-    def __init__(self, track: Optional[Track] = None, index: int = 0, parent=None) -> None:
+    def __init__(
+        self,
+        track: Optional[Track] = None,
+        index: int = 0,
+        allow_remove_from_playlist: bool = False,
+        parent=None,
+    ) -> None:
         super().__init__(parent)
 
         self._track: Optional[Track] = None
         self._index = index
+        self._is_playing = False
         self._hovered = False
+        self._allow_remove_from_playlist = allow_remove_from_playlist
         self._path_provider = PathProvider()
-        self._downloader = AsyncDownloader()
+        if TrackCard._shared_downloader is None:
+            TrackCard._shared_downloader = AsyncDownloader()
+        self._downloader = TrackCard._shared_downloader
 
         self.setObjectName("TrackCard")
         self.setFixedHeight(_CARD_HEIGHT)
@@ -177,10 +190,9 @@ class TrackCard(QWidget):
         """Set or update the displayed track."""
         self._track = track
         self._index = index
-
-        self._num_label.setText(str(index) if index else "")
+        self._update_index_label()
         self._title.setText(track.title)
-        self._author.setText(track.author)
+        self._author.setText(self._build_meta_line(track))
 
         color = _SOURCE_COLORS.get(track.source, _DEFAULT_SOURCE_COLOR)
         self._source_badge.setText(track.source)
@@ -190,6 +202,35 @@ class TrackCard(QWidget):
             border-radius: 6px; padding: 2px 8px;
         """)
         self._source_badge.adjustSize()
+
+    @staticmethod
+    def _build_meta_line(track: Track) -> str:
+        """Формирует строку автора и количества прослушиваний."""
+        listens = max(0, int(getattr(track, "listen_count", 0)))
+        if listens == 0:
+            return track.author
+        return f"{track.author} · {TrackCard._format_listens(listens)}"
+
+    @staticmethod
+    def _format_listens(listens: int) -> str:
+        """Возвращает фразу с корректным склонением слова 'прослушивание'."""
+        tail_100 = listens % 100
+        tail_10 = listens % 10
+        if 11 <= tail_100 <= 14:
+            word = "прослушиваний"
+        elif tail_10 == 1:
+            word = "прослушивание"
+        elif 2 <= tail_10 <= 4:
+            word = "прослушивания"
+        else:
+            word = "прослушиваний"
+        return f"{listens} {word}"
+
+    def set_playing(self, is_playing: bool) -> None:
+        """Set visual state for the currently playing track."""
+        self._is_playing = is_playing
+        self._update_index_label()
+        self.update()
 
     @asyncSlot()
     async def load_cover(self) -> None:
@@ -210,6 +251,18 @@ class TrackCard(QWidget):
     @property
     def track(self) -> Optional[Track]:
         return self._track
+
+    def _update_index_label(self) -> None:
+        if self._is_playing:
+            self._num_label.setText("▶")
+            self._num_label.setStyleSheet(
+                "color: rgb(0,220,255); font-size: 13px; font-weight: 700; background: transparent;"
+            )
+            return
+        self._num_label.setText(str(self._index) if self._index else "")
+        self._num_label.setStyleSheet(
+            "color: rgba(255,255,255,80); font-size: 13px; background: transparent;"
+        )
 
     # --- slots ---
 
@@ -240,13 +293,37 @@ class TrackCard(QWidget):
     def mousePressEvent(self, event) -> None:
         if event.button() == Qt.LeftButton and self._track is not None:
             self.play_requested.emit(self._track)
+        elif event.button() == Qt.RightButton and self._track is not None:
+            self._show_context_menu(event.globalPos())
         super().mousePressEvent(event)
+
+    def _show_context_menu(self, global_pos) -> None:
+        """Открывает контекстное меню действий с треком."""
+        menu = QMenu(self)
+        play_action = menu.addAction("Играть")
+        add_action = menu.addAction("Добавить в плейлист")
+        remove_action = None
+        if self._allow_remove_from_playlist:
+            remove_action = menu.addAction("Удалить из плейлиста")
+        download_action = menu.addAction("Скачать")
+
+        chosen = menu.exec(global_pos)
+        if chosen == play_action:
+            self._on_play()
+        elif chosen == add_action and self._track is not None:
+            self.add_to_playlist_requested.emit(self._track)
+        elif remove_action is not None and chosen == remove_action and self._track is not None:
+            self.remove_from_playlist_requested.emit(self._track)
+        elif chosen == download_action:
+            self._on_download()
 
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing, True)
 
-        if self._hovered:
+        if self._is_playing:
+            painter.setBrush(QColor(0, 220, 255, 35))
+        elif self._hovered:
             painter.setBrush(QColor(0, 220, 255, 20))
         else:
             painter.setBrush(QColor(255, 255, 255, 6))
