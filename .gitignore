@@ -39,5 +39,5 @@ playlists/
 .DS_Store
 Thumbs.db
 
-assets/backgrounds/*
+assets/background/*
 assets/icons/*

@@ -22,7 +22,7 @@ class AsyncDatabase:
     - выполнять SQL-запросы асинхронно.
     """
 
-    def __init__(self, db_path: str = "database/player_history.db") -> None:
+    def __init__(self, db_path: str = "player_history.db") -> None:
         self._db_path = Path(db_path)
         self._conn: aiosqlite.Connection | None = None
         self._init_lock = asyncio.Lock()
