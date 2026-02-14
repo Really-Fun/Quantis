@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QFrame,
 )
-from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QPixmap, QGuiApplication
 from PySide6.QtCore import QSettings, Qt
 from qasync import asyncSlot
 
@@ -33,8 +33,10 @@ class NeonMusic(QMainWindow):
         viz_color = (viz_r, viz_g, viz_b)
 
         self.setWindowTitle("NeonMusic")
-        self.resize(600, 800)
+        # Широкая ширина, обычная высота — чтобы всё было видно
+        self.resize(1100, 750)
         self.setMaximumSize(1920, 1080)
+        self._center_on_screen()
 
         # ================== ЦЕНТРАЛЬНЫЙ ВИДЖЕТ ==================
         central = QWidget(self)
@@ -158,6 +160,15 @@ class NeonMusic(QMainWindow):
     def _set_visualizer_mode(self, mode: str) -> None:
         self.visualizer.set_mode(mode)
         self._settings.setValue("visualizer/mode", str(mode))
+
+    def _center_on_screen(self) -> None:
+        """Размещает окно по центру доступной области экрана."""
+        screen = QGuiApplication.primaryScreen()
+        if screen is not None:
+            available = screen.availableGeometry()
+            frame = self.frameGeometry()
+            frame.moveCenter(available.center())
+            self.move(frame.topLeft())
 
     # ================== ИЗМЕНЕНИЕ РАЗМЕРА ==================
     def resizeEvent(self, event) -> None:

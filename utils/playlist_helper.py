@@ -172,6 +172,17 @@ def remove_track_from_user_playlist(
     return True
 
 
+def touch_user_playlist_file(playlist_name: str, playlists_dir: str = "playlists") -> None:
+    """Обновляет время модификации файла плейлиста (для сортировки по mtime)."""
+    playlist_path = _find_playlist_path_by_name(playlist_name, playlists_dir)
+    playlist_path.touch()
+
+
+def get_user_playlist_path_by_name(playlist_name: str, playlists_dir: str = "playlists") -> Path:
+    """Возвращает путь к JSON-файлу пользовательского плейлиста по имени."""
+    return _find_playlist_path_by_name(playlist_name, playlists_dir)
+
+
 def _find_playlist_path_by_name(playlist_name: str, playlists_dir: str) -> Path:
     """Находит JSON-файл пользовательского плейлиста по отображаемому имени."""
     clean_name = playlist_name.strip()

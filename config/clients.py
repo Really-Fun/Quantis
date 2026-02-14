@@ -1,3 +1,13 @@
+"""Инициализация клиентов:
+- Яндекс Музыка
+- YouTube Music
+- Last.fm
+- Spotify (TODO) - приоритет
+- SoundCloud (TODO)
+- Vk Music (TODO)
+
+"""
+
 import os
 from typing import List, Union
 
@@ -8,10 +18,8 @@ from pylast import LastFMNetwork
 from ytmusicapi import YTMusic
 from keyring import get_password
 
-SERVICE_NAME_YANDEX: str = "YANDEX_TOKEN_NEON_APP"
-SERVICE_NAME_LASTFM_API: str = "LASTFM_API_NEON_APP"
-SERVICE_NAME_LASTFM_SECRET: str = "LASTFM_SECRET_NEON_APP"
-USER: str = "NEON_APP"
+from config.constants import SERVICE_NAME_YANDEX, SERVICE_NAME_LASTFM_API, SERVICE_NAME_LASTFM_SECRET, USER
+
 
 
 class InitClients:

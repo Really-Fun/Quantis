@@ -50,6 +50,8 @@ class Stack(QWidget):
         """Переключает страницу по индексу (``Stack.HOME``, ``Stack.SEARCH`` и т.д.)."""
         if 0 <= index < self._stack.count():
             self._stack.setCurrentIndex(index)
+            if index == self.HOME:
+                self.home_page._reload_user_playlists()
 
     async def open_playlist(self, playlist) -> None:
         """Открывает страницу плейлиста и загружает данные."""

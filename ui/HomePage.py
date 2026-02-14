@@ -16,7 +16,9 @@ from ui.PlaylistPreview import PlaylistPreview
 from utils import (
     create_user_playlist_file,
     delete_user_playlist_file,
+    get_user_playlist_path_by_name,
     rename_user_playlist_file,
+    touch_user_playlist_file,
 )
 
 _COLUMNS = 4
@@ -114,16 +116,23 @@ class HomePage(QWidget):
             self._sys_section.set_empty("Скачайте треки — они появятся здесь")
 
     def _load_user_playlists(self) -> None:
-        """Загружает пользовательские плейлисты из директории `playlists/`."""
+        """Загружает пользовательские плейлисты из директории `playlists/`.
+
+        Плейлисты сортируются по времени модификации (новые/недавно открытые — сверху).
+        """
         playlists_dir = Path("playlists")
         if not playlists_dir.is_dir():
             playlists_dir.mkdir(parents=True, exist_ok=True)
 
-        for name in sorted(playlists_dir.iterdir()) if playlists_dir.is_dir() else []:
-            if name.suffix != ".json":
-                continue
+        json_files = sorted(
+            (p for p in playlists_dir.iterdir() if p.suffix == ".json"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True,
+        ) if playlists_dir.is_dir() else []
+
+        for path in json_files:
             try:
-                playlist = UserPlaylist.get_playlist_from_path(str(name))
+                playlist = UserPlaylist.get_playlist_from_path(str(path))
             except Exception:
                 continue
             if playlist is None:
@@ -176,6 +185,17 @@ class HomePage(QWidget):
         if isinstance(playlist, RecentlyPlayedPlaylist):
             fresh = await self._history_service.get_recent_playlist(limit=50)
             playlist = fresh if fresh is not None else RecentlyPlayedPlaylist(tracks=())
+        elif isinstance(playlist, UserPlaylist):
+            # Перечитываем плейлист с диска, чтобы подхватить добавленные треки,
+            # и обновляем mtime файла, чтобы он поднимался вверх списка.
+            try:
+                touch_user_playlist_file(playlist.name)
+                path = get_user_playlist_path_by_name(playlist.name)
+                fresh = UserPlaylist.get_playlist_from_path(str(path))
+                if fresh is not None:
+                    playlist = fresh
+            except Exception:
+                logger.exception("Не удалось перезагрузить пользовательский плейлист")
         self._pm.set_playlist(playlist)
         self.playlist_opened.emit(playlist)
 

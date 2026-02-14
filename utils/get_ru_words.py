@@ -1,9 +1,9 @@
 def get_ru_words_for_number(number: int) -> str:
-    """Возвращает русское слово в зависимости от числа.
+    """Возвращает правильное слово (трек, трека, треков) в зависимости от числа.
     Args:
         number (int): число
     Returns:
-        str: русское слово
+        str: число с правильным словом
     """
     if number % 100 == 11 or number % 100 == 12 or number % 100 == 13 or number % 100 == 14:
         return f"{number} треков"

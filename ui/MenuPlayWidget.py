@@ -76,6 +76,7 @@ class PlayMenu(QWidget):
         self._path_provider = PathProvider()
 
         self._seeking = False  # True, пока пользователь двигает ползунок перемотки
+        self._repeat_mode = "off"  # "off" | "one" | "all"
 
         # ────────── корневой layout: 3 колонки ──────────
         root = QHBoxLayout(self)
@@ -129,6 +130,7 @@ class PlayMenu(QWidget):
         btns.setAlignment(Qt.AlignCenter)
 
         self.btn_repeat = self._btn("assets/icons/repeat_playlist.png", 30)
+        self.btn_repeat.setToolTip("Повтор: выкл")
         self.btn_prev = self._btn("assets/icons/backward.png", 34)
         self.btn_play = self._btn("assets/icons/play.png", 40)
         self.btn_next = self._btn("assets/icons/forward.png", 34)
@@ -210,12 +212,13 @@ class PlayMenu(QWidget):
 
         # ── сигналы ──
         self.btn_play.clicked.connect(self.toggle_playback)
+        self.btn_repeat.clicked.connect(self._cycle_repeat_mode)
         self.btn_prev.clicked.connect(self.play_previous_track)
         self.btn_next.clicked.connect(self.play_next_track)
         self.btn_download.clicked.connect(self.download_track)
 
         # ── реакция на завершение трека ──
-        self.player.track_finished.connect(self.play_next_track)
+        self.player.track_finished.connect(self._on_track_finished)
 
         # ── таймер обновления ──
         self._timer = QTimer(self)
@@ -224,6 +227,8 @@ class PlayMenu(QWidget):
 
         # ── реакция на смену трека ──
         self.player.track_changed.connect(self._on_track_changed)
+
+        self._update_repeat_button_style()
 
     # ── темный овальный фон ──
 
@@ -305,6 +310,48 @@ class PlayMenu(QWidget):
         await self.player.play_track(track)
         await self.set_track(track)
         self.btn_play.setIcon(QIcon("assets/icons/pause.png"))
+
+    def _cycle_repeat_mode(self) -> None:
+        """Цикл: выкл → один трек → весь плейлист → выкл."""
+        modes = ("off", "one", "all")
+        idx = (modes.index(self._repeat_mode) + 1) % len(modes)
+        self._repeat_mode = modes[idx]
+        tips = {"off": "Повтор: выкл", "one": "Повтор: один трек", "all": "Повтор: плейлист"}
+        self.btn_repeat.setToolTip(tips[self._repeat_mode])
+        self._update_repeat_button_style()
+
+    def _update_repeat_button_style(self) -> None:
+        """Подсветка кнопки повтора, когда режим включён."""
+        size = 30
+        if self._repeat_mode == "off":
+            style = """
+                QToolButton { border-radius: 15px; background: transparent; border: none; }
+                QToolButton:hover { background: rgba(255,255,255,15); }
+            """
+        else:
+            style = f"""
+                QToolButton {{
+                    border-radius: 15px;
+                    background: rgba(0,220,255,40);
+                    border: none;
+                }}
+                QToolButton:hover {{
+                    background: rgba(0,220,255,60);
+                }}
+            """
+        self.btn_repeat.setStyleSheet(style)
+
+    @asyncSlot()
+    async def _on_track_finished(self) -> None:
+        """По завершении трека: повтор одного или переход к следующему."""
+        if self._repeat_mode == "one":
+            current = self.playlist_manager.current_playlist.get_current_track()
+            if current is not None:
+                await self.player.play_track(current)
+                await self.set_track(current)
+                self.btn_play.setIcon(QIcon("assets/icons/pause.png"))
+                return
+        await self.play_next_track()
 
     @asyncSlot()
     async def download_track(self):

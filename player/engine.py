@@ -14,7 +14,6 @@ from PySide6.QtCore import QTimer
 from vlc import Instance, MediaPlayer, Media
 
 # Задержка запуска analysis_player (мс).
-# Playback проходит через аудио-буфер ОС, analysis отдаёт PCM мгновенно.
 _ANALYSIS_DELAY_MS = 1500
 
 
@@ -43,7 +42,6 @@ class VLCEngine:
 
         self._initialized = True
 
-    # --- Properties ---
 
     @property
     def instance(self) -> Instance:
@@ -57,14 +55,23 @@ class VLCEngine:
     def analysis_player(self) -> MediaPlayer:
         return self._analysis_player
 
-    # --- Media API ---
-
     def load_media(self, source: str) -> Media:
-        """Создаёт Media из пути или URL."""
+        """Создаёт Media из пути или URL.
+        
+        Args:
+            source (str): Путь к медиа-файлу или URL.
+
+        Returns:
+            Media: Объект Media.
+        """
         return self._vlc_instance.media_new(source)
 
     def play_both(self, source: str) -> None:
-        """Запускает playback сразу, analysis с задержкой для синхронизации."""
+        """Запускает playback сразу, analysis с задержкой для синхронизации.
+        
+        Args:
+            source (str): Путь к медиа-файлу или URL.
+        """
         self._analysis_timer.stop()
 
         media_play = self.load_media(source)
@@ -73,10 +80,8 @@ class VLCEngine:
         self._playback_player.set_media(media_play)
         self._analysis_player.set_media(media_analysis)
 
-        # Playback стартует сразу
         self._playback_player.play()
 
-        # Analysis стартует с задержкой, чтобы не обгонять звук
         self._analysis_timer.start(_ANALYSIS_DELAY_MS)
 
     def _start_analysis(self) -> None:
