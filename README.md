@@ -1,34 +1,25 @@
 # CleanPlayer
 
-[![Python](https://img.shields.io/badge/python-3.14.2-informational)]()
-[![License](https://img.shields.io/badge/license-MIT-blue)]()
-[![Platform](https://img.shields.io/badge/platform-Windows%20|%20macOS%20|
-%20Linux-brightgreen)]()
-[![SOON](https://img.shields.io/badge/SOON-Android-green)]()
-[![Status](https://img.shields.io/badge/status-Active-success)]()
-[![Release](https://img.shields.io/github/v/release/Really-Fun/CleanPlayer)]
-()
+[![Python](https://img.shields.io/badge/python-3.14.2-informational)](https://www.python.org/)
+[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-brightgreen)](https://github.com/Really-Fun/CleanPlayer)
+[![Status](https://img.shields.io/badge/status-Active-success)](https://github.com/Really-Fun/CleanPlayer)
+[![Release](https://img.shields.io/github/v/release/Really-Fun/CleanPlayer)](https://github.com/Really-Fun/CleanPlayer/releases)
 
-Десктопный музыкальный плеер на `PySide6 + asyncio` с поиском треков, стримингом, скачиванием и историей прослушивания.
-
-Проект развивается как реальный рабочий плеер: с понятной структурой и нормальной декомпозицией по слоям.
+Быстрый десктопный плеер на `PySide6 + asyncio`: поиск, стриминг, скачивание, история и нормальная архитектура без каши.
 
 ---
 
 ## Что уже работает
 
-- Поиск треков из нескольких источников (`Yandex`, `YouTube`).
-- Воспроизведение через VLC-движок.
-- Скачивание треков и обложек.
-- История прослушивания в `SQLite` с восстановлением позиции трека.
-- Системные плейлисты:
-  - `Скачанные`
-  - `Недавно прослушанные`
-- Настройки интерфейса:
-  - фон
-  - параметры визуализатора
-- Отдельная страница профиля (пока заглушка под API-ключи/токены).
-- Кнопка быстрого открытия папки приложения (там же `music/`, `covers/`, `assets/`).
+- Поиск треков из `Yandex` и `YouTube`.
+- Стабильное воспроизведение через `VLC`.
+- Скачивание треков + обложек.
+- История прослушивания в `SQLite` с автосохранением позиции.
+- Системные плейлисты: `Скачанные`, `Недавно прослушанные`.
+- Настройки UI: фон и параметры визуализатора.
+- Страница профиля (заглушка под API-ключи/токены).
+- Кнопка быстрого открытия рабочей папки приложения (`music/`, `covers/`, `assets/`).
 
 ---
 
@@ -55,13 +46,15 @@ pip install -r requirements.txt
 python main.py
 ```
 
+Требование: установлен `VLC` в системе (для `python-vlc`).
+
 ---
 
-## Переменные и ключи
+## Ключи и токены
 
-Клиенты берут секреты из системного keyring.
+Секреты берутся из системного `keyring`.
 
-Используемые сервисные ключи:
+Используемые записи:
 
 - `YANDEX_TOKEN_NEON_APP` (user: `NEON_APP`)
 - `LASTFM_API_NEON_APP` (user: `NEON_APP`)
@@ -81,10 +74,10 @@ keyring.set_password("LASTFM_SECRET_NEON_APP", "NEON_APP", "<ваш_api_secret>"
 
 ## Архитектура истории прослушивания
 
-Слой истории разделен на 3 части:
+История разбита на 3 слоя:
 
 - `database/async_database.py` — асинхронная обертка над SQLite.
-- `database/track_history_repository.py` — SQL-операции.
+- `database/track_history_repository.py` — SQL-репозиторий.
 - `services/TrackHistoryService.py` — бизнес-логика (частота сохранения, финализация прослушивания, сборка “Недавно прослушанных”).
 
 Таблица `track_history` хранит:
@@ -95,7 +88,7 @@ keyring.set_password("LASTFM_SECRET_NEON_APP", "NEON_APP", "<ваш_api_secret>"
 - `listen_count`
 - `last_played_at`
 
-Для нормальной работы под нагрузкой включены PRAGMA:
+Для скорости и стабильности включены PRAGMA:
 
 - `journal_mode=WAL`
 - `synchronous=NORMAL`
@@ -119,9 +112,9 @@ utils/       # файловые и вспомогательные утилиты
 
 ---
 
-## Интерфейс
+## Интерфейс (скриншоты / GIF)
 
-> Добавь файлы в `assets/readme/`, и блок начнет показывать реальные скриншоты/GIF без доп. правок.
+Если картинки не отображаются, просто положи их в `assets/readme/`.
 
 ### Главная
 
@@ -148,8 +141,11 @@ utils/       # файловые и вспомогательные утилиты
 ## Ближайший план
 
 - Сохранение ключей из UI страницы профиля.
-- Валидация ключей и проверка подключения к сервисам прямо из интерфейса.
-- Улучшение диагностики сетевых ошибок.
+- Проверка валидности ключей прямо из интерфейса.
+- Доработка сетевой диагностики и UX при ошибках соединения.
+- Рекомендации на основе Spotipy
+- Улучшенная оптимизация
+- Читска кода
 
 ---
 
