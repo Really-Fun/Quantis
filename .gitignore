@@ -28,6 +28,7 @@ covers/*
 database/*.db
 database/*.sqlite
 database/*.sqlite3
+player_history.db
 
 # Legacy asset output dirs (if used)
 
