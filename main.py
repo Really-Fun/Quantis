@@ -1,5 +1,11 @@
 import sys
+import os
 import asyncio
+
+# В exe (PyInstaller) путь к локалям ytmusicapi должен браться из sys._MEIPASS
+if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+    import ytmusicapi.ytmusic as _ytm_mod
+    _ytm_mod.__file__ = os.path.join(sys._MEIPASS, "ytmusicapi", "ytmusic.py")
 
 from qasync import QEventLoop
 from PySide6.QtWidgets import QApplication
