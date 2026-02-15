@@ -1,7 +1,7 @@
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QSize, Signal
+from PySide6.QtCore import Qt, QSize, Signal, QUrl
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
@@ -9,7 +9,6 @@ from PySide6.QtWidgets import (
     QFrame, QToolButton, QHBoxLayout,
 )
 from PySide6.QtGui import QIcon, QDesktopServices
-from PySide6.QtCore import QUrl
 
 
 class MenuTabs(QWidget):

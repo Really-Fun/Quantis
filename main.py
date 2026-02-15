@@ -53,9 +53,6 @@ if getattr(sys, "frozen", False):
                 _ca_bundle_set = _p
         except Exception:
             pass
-    # onefile: user_theme.xml и assets лежат в распакованной папке (_MEIPASS)
-    os.chdir(_meipass)
-
 from qasync import QEventLoop
 from PySide6.QtWidgets import QApplication
 from qt_material import apply_stylesheet
@@ -65,6 +62,9 @@ from ui import NeonMusic
 
 
 if __name__ == "__main__":
+    # onefile: сразу ставим рабочую папку в _MEIPASS, чтобы assets/icons и user_theme.xml находились
+    if getattr(sys, "frozen", False):
+        os.chdir(getattr(sys, "_MEIPASS", os.path.dirname(sys.executable)))
     if getattr(sys, "frozen", False) and not os.environ.get("REQUESTS_CA_BUNDLE"):
         try:
             import certifi

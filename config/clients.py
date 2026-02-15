@@ -36,17 +36,14 @@ class InitClients:
         self._init_lastfm_client()
         
     def _init_yandex_client(self) -> None:
-        self._yandex_client = None
         try:
-            token = get_password(SERVICE_NAME_YANDEX, USER)
-            if token:
-                self._yandex_client = ClientAsync(token)
-        except (TimedOutError, NetworkErrorYandex, Exception):
-            pass
+            self._yandex_client = ClientAsync(get_password(SERVICE_NAME_YANDEX, USER))
+        except TimedOutError:
+            self._yandex_client = None
+        except NetworkErrorYandex:
+            self._yandex_client = None
     
     def _init_lastfm_client(self) -> None:
-        self._lastfm_client = None
-        return None
         LASTFM_API_KEY = get_password(SERVICE_NAME_LASTFM_API, USER)
         LASTFM_API_SECRET = get_password(SERVICE_NAME_LASTFM_SECRET, USER)
         if LASTFM_API_KEY is None or LASTFM_API_SECRET is None:
