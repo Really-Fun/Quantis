@@ -3,10 +3,12 @@
 # Локали ytmusicapi (в т.ч. RU) подхватываются через collect_all.
 
 import os
-from PyInstaller.utils.hooks import collect_all
+from PyInstaller.utils.hooks import collect_all, collect_data_files
 
 # Подтянуть все данные ytmusicapi (локали, в т.ч. ru)
 ytmusic_datas, ytmusic_binaries, ytmusic_hidden = collect_all('ytmusicapi')
+# CA-сертификаты для requests/SSL в exe (иначе запрос за visitor_id к YouTube может не пройти)
+certifi_datas = collect_data_files("certifi")
 
 # Файлы приложения: тема, assets
 app_datas = [
@@ -20,8 +22,9 @@ a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=ytmusic_binaries,
-    datas=ytmusic_datas + app_datas,
+    datas=ytmusic_datas + certifi_datas + app_datas,
     hiddenimports=[
+        'certifi',
         'qasync',
         'PySide6.QtCore',
         'PySide6.QtGui',

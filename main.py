@@ -3,6 +3,22 @@ import os
 import asyncio
 import logging
 
+# В exe requests может не найти CA-бандл — без него запрос за visitor_id к YouTube падает, поиск 0 результатов
+if getattr(sys, "frozen", False):
+    try:
+        import pkgutil
+        cert_data = pkgutil.get_data("certifi", "cacert.pem")
+        if cert_data:
+            import tempfile
+            fd, path = tempfile.mkstemp(suffix=".pem")
+            os.close(fd)
+            with open(path, "wb") as f:
+                f.write(cert_data)
+            os.environ["REQUESTS_CA_BUNDLE"] = path
+            os.environ["SSL_CERT_FILE"] = path
+    except Exception:
+        pass
+
 from qasync import QEventLoop
 from PySide6.QtWidgets import QApplication
 from qt_material import apply_stylesheet

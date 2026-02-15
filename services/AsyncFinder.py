@@ -88,7 +88,19 @@ class AsyncYoutubeFinder(AsyncFinderInterface):
         except Exception as e:
             logger.exception("YouTube search %r: %s", title, e)
             return []
-        logger.info("YouTube search %r: найдено %s результатов", title, len(results) if results else 0)
+        n = len(results) if results else 0
+        logger.info("YouTube search %r: найдено %s результатов", title, n)
+        if n == 0:
+            try:
+                h = getattr(self.client, "base_headers", None) or {}
+                has_visitor = bool(h.get("X-Goog-Visitor-Id") if hasattr(h, "get") else None)
+            except Exception:
+                has_visitor = None
+            logger.warning(
+                "YouTube вернул 0 результатов (X-Goog-Visitor-Id: %s). "
+                "Если False — в exe запрос за visitor к music.youtube.com мог не пройти.",
+                has_visitor,
+            )
         tracks = []
         for track in results:
             track_id = track.get("videoId")

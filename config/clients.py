@@ -66,8 +66,12 @@ class InitClients:
     
     def _init_ytmusic_client(self) -> None:
         try:
-            self._ytmusic_client = YTMusic()
-            logger.info("YTMusic клиент создан (frozen=%s)", getattr(sys, "frozen", False))
+            # Явные language/location стабилизируют контекст в exe (избегаем пустого ответа поиска)
+            self._ytmusic_client = YTMusic(language="en", location="US")
+            logger.info(
+                "YTMusic клиент создан (frozen=%s, language=en, location=US)",
+                getattr(sys, "frozen", False),
+            )
         except Exception as e:
             logger.exception("Не удалось создать YTMusic: %s", e)
             raise
