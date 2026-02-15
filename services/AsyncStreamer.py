@@ -42,6 +42,8 @@ class AsyncYandexStreamer(AsyncStreamerInterface):
         self.client = GetClients().get_yandex_client()
 
     async def get_stream_url(self, track: Track) -> str | None:
+        if self.client is None:
+            return None
         try:
             track_info = await self.client.tracks(track.track_id)
             download_info = await track_info[0].get_download_info_async()

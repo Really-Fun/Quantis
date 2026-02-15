@@ -8,12 +8,7 @@
 
 """
 
-import logging
-import os
-import sys
 from typing import List, Union
-
-logger = logging.getLogger("cleanplayer.clients")
 
 from yandex_music import ClientAsync
 from yandex_music.exceptions import TimedOutError, NetworkError as NetworkErrorYandex
@@ -41,16 +36,17 @@ class InitClients:
         self._init_lastfm_client()
         
     def _init_yandex_client(self) -> None:
+        self._yandex_client = None
         try:
-            self._yandex_client = ClientAsync(get_password(SERVICE_NAME_YANDEX, USER))
-        except TimedOutError:
-            pass
-        except NetworkErrorYandex:
-            pass
-        else:
+            token = get_password(SERVICE_NAME_YANDEX, USER)
+            if token:
+                self._yandex_client = ClientAsync(token)
+        except (TimedOutError, NetworkErrorYandex, Exception):
             pass
     
     def _init_lastfm_client(self) -> None:
+        self._lastfm_client = None
+        return None
         LASTFM_API_KEY = get_password(SERVICE_NAME_LASTFM_API, USER)
         LASTFM_API_SECRET = get_password(SERVICE_NAME_LASTFM_SECRET, USER)
         if LASTFM_API_KEY is None or LASTFM_API_SECRET is None:
@@ -65,18 +61,10 @@ class InitClients:
             pass
     
     def _init_ytmusic_client(self) -> None:
-        try:
-            # Явные language/location стабилизируют контекст в exe (избегаем пустого ответа поиска)
-            self._ytmusic_client = YTMusic(language="en", location="US")
-            logger.info(
-                "YTMusic клиент создан (frozen=%s, language=en, location=US)",
-                getattr(sys, "frozen", False),
-            )
-        except Exception as e:
-            logger.exception("Не удалось создать YTMusic: %s", e)
-            raise
+        # language=en, location="" — регион по серверу (по IP), иначе в РФ по "кино" и др. пусто
+        self._ytmusic_client = YTMusic(language="ru", location="")
 
-    def return_clients(self) -> List[Union[ClientAsync, YTMusic, LastFMNetwork]]:
+    def return_clients(self) -> List[Union[ClientAsync | None, YTMusic, LastFMNetwork]]:
         return [self._yandex_client, self._ytmusic_client, self._lastfm_client]
         
 
@@ -94,7 +82,7 @@ class GetClients:
         for name, client in zip(["__yandex", "__youtube", "__lastfm"], InitClients().return_clients()):
             setattr(self, "_GetClients" + name, client)
     
-    def get_yandex_client(self) -> ClientAsync:
+    def get_yandex_client(self) -> ClientAsync | None:
         return self.__yandex
     
     def get_youtube_client(self) -> YTMusic:

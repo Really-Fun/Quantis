@@ -27,7 +27,7 @@ class MenuTabs(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        self.setFixedWidth(88)
+        self.setFixedWidth(150)
         self.setAttribute(Qt.WA_TranslucentBackground)
 
         # ================= ПАНЕЛЬ =================
@@ -35,8 +35,8 @@ class MenuTabs(QWidget):
         panel.setObjectName("navPanel")
 
         panel_layout = QVBoxLayout(panel)
-        panel_layout.setContentsMargins(12, 16, 12, 16)
-        panel_layout.setSpacing(10)
+        panel_layout.setContentsMargins(8, 10, 8, 10)
+        panel_layout.setSpacing(6)
         panel_layout.setAlignment(Qt.AlignTop)
 
         # --- кнопки навигации ---
@@ -87,8 +87,8 @@ class MenuTabs(QWidget):
 
             QPushButton#navButton {
                 color: #e6ffff;
-                font-size: 18px;
-                border-radius: 12px;
+                font-size: 16px;
+                border-radius: 10px;
                 background: transparent;
             }
 
@@ -127,17 +127,17 @@ class MenuTabs(QWidget):
     @staticmethod
     def _make_nav_button(text: str) -> QPushButton:
         btn = QPushButton(text)
-        btn.setFixedHeight(44)
+        btn.setFixedHeight(36)
         btn.setCursor(Qt.PointingHandCursor)
         btn.setObjectName("navButton")
         btn.setCheckable(True)
         return btn
 
     @staticmethod
-    def _make_tool_button(icon_path: str, size: int = 40) -> QToolButton:
+    def _make_tool_button(icon_path: str, size: int = 32) -> QToolButton:
         btn = QToolButton()
         btn.setIcon(QIcon(icon_path))
-        btn.setIconSize(QSize(size, size))
+        btn.setIconSize(QSize(size - 4, size - 4))
         btn.setFixedSize(size, size)
         btn.setAutoRaise(True)
         btn.setCursor(Qt.PointingHandCursor)

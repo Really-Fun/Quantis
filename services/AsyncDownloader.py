@@ -53,6 +53,8 @@ class AsyncYandexDownloader(AsyncDownloaderInterface):
         self.client = GetClients().get_yandex_client()
     
     async def download_track(self, track: Track) -> None:
+        if self.client is None:
+            return
         try:
             track_info = await self.client.tracks(track.track_id)
             await track_info[0].download_async(self.path_provider.get_track_path(track))
@@ -60,6 +62,8 @@ class AsyncYandexDownloader(AsyncDownloaderInterface):
             logger.exception("Не удалось скачать трек с Яндекс.Музыки: %s", track)
 
     async def download_cover(self, track: Track) -> None:
+        if self.client is None:
+            return
         try:
             track_info = await self.client.tracks(track.track_id)
             await track_info[0].downloadCoverAsync(self.path_provider.get_cover_path(track), "200x200")

@@ -4,7 +4,6 @@ Yandex
 Youtube
 """
 
-import logging
 from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor
 from asyncio import get_running_loop
@@ -13,8 +12,6 @@ import yandex_music.exceptions
 
 from models import Track, YandexTrack, YoutubeTrack
 from config import GetClients
-
-logger = logging.getLogger("cleanplayer.search")
 
 
 class AsyncFinderInterface(ABC):
@@ -34,6 +31,8 @@ class AsyncYandexFinder(AsyncFinderInterface):
         self.client = GetClients().get_yandex_client()
 
     async def get_tracks(self, title: str, value: int = 5) -> list[Track]:
+        if self.client is None:
+            return []
         try:
             tracks = await self.client.search(title)
             return [YandexTrack(
@@ -50,6 +49,8 @@ class AsyncYandexFinder(AsyncFinderInterface):
             return []
 
     async def get_track(self, id: int) -> Track | None:
+        if self.client is None:
+            return None
         try:
             track_info = await self.client.tracks(id)
             track = track_info[0]
@@ -68,7 +69,6 @@ class AsyncYoutubeFinder(AsyncFinderInterface):
 
     def __init__(self) -> None:
         self.client = GetClients().get_youtube_client()
-        logger.info("AsyncYoutubeFinder: клиент получен, client=%s", type(self.client).__name__)
 
     async def get_tracks(self, title: str, value: int = 5) -> list[Track]:
         with ThreadPoolExecutor() as pool:
@@ -85,22 +85,8 @@ class AsyncYoutubeFinder(AsyncFinderInterface):
     def sync_get_tracks(self, title: str, value: int = 5) -> list[Track]:
         try:
             results = self.client.search(query=title, filter="songs", limit=value)
-        except Exception as e:
-            logger.exception("YouTube search %r: %s", title, e)
+        except Exception:
             return []
-        n = len(results) if results else 0
-        logger.info("YouTube search %r: найдено %s результатов", title, n)
-        if n == 0:
-            try:
-                h = getattr(self.client, "base_headers", None) or {}
-                has_visitor = bool(h.get("X-Goog-Visitor-Id") if hasattr(h, "get") else None)
-            except Exception:
-                has_visitor = None
-            logger.warning(
-                "YouTube вернул 0 результатов (X-Goog-Visitor-Id: %s). "
-                "Если False — в exe запрос за visitor к music.youtube.com мог не пройти.",
-                has_visitor,
-            )
         tracks = []
         for track in results:
             track_id = track.get("videoId")
@@ -135,7 +121,6 @@ class AsyncFinder(AsyncFinderInterface):
     async def get_tracks(self, title: str, value: int = 5) -> list[Track]:
         yandex_tracks = await self._yandex_finder.get_tracks(title, value)
         youtube_tracks = await self._youtube_finder.get_tracks(title, value)
-        logger.info("Поиск %r: Yandex=%s, YouTube=%s", title, len(yandex_tracks), len(youtube_tracks))
         return yandex_tracks + youtube_tracks
 
     async def get_track(self, id: int) -> Track:
