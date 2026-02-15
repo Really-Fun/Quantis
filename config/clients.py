@@ -8,8 +8,12 @@
 
 """
 
+import logging
 import os
+import sys
 from typing import List, Union
+
+logger = logging.getLogger("cleanplayer.clients")
 
 from yandex_music import ClientAsync
 from yandex_music.exceptions import TimedOutError, NetworkError as NetworkErrorYandex
@@ -61,8 +65,13 @@ class InitClients:
             pass
     
     def _init_ytmusic_client(self) -> None:
-        self._ytmusic_client = YTMusic()
-        
+        try:
+            self._ytmusic_client = YTMusic()
+            logger.info("YTMusic клиент создан (frozen=%s)", getattr(sys, "frozen", False))
+        except Exception as e:
+            logger.exception("Не удалось создать YTMusic: %s", e)
+            raise
+
     def return_clients(self) -> List[Union[ClientAsync, YTMusic, LastFMNetwork]]:
         return [self._yandex_client, self._ytmusic_client, self._lastfm_client]
         

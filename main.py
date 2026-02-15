@@ -1,11 +1,7 @@
 import sys
 import os
 import asyncio
-
-# В exe (PyInstaller) путь к локалям ytmusicapi должен браться из sys._MEIPASS
-if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
-    import ytmusicapi.ytmusic as _ytm_mod
-    _ytm_mod.__file__ = os.path.join(sys._MEIPASS, "ytmusicapi", "ytmusic.py")
+import logging
 
 from qasync import QEventLoop
 from PySide6.QtWidgets import QApplication
@@ -15,7 +11,30 @@ from services import TrackHistoryService
 from ui import NeonMusic
 
 
+def _setup_logging() -> None:
+    """Мини-логи для отладки (поиск, YTMusic). В exe — ещё и в файл."""
+    fmt = logging.Formatter("%(asctime)s [%(name)s] %(levelname)s: %(message)s", datefmt="%H:%M:%S")
+    root = logging.getLogger("cleanplayer")
+    root.setLevel(logging.INFO)
+    if not root.handlers:
+        h = logging.StreamHandler(sys.stderr)
+        h.setFormatter(fmt)
+        root.addHandler(h)
+    if getattr(sys, "frozen", False):
+        try:
+            base = getattr(sys, "_MEIPASS", os.path.dirname(sys.executable))
+            log_dir = os.path.dirname(sys.executable)
+            log_path = os.path.join(log_dir, "cleanplayer.log")
+            fh = logging.FileHandler(log_path, encoding="utf-8")
+            fh.setFormatter(fmt)
+            root.addHandler(fh)
+            root.info("Лог exe: %s", log_path)
+        except Exception:
+            pass
+
+
 if __name__ == "__main__":
+    _setup_logging()
     app = QApplication(sys.argv)
     apply_stylesheet(app, "user_theme.xml", invert_secondary=True)
 

@@ -4,6 +4,7 @@ Yandex
 Youtube
 """
 
+import logging
 from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor
 from asyncio import get_running_loop
@@ -12,6 +13,8 @@ import yandex_music.exceptions
 
 from models import Track, YandexTrack, YoutubeTrack
 from config import GetClients
+
+logger = logging.getLogger("cleanplayer.search")
 
 
 class AsyncFinderInterface(ABC):
@@ -65,6 +68,7 @@ class AsyncYoutubeFinder(AsyncFinderInterface):
 
     def __init__(self) -> None:
         self.client = GetClients().get_youtube_client()
+        logger.info("AsyncYoutubeFinder: клиент получен, client=%s", type(self.client).__name__)
 
     async def get_tracks(self, title: str, value: int = 5) -> list[Track]:
         with ThreadPoolExecutor() as pool:
@@ -79,7 +83,12 @@ class AsyncYoutubeFinder(AsyncFinderInterface):
         return track
 
     def sync_get_tracks(self, title: str, value: int = 5) -> list[Track]:
-        results = self.client.search(query=title, filter="songs", limit=value)
+        try:
+            results = self.client.search(query=title, filter="songs", limit=value)
+        except Exception as e:
+            logger.exception("YouTube search %r: %s", title, e)
+            return []
+        logger.info("YouTube search %r: найдено %s результатов", title, len(results) if results else 0)
         tracks = []
         for track in results:
             track_id = track.get("videoId")
@@ -114,6 +123,7 @@ class AsyncFinder(AsyncFinderInterface):
     async def get_tracks(self, title: str, value: int = 5) -> list[Track]:
         yandex_tracks = await self._yandex_finder.get_tracks(title, value)
         youtube_tracks = await self._youtube_finder.get_tracks(title, value)
+        logger.info("Поиск %r: Yandex=%s, YouTube=%s", title, len(yandex_tracks), len(youtube_tracks))
         return yandex_tracks + youtube_tracks
 
     async def get_track(self, id: int) -> Track:
