@@ -62,9 +62,9 @@ from ui import NeonMusic
 
 
 if __name__ == "__main__":
-    # onefile: сразу ставим рабочую папку в _MEIPASS, чтобы assets/icons и user_theme.xml находились
+    # onefile: рабочая папка = папка с exe (там лежат assets/, user_theme.xml)
     if getattr(sys, "frozen", False):
-        os.chdir(getattr(sys, "_MEIPASS", os.path.dirname(sys.executable)))
+        os.chdir(os.path.dirname(sys.executable))
     if getattr(sys, "frozen", False) and not os.environ.get("REQUESTS_CA_BUNDLE"):
         try:
             import certifi

@@ -10,6 +10,8 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtGui import QIcon, QDesktopServices
 
+from utils import asset_path
+
 
 class MenuTabs(QWidget):
     """Левая панель навигации. Сигнал ``page_changed(int)`` при клике."""
@@ -54,11 +56,11 @@ class MenuTabs(QWidget):
         panel_layout.addWidget(self.btn_library)
 
         # --- нижние кнопки инструментов ---
-        self.btn_settings = self._make_tool_button("assets/icons/setting.png")
+        self.btn_settings = self._make_tool_button(asset_path("assets/icons/setting.png"))
         self.btn_settings.clicked.connect(lambda: self._switch(self.SETTINGS))
-        self.btn_folder = self._make_tool_button("assets/icons/folder.png")
+        self.btn_folder = self._make_tool_button(asset_path("assets/icons/folder.png"))
         self.btn_folder.clicked.connect(self._open_app_folder)
-        self.btn_account = self._make_tool_button("assets/icons/account.png")
+        self.btn_account = self._make_tool_button(asset_path("assets/icons/account.png"))
         self.btn_account.clicked.connect(lambda: self._switch(self.USER))
 
         panel_layout.addStretch(1)

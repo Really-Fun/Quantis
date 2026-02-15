@@ -3,6 +3,7 @@
 import os
 import re
 
+from utils import asset_path
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
     QScrollArea, QSlider, QComboBox, QLineEdit, QToolButton, QSizePolicy,
@@ -79,7 +80,7 @@ class SettingsPage(QWidget):
 
         row_bg = _SettingRow("Фон")
         self._bg_combo = QComboBox()
-        bg_dir = "assets/background"
+        bg_dir = asset_path("assets/background")
         if os.path.isdir(bg_dir):
             bg_files = sorted(
                 f for f in os.listdir(bg_dir)
@@ -176,7 +177,7 @@ class SettingsPage(QWidget):
 
     def _on_bg_selected(self, index: int) -> None:
         name = self._bg_combo.itemText(index)
-        self.background_changed.emit(f"assets/background/{name}")
+        self.background_changed.emit(asset_path(f"assets/background/{name}"))
 
     def _on_delay_changed(self, value: int) -> None:
         self._viz_delay_label.setText(str(value))

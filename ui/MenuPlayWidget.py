@@ -10,6 +10,7 @@ from player import Player
 from services import AsyncDownloader
 from providers import PlaylistManager, PathProvider
 from models import Track
+from utils import asset_path
 import os
 
 _BG_COLOR = QColor(0, 0, 0, 200)
@@ -129,12 +130,12 @@ class PlayMenu(QWidget):
         btns.setSpacing(8)
         btns.setAlignment(Qt.AlignCenter)
 
-        self.btn_repeat = self._btn("assets/icons/repeat_playlist.png", 30)
+        self.btn_repeat = self._btn(asset_path("assets/icons/repeat_playlist.png"), 30)
         self.btn_repeat.setToolTip("Повтор: выкл")
-        self.btn_prev = self._btn("assets/icons/backward.png", 34)
-        self.btn_play = self._btn("assets/icons/play.png", 40)
-        self.btn_next = self._btn("assets/icons/forward.png", 34)
-        self.btn_wave = self._btn("assets/icons/wave.png", 30)
+        self.btn_prev = self._btn(asset_path("assets/icons/backward.png"), 34)
+        self.btn_play = self._btn(asset_path("assets/icons/play.png"), 40)
+        self.btn_next = self._btn(asset_path("assets/icons/forward.png"), 34)
+        self.btn_wave = self._btn(asset_path("assets/icons/wave.png"), 30)
 
         btns.addWidget(self.btn_repeat)
         btns.addWidget(self.btn_prev)
@@ -184,7 +185,7 @@ class PlayMenu(QWidget):
         right.setContentsMargins(0, 0, 0, 0)
         right.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
-        self.btn_download = self._btn("assets/icons/download.png", 30)
+        self.btn_download = self._btn(asset_path("assets/icons/download.png"), 30)
 
         vol_icon = QLabel("🔊")
         vol_icon.setStyleSheet("font-size: 14px; background: transparent;")
@@ -246,7 +247,7 @@ class PlayMenu(QWidget):
     @asyncSlot(object)
     async def _on_track_changed(self, track) -> None:
         await self.set_track(track)
-        self.btn_play.setIcon(QIcon("assets/icons/pause.png"))
+        self.btn_play.setIcon(QIcon(asset_path("assets/icons/pause.png")))
 
     # ── обновление информации о треке ──
 
@@ -292,24 +293,24 @@ class PlayMenu(QWidget):
     async def toggle_playback(self):
         if self.player.is_playing():
             self.player.pause()
-            self.btn_play.setIcon(QIcon("assets/icons/play.png"))
+            self.btn_play.setIcon(QIcon(asset_path("assets/icons/play.png")))
             return
         self.player.resume()
-        self.btn_play.setIcon(QIcon("assets/icons/pause.png"))
+        self.btn_play.setIcon(QIcon(asset_path("assets/icons/pause.png")))
 
     @asyncSlot()
     async def play_previous_track(self):
         track = self.playlist_manager.current_playlist.move_previous_track()
         await self.player.play_track(track)
         await self.set_track(track)
-        self.btn_play.setIcon(QIcon("assets/icons/pause.png"))
+        self.btn_play.setIcon(QIcon(asset_path("assets/icons/pause.png")))
 
     @asyncSlot()
     async def play_next_track(self):
         track = self.playlist_manager.current_playlist.move_next_track()
         await self.player.play_track(track)
         await self.set_track(track)
-        self.btn_play.setIcon(QIcon("assets/icons/pause.png"))
+        self.btn_play.setIcon(QIcon(asset_path("assets/icons/pause.png")))
 
     def _cycle_repeat_mode(self) -> None:
         """Цикл: выкл → один трек → весь плейлист → выкл."""
@@ -349,7 +350,7 @@ class PlayMenu(QWidget):
             if current is not None:
                 await self.player.play_track(current)
                 await self.set_track(current)
-                self.btn_play.setIcon(QIcon("assets/icons/pause.png"))
+                self.btn_play.setIcon(QIcon(asset_path("assets/icons/pause.png")))
                 return
         await self.play_next_track()
 

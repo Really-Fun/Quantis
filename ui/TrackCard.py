@@ -26,6 +26,7 @@ from qasync import asyncSlot
 from models import Track
 from providers import PathProvider
 from services import AsyncDownloader
+from utils import asset_path
 
 _COVER_SIZE = 48
 _CARD_HEIGHT = 60
@@ -55,7 +56,7 @@ class _PlayOverlay(QToolButton):
         super().__init__(parent)
         self.setFixedSize(_COVER_SIZE, _COVER_SIZE)
         self.setIconSize(QSize(22, 22))
-        self.setIcon(QIcon("assets/icons/play.png"))
+        self.setIcon(QIcon(asset_path("assets/icons/play.png")))
         self.setCursor(Qt.PointingHandCursor)
         self.setStyleSheet(_BTN_STYLE.format(
             bg="0, 0, 0, 140",
@@ -72,7 +73,7 @@ class _DownloadButton(QToolButton):
         super().__init__(parent)
         self.setFixedSize(28, 28)
         self.setIconSize(QSize(16, 16))
-        self.setIcon(QIcon("assets/icons/download.png"))
+        self.setIcon(QIcon(asset_path("assets/icons/download.png")))
         self.setCursor(Qt.PointingHandCursor)
         self.setStyleSheet(_BTN_STYLE.format(
             bg="255, 255, 255, 15",

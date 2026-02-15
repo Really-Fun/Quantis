@@ -14,6 +14,7 @@ from PySide6.QtGui import QPixmap, QGuiApplication
 from PySide6.QtCore import QSettings, Qt
 from qasync import asyncSlot
 
+from utils import asset_path
 from ui.MenuPlayWidget import PlayMenu
 from ui.MenuTabsWidget import MenuTabs
 from ui.Stack import Stack
@@ -45,7 +46,7 @@ class NeonMusic(QMainWindow):
 
         # ================== ФОН ==================
         self.background = QLabel(central)
-        self.background.setPixmap(QPixmap("assets/background/real.jpg"))
+        self.background.setPixmap(QPixmap(asset_path("assets/background/real.jpg")))
         self.background.setScaledContents(True)
 
         # ================== ТЕМНОЕ ПЕРЕКРЫТИЕ ==================
