@@ -12,6 +12,22 @@ if getattr(sys, "frozen", False):
         _ytm_mod.__file__ = os.path.join(_meipass, "ytmusicapi", "ytmusic.py")
     except Exception:
         pass
+    # Запрос за X-Goog-Visitor-Id к music.youtube.com часто получает пустую страницу при старом UA.
+    # Подменяем User-Agent на актуальный Chrome, чтобы сервер отдал страницу с ytcfg (VISITOR_DATA).
+    try:
+        import ytmusicapi.helpers as _ytm_helpers
+        _orig_init_headers = _ytm_helpers.initialize_headers
+        _chrome_ua = (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/131.0.0.0 Safari/537.36"
+        )
+        def _patched_init_headers():
+            h = _orig_init_headers()
+            h["user-agent"] = _chrome_ua
+            return h
+        _ytm_helpers.initialize_headers = _patched_init_headers
+    except Exception:
+        pass
     _cert_paths = (
         os.path.join(_meipass, "certifi", "cacert.pem"),
         os.path.join(_meipass, "certifi", "certifi", "cacert.pem"),
