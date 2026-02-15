@@ -56,8 +56,6 @@ if getattr(sys, "frozen", False):
             pass
     # сохраняем для лога после настройки logging
     __ca_bundle_for_log = _ca_bundle_set
-    # onefile: ищем user_theme.xml и assets в распакованной папке
-    os.chdir(_meipass)
 
 from qasync import QEventLoop
 from PySide6.QtWidgets import QApplication

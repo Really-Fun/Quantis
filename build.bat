@@ -18,6 +18,6 @@ if %ERRORLEVEL% neq 0 (
 )
 
 echo.
-echo Done. Onefile: dist\CleanPlayer.exe
+echo Done. Run: dist\CleanPlayer\CleanPlayer.exe
 echo VLC must be installed on the target machine.
 pause
