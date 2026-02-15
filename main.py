@@ -3,21 +3,45 @@ import os
 import asyncio
 import logging
 
-# В exe requests может не найти CA-бандл — без него запрос за visitor_id к YouTube падает, поиск 0 результатов
+# В exe (onefile/onedir): путь к локалям ytmusicapi и CA-бандл для requests
 if getattr(sys, "frozen", False):
+    _meipass = getattr(sys, "_MEIPASS", os.path.dirname(sys.executable))
+    # Чтобы ytmusicapi нашёл locales (в т.ч. ru), подменяем __file__ модуля ytmusic
     try:
-        import pkgutil
-        cert_data = pkgutil.get_data("certifi", "cacert.pem")
-        if cert_data:
-            import tempfile
-            fd, path = tempfile.mkstemp(suffix=".pem")
-            os.close(fd)
-            with open(path, "wb") as f:
-                f.write(cert_data)
-            os.environ["REQUESTS_CA_BUNDLE"] = path
-            os.environ["SSL_CERT_FILE"] = path
+        import ytmusicapi.ytmusic as _ytm_mod
+        _ytm_mod.__file__ = os.path.join(_meipass, "ytmusicapi", "ytmusic.py")
     except Exception:
         pass
+    _cert_paths = (
+        os.path.join(_meipass, "certifi", "cacert.pem"),
+        os.path.join(_meipass, "certifi", "certifi", "cacert.pem"),
+    )
+    _ca_bundle_set = False
+    for _p in _cert_paths:
+        if os.path.isfile(_p):
+            os.environ["REQUESTS_CA_BUNDLE"] = _p
+            os.environ["SSL_CERT_FILE"] = _p
+            _ca_bundle_set = _p
+            break
+    if not _ca_bundle_set:
+        try:
+            import pkgutil
+            import tempfile
+            _cert_data = pkgutil.get_data("certifi", "cacert.pem")
+            if _cert_data:
+                _fd, _p = tempfile.mkstemp(suffix=".pem")
+                os.close(_fd)
+                with open(_p, "wb") as _f:
+                    _f.write(_cert_data)
+                os.environ["REQUESTS_CA_BUNDLE"] = _p
+                os.environ["SSL_CERT_FILE"] = _p
+                _ca_bundle_set = _p
+        except Exception:
+            pass
+    # сохраняем для лога после настройки logging
+    __ca_bundle_for_log = _ca_bundle_set
+    # onefile: ищем user_theme.xml и assets в распакованной папке
+    os.chdir(_meipass)
 
 from qasync import QEventLoop
 from PySide6.QtWidgets import QApplication
@@ -51,6 +75,23 @@ def _setup_logging() -> None:
 
 if __name__ == "__main__":
     _setup_logging()
+    if getattr(sys, "frozen", False):
+        # Если по путям не нашли — пробуем certifi.where() (пакет уже в бандле)
+        if not os.environ.get("REQUESTS_CA_BUNDLE"):
+            try:
+                import certifi
+                _p = certifi.where()
+                if _p and os.path.isfile(_p):
+                    os.environ["REQUESTS_CA_BUNDLE"] = _p
+                    os.environ["SSL_CERT_FILE"] = _p
+                    globals()["__ca_bundle_for_log"] = _p
+            except Exception:
+                pass
+        _ca = globals().get("__ca_bundle_for_log")
+        logging.getLogger("cleanplayer").info(
+            "CA bundle для SSL: %s",
+            _ca if _ca else "НЕ ЗАДАН — возможна причина 0 результатов YouTube",
+        )
     app = QApplication(sys.argv)
     apply_stylesheet(app, "user_theme.xml", invert_secondary=True)
 

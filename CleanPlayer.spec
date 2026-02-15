@@ -1,20 +1,20 @@
 # -*- mode: python ; coding: utf-8 -*-
-# Сборка CleanPlayer для Windows.
-# Локали ytmusicapi (в т.ч. RU) подхватываются через collect_all.
+# Сборка CleanPlayer для Windows (onefile, как в рабочей команде с ytmusicapi).
 
 import os
 from PyInstaller.utils.hooks import collect_all, collect_data_files
 
-# Подтянуть все данные ytmusicapi (локали, в т.ч. ru)
+# Локали ytmusicapi (в т.ч. ru) — collect_all + явно ru как в старой рабочей сборке
 ytmusic_datas, ytmusic_binaries, ytmusic_hidden = collect_all('ytmusicapi')
-# CA-сертификаты для requests/SSL в exe (иначе запрос за visitor_id к YouTube может не пройти)
 certifi_datas = collect_data_files("certifi")
 
-# Файлы приложения: тема, assets
 app_datas = [
     ('user_theme.xml', '.'),
     ('assets', 'assets'),
 ]
+
+# Иконка (создай assets/icons/icon.ico при необходимости)
+icon_path = 'assets/icons/icon.ico' if os.path.isfile('assets/icons/icon.ico') else None
 
 block_cipher = None
 
@@ -25,6 +25,7 @@ a = Analysis(
     datas=ytmusic_datas + certifi_datas + app_datas,
     hiddenimports=[
         'certifi',
+        'ytmusicapi',
         'qasync',
         'PySide6.QtCore',
         'PySide6.QtGui',
@@ -42,31 +43,26 @@ a = Analysis(
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
+# Onefile: один exe, всё внутри (как в твоей рабочей команде)
 exe = EXE(
     pyz,
     a.scripts,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
     [],
-    exclude_binaries=True,
     name='CleanPlayer',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=False,  # GUI — без консоли
+    upx_exclude=[],
+    runtime_tmpdir=None,
+    console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-)
-
-coll = COLLECT(
-    exe,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
-    strip=False,
-    upx=True,
-    upx_exclude=[],
-    name='CleanPlayer',
+    icon=icon_path,
 )
