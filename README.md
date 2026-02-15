@@ -48,6 +48,15 @@ python main.py
 
 Требование: установлен `VLC` в системе (для `python-vlc`).
 
+### Сборка exe (Windows)
+
+```bat
+pip install pyinstaller
+build.bat
+```
+
+Исполняемый файл и ресурсы появятся в `dist\CleanPlayer\`. Запуск: `dist\CleanPlayer\CleanPlayer.exe`. В spec подключены локали **ytmusicapi** (в т.ч. RU) через `collect_all('ytmusicapi')`.
+
 ---
 
 ## Ключи и токены

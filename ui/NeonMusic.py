@@ -82,7 +82,6 @@ class NeonMusic(QMainWindow):
 
         # -------- ЛЕВОЕ МЕНЮ --------
         self.menu_tabs = MenuTabs()
-        self.menu_tabs.setFixedWidth(self.width() // 3)
         self.menu_tabs.setAttribute(Qt.WA_TranslucentBackground)
 
         content_layout.addWidget(self.menu_tabs)
