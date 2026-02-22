@@ -47,7 +47,8 @@ class InitClients:
         LASTFM_API_KEY = get_password(SERVICE_NAME_LASTFM_API, USER)
         LASTFM_API_SECRET = get_password(SERVICE_NAME_LASTFM_SECRET, USER)
         if LASTFM_API_KEY is None or LASTFM_API_SECRET is None:
-            raise Exception("LastFm API key or secret is not set")
+            self._lastfm_client = None
+            return None
         try:
             self._lastfm_client = LastFMNetwork(LASTFM_API_KEY, LASTFM_API_SECRET)
         except WSError:
