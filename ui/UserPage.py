@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
 )
 
 from ui.theme import PANEL_RADIUS, scroll_qss
+import keyring
 
 
 class UserPage(QWidget):
@@ -119,13 +120,13 @@ class _TokenSection(QFrame):
         title.setStyleSheet("color: #fff; font-size: 16px; font-weight: 700;")
         lay.addWidget(title)
 
-        yandex_token = QLineEdit()
-        yandex_token.setPlaceholderText("Yandex token")
-        yandex_token.setEchoMode(QLineEdit.Password)
+        self.yandex_token = QLineEdit()
+        self.yandex_token.setPlaceholderText("Yandex token")
+        self.yandex_token.setEchoMode(QLineEdit.Password)
 
-        youtube_key = QLineEdit()
-        youtube_key.setPlaceholderText("YouTube API key")
-        youtube_key.setEchoMode(QLineEdit.Password)
+        self.youtube_key = QLineEdit()
+        self.youtube_key.setPlaceholderText("YouTube API key")
+        self.youtube_key.setEchoMode(QLineEdit.Password)
 
         custom_api = QLineEdit()
         custom_api.setPlaceholderText("Другой API key / secret")
@@ -138,24 +139,43 @@ class _TokenSection(QFrame):
             "}"
             "QLineEdit:focus { border: 1px solid rgba(0,220,255,110); }"
         )
-        yandex_token.setStyleSheet(field_qss)
-        youtube_key.setStyleSheet(field_qss)
+        self.yandex_token.setStyleSheet(field_qss)
+        self.youtube_key.setStyleSheet(field_qss)
         custom_api.setStyleSheet(field_qss)
 
-        lay.addWidget(yandex_token)
-        lay.addWidget(youtube_key)
+        lay.addWidget(self.yandex_token)
+        lay.addWidget(self.youtube_key)
+        
         lay.addWidget(custom_api)
 
-        save_btn = QPushButton("Сохранить (скоро)")
-        save_btn.setEnabled(False)
-        save_btn.setCursor(Qt.ForbiddenCursor)
+        save_btn = QPushButton("Сохранить")
+        # save_btn.setCursor(Qt.ForbiddenCursor)
         save_btn.setStyleSheet(
             "QPushButton {"
             "color: rgba(255,255,255,120); background: rgba(255,255,255,10);"
             "border: 1px solid rgba(255,255,255,20); border-radius: 10px; padding: 8px 10px;"
             "}"
         )
+        save_btn.clicked.connect(self.save_apis)
         lay.addWidget(save_btn)
+
+    def get_apis(self):
+        yandex_api = self.yandex_token.text().strip()
+        return {"YANDEX_TOKEN_NEON_APP": yandex_api}
+    
+    def is_correct(self, apis: dict) -> bool:
+        return True
+
+    def write_apis(self, apis: dict) -> bool:
+        for key in apis:
+            keyring.set_password(key, "NEON_APP", apis[key])
+
+    def save_apis(self, text: str):
+        apis = self.get_apis()
+        if self.is_correct(apis):
+            self.write_apis(apis)
+        else:
+            print("Некорректные апи")
 
 
 class _InfoSection(QFrame):
