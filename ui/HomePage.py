@@ -1,17 +1,31 @@
-from pathlib import Path
-import logging
+"""Главная страница приложения.
 
-from PySide6.QtGui import QColor, QPainter, QLinearGradient, QBrush, QPainterPath, QPen
-from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QGridLayout, QScrollArea, QHBoxLayout,
-    QLabel, QMessageBox, QPushButton, QInputDialog, QSizePolicy, QFrame,
-)
+Секции: библиотека (скачанные, недавно прослушанные) и пользовательские плейлисты.
+"""
+
+import logging
+from pathlib import Path
+
 from PySide6.QtCore import Qt, QRectF, Signal, QTimer
+from PySide6.QtGui import QBrush, QColor, QLinearGradient, QPainter, QPainterPath, QPen
+from PySide6.QtWidgets import (
+    QFrame,
+    QGridLayout,
+    QHBoxLayout,
+    QInputDialog,
+    QLabel,
+    QMessageBox,
+    QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
+)
 from qasync import asyncSlot
 
 from models import DownloadPlaylist, RecentlyPlayedPlaylist, UserPlaylist
 from providers import PlaylistManager
-from services import TrackHistoryService
+from services import TrackHistoryService, AsyncRecomendation
 from ui.PlaylistPreview import PlaylistPreview
 from utils import (
     create_user_playlist_file,
@@ -40,6 +54,7 @@ _SCROLL_QSS = """
 
 
 class HomePage(QWidget):
+    """Главная страница с карточками плейлистов."""
 
     playlist_opened = Signal(object)
 
@@ -90,6 +105,11 @@ class HomePage(QWidget):
 
     # ── loading ──
 
+    async def load_recomendation(self) -> None:
+        rl = await AsyncRecomendation().get_personal_playlist()
+        if rl and rl.tracks.values:
+            self._add_card(self._sys_section, rl)
+
     def _load_system_playlists(self) -> None:
         """Загружает системные плейлисты и запускает фоновую загрузку истории."""
         try:
@@ -105,7 +125,7 @@ class HomePage(QWidget):
     async def _load_recent_played_async(self) -> None:
         """Подгружает плейлист недавно прослушанных из БД."""
         try:
-            recent = await self._history_service.get_recent_playlist(limit=24)
+            recent = await self._history_service.get_recent_playlist(limit=50)
             if recent is None:
                 recent = RecentlyPlayedPlaylist(tracks=())
             self._add_card(self._sys_section, recent)
@@ -124,11 +144,15 @@ class HomePage(QWidget):
         if not playlists_dir.is_dir():
             playlists_dir.mkdir(parents=True, exist_ok=True)
 
-        json_files = sorted(
-            (p for p in playlists_dir.iterdir() if p.suffix == ".json"),
-            key=lambda p: p.stat().st_mtime,
-            reverse=True,
-        ) if playlists_dir.is_dir() else []
+        json_files = (
+            sorted(
+                (p for p in playlists_dir.iterdir() if p.suffix == ".json"),
+                key=lambda p: p.stat().st_mtime,
+                reverse=True,
+            )
+            if playlists_dir.is_dir()
+            else []
+        )
 
         for path in json_files:
             try:
@@ -146,6 +170,11 @@ class HomePage(QWidget):
         """Перезагружает блок пользовательских плейлистов на экране."""
         self._user_section.clear_cards()
         self._load_user_playlists()
+
+    def _reload_system_playlists(self) -> None:
+        """Перезагружает системные плейлисты (Скачанные, Недавно прослушанные)."""
+        self._sys_section.clear_cards()
+        self._load_system_playlists()
 
     def _create_playlist(self) -> None:
         """Открывает диалог создания нового пользовательского плейлиста."""
@@ -271,7 +300,7 @@ class HomePage(QWidget):
 
 
 class _PlaylistSection(QWidget):
-    """A titled section with a grid of playlist cards inside a dark panel."""
+    """Секция с заголовком и сеткой карточек плейлистов."""
 
     create_requested = Signal()
 
@@ -420,7 +449,7 @@ class _PlaylistSection(QWidget):
 
 
 class _HeaderPanel(QWidget):
-    """Top header with greeting and subtle gradient background."""
+    """Верхняя шапка с приветствием и градиентным фоном."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -468,8 +497,12 @@ class _HeaderPanel(QWidget):
         line_grad.setColorAt(1.0, QColor(0, 220, 255, 0))
         pen = QPen(QBrush(line_grad), 1.0)
         p.setPen(pen)
-        p.drawLine(int(rect.left() + 16), int(rect.bottom() - 1),
-                   int(rect.right() - 16), int(rect.bottom() - 1))
+        p.drawLine(
+            int(rect.left() + 16),
+            int(rect.bottom() - 1),
+            int(rect.right() - 16),
+            int(rect.bottom() - 1),
+        )
 
         p.end()
         super().paintEvent(event)

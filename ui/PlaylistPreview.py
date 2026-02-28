@@ -1,13 +1,10 @@
-import os
-from pathlib import Path
+"""Карточка плейлиста для главной страницы."""
 
-from PySide6.QtWidgets import (
-    QWidget, QLabel, QVBoxLayout, QSizePolicy, QGraphicsDropShadowEffect, QMenu,
-)
-from PySide6.QtGui import (
-    QPixmap, QColor, QPainter, QPen, QLinearGradient, QBrush, QFont, QPainterPath,
-)
-from PySide6.QtCore import Qt, Signal, QTimeLine, QRectF
+import os
+
+from PySide6.QtCore import Qt, QRectF, Signal, QTimeLine
+from PySide6.QtGui import QBrush, QColor, QFont, QLinearGradient, QPainter, QPainterPath, QPen, QPixmap
+from PySide6.QtWidgets import QGraphicsDropShadowEffect, QLabel, QMenu, QSizePolicy, QVBoxLayout, QWidget
 
 from providers import PathProvider
 from utils import get_ru_words_for_number
@@ -115,7 +112,7 @@ class PlaylistPreview(QWidget):
     # ── cover loading ──
 
     def _load_cover(self) -> None:
-        """Try to load cover from disk. Falls back to a nice gradient placeholder."""
+        """Пытается загрузить обложку с диска. При отсутствии — градиент."""
         cover_path = self._resolve_cover()
         if cover_path and os.path.isfile(cover_path):
             pm = QPixmap(cover_path)
@@ -142,7 +139,7 @@ class PlaylistPreview(QWidget):
         return None
 
     def set_cover_pixmap(self, pm: QPixmap) -> None:
-        """Called externally after async cover download."""
+        """Вызывается извне после асинхронной загрузки обложки."""
         self._cover_pixmap = pm.scaled(
             _COVER_SIZE, _COVER_SIZE,
             Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation,

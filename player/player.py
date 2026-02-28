@@ -25,7 +25,9 @@ class Player(QObject):
     """Синглтон-плеер. Только воспроизведение."""
 
     track_finished = Signal()
-    track_changed = Signal(object)  # emitted with Track when a new track starts
+    track_changed = Signal(object)
+    next_requested = Signal()
+    previous_requested = Signal()
     _instance: Player | None = None
 
     def __new__(cls, *args, **kwargs) -> Player:
@@ -71,8 +73,6 @@ class Player(QObject):
             return
 
         self._engine.play_both(source)
-        # Сразу создаем/обновляем запись в истории, чтобы трек появлялся
-        # в "Недавно прослушанных" уже во время прослушивания.
         self._save_progress_background(track, force=True)
         self._start_resume_restore(track)
         self.track_changed.emit(track)

@@ -1,16 +1,22 @@
-from PySide6.QtWidgets import QWidget, QStackedWidget, QVBoxLayout
+"""Стек страниц приложения.
+
+Переключение между главной, поиском, плейлистом, настройками, профилем.
+"""
+
 import asyncio
 
+from PySide6.QtWidgets import QStackedWidget, QVBoxLayout, QWidget
+
 from ui.HomePage import HomePage
-from ui.SearchPage import SearchPage
 from ui.PlaylistPage import PlaylistPage
+from ui.SearchPage import SearchPage
 from ui.SettingsPage import SettingsPage
 from ui.UserPage import UserPage
 
 
 class Stack(QWidget):
+    """Виджет со стеком страниц и навигацией."""
 
-    # Индексы страниц
     HOME = 0
     SEARCH = 1
     PLAYLIST = 2
@@ -47,14 +53,15 @@ class Stack(QWidget):
         self.user_page.go_back.connect(lambda: self.switch_to(self.HOME))
 
     def switch_to(self, index: int) -> None:
-        """Переключает страницу по индексу (``Stack.HOME``, ``Stack.SEARCH`` и т.д.)."""
+        """Переключает активную страницу по индексу."""
         if 0 <= index < self._stack.count():
             self._stack.setCurrentIndex(index)
             if index == self.HOME:
+                self.home_page._reload_system_playlists()
                 self.home_page._reload_user_playlists()
 
     async def open_playlist(self, playlist) -> None:
-        """Открывает страницу плейлиста и загружает данные."""
+        """Открывает страницу плейлиста и загружает его содержимое."""
         self.switch_to(self.PLAYLIST)
         # Даем Qt шанс отрисовать страницу до тяжелой загрузки карточек.
         await asyncio.sleep(0)

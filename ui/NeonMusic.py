@@ -1,27 +1,21 @@
-"""Главное окно приложения."""
+"""Главное окно приложения CleanPlayer."""
+
 import sys
 
-from PySide6.QtWidgets import (
-    QMainWindow,
-    QApplication,
-    QVBoxLayout,
-    QWidget,
-    QHBoxLayout,
-    QLabel,
-    QFrame,
-)
-from PySide6.QtGui import QPixmap, QGuiApplication
 from PySide6.QtCore import QSettings, Qt
+from PySide6.QtGui import QGuiApplication, QPixmap
+from PySide6.QtWidgets import QApplication, QFrame, QHBoxLayout, QLabel, QMainWindow, QVBoxLayout, QWidget
 from qasync import asyncSlot
 
-from utils import asset_path
+from ui.AudioVisualizer import AudioVisualizer
 from ui.MenuPlayWidget import PlayMenu
 from ui.MenuTabsWidget import MenuTabs
 from ui.Stack import Stack
-from ui.AudioVisualizer import AudioVisualizer
+from utils import asset_path
 
 
 class NeonMusic(QMainWindow):
+    """Главное окно: меню, контент, плеер, визуализатор."""
 
     def __init__(self) -> None:
         super().__init__()
@@ -162,7 +156,7 @@ class NeonMusic(QMainWindow):
         self._settings.setValue("visualizer/mode", str(mode))
 
     def _center_on_screen(self) -> None:
-        """Размещает окно по центру доступной области экрана."""
+        """Размещает окно по центру экрана."""
         screen = QGuiApplication.primaryScreen()
         if screen is not None:
             available = screen.availableGeometry()

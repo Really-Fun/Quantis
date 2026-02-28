@@ -25,9 +25,12 @@ from abc import ABC, abstractmethod
 from models import Track, YandexTrack, YoutubeTrack, UpgradeCycle
 from providers import TrackManager
 
+
 class Playlist(ABC):
 
-    def __init__(self, name: str, tracks: Iterable[Track], cover_path: str | None = None) -> None:
+    def __init__(
+        self, name: str, tracks: Iterable[Track], cover_path: str | None = None
+    ) -> None:
         self.tracks = UpgradeCycle(tracks)
         self.name = name
         self.cover_path = cover_path
@@ -70,7 +73,18 @@ class Playlist(ABC):
             return True
         except ValueError:
             return False
-    
+
+    def set_current_track(self, index: int) -> None:
+        """Устанавливаем текущий трек плейлиста.
+
+        Args:
+            index (int): индекс (позиция) трека в плейлисте
+
+        Returns:
+            _type_: _description_
+        """
+        self.tracks.set_index(index)
+
     @staticmethod
     def load_playlist(playlist_path: str):
         """Загружаем плейлист из файла
@@ -86,10 +100,12 @@ class Playlist(ABC):
             name = playlist["name"]
             track_manager = TrackManager()
             tracks = [
-                track_manager.get_track_from_playlist(*(track["id"], track["title"], track["author"])) for track in playlist["tracks"]
+                track_manager.get_track_from_playlist(
+                    *(track["id"], track["title"], track["author"])
+                )
+                for track in playlist["tracks"]
             ]
         return name, tracks
-
 
     @classmethod
     @abstractmethod
@@ -140,10 +156,39 @@ class UserPlaylist(Playlist):
         return tuple(self.tracks.values)
 
 
-class DownloadPlaylist(Playlist):
-    """плейлист скачанных треков из music """
+class RecomendationPlaylist(Playlist):
+    """плейлист рекомендаций"""
 
-    def __init__(self, name: str = "Скачанные", tracks: Iterable[Track] | None = None, cover_path: str  = "playlist_covers/download.png") -> None:
+    def __init__(
+        self,
+        name: str = "Рекомендации",
+        tracks: Iterable[Track] | None = None,
+        cover_path: str = "playlist_covers/download.png",
+    ) -> None:
+        super().__init__(name, tracks, cover_path)
+
+    def get_tracks(self) -> Tuple[Track]:
+        """Получаем список треков из плейлиста
+
+        Returns:
+            Tuple[Track]: список треков
+        """
+        return tuple(self.tracks.values)
+
+    @classmethod
+    def get_playlist_from_path(cls, path_to_playlist: str) -> "DownloadPlaylist | None":
+        pass
+
+
+class DownloadPlaylist(Playlist):
+    """плейлист скачанных треков из music"""
+
+    def __init__(
+        self,
+        name: str = "Скачанные",
+        tracks: Iterable[Track] | None = None,
+        cover_path: str = "playlist_covers/download.png",
+    ) -> None:
         super().__init__(name, tracks or (), cover_path)
 
     def get_tracks(self) -> Tuple[Track]:
@@ -164,7 +209,9 @@ class DownloadPlaylist(Playlist):
         Returns:
             DownloadPlaylist: плейлист
         """
-        return DownloadPlaylist(name="Скачанные", tracks=cls.get_tracks_from_music_dir())
+        return DownloadPlaylist(
+            name="Скачанные", tracks=cls.get_tracks_from_music_dir()
+        )
 
     @staticmethod
     def get_tracks_from_music_dir() -> Tuple[Track]:
@@ -185,9 +232,23 @@ class DownloadPlaylist(Playlist):
                     continue
                 track_id, track_title, track_author = parts
                 if ext == ".mp3":
-                    tracks.append(YandexTrack(track_id=track_id, title=track_title, author=track_author, downloaded=True))
+                    tracks.append(
+                        YandexTrack(
+                            track_id=track_id,
+                            title=track_title,
+                            author=track_author,
+                            downloaded=True,
+                        )
+                    )
                 elif ext == ".m4a":
-                    tracks.append(YoutubeTrack(track_id=track_id, title=track_title, author=track_author, downloaded=True))
+                    tracks.append(
+                        YoutubeTrack(
+                            track_id=track_id,
+                            title=track_title,
+                            author=track_author,
+                            downloaded=True,
+                        )
+                    )
             except Exception:
                 continue
         return tuple(tracks)
@@ -209,6 +270,8 @@ class RecentlyPlayedPlaylist(Playlist):
         return tuple(self.tracks.values)
 
     @classmethod
-    def get_playlist_from_path(cls, path_to_playlist: str) -> "RecentlyPlayedPlaylist | None":
+    def get_playlist_from_path(
+        cls, path_to_playlist: str
+    ) -> "RecentlyPlayedPlaylist | None":
         """Плейлист строится из БД, поэтому чтение с диска не используется."""
         return None

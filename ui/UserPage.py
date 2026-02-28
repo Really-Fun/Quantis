@@ -1,25 +1,29 @@
-"""Страница пользователя (заглушка под API-данные)."""
+"""Страница пользователя.
+
+Заглушка под API-данные: токены, ключи, настройки аккаунта.
+"""
+
+import keyring
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
+    QFrame,
     QHBoxLayout,
     QLabel,
-    QFrame,
-    QScrollArea,
-    QToolButton,
     QLineEdit,
     QPushButton,
+    QScrollArea,
     QSizePolicy,
+    QToolButton,
+    QVBoxLayout,
+    QWidget,
 )
 
 from ui.theme import PANEL_RADIUS, scroll_qss
-import keyring
 
 
 class UserPage(QWidget):
-    """Экран пользователя с полями-заглушками для ключей и токенов."""
+    """Страница профиля с полями для токенов и API-ключей."""
 
     go_back = Signal()
 

@@ -1,6 +1,8 @@
 import os
 from decimal import Decimal
 
+from PySide6.QtCore import QTimer
+
 from mpris_server.adapters import MprisAdapter
 from mpris_server.base import MAX_RATE, MIN_RATE, PlayState
 from mpris_server.events import EventAdapter
@@ -152,15 +154,28 @@ class NeonAppAdapter(MprisAdapter):
     def get_playlists(self, index: int, max_count: int, order: str, reverse: bool):
         return []
 
-    # Управление воспроизведением
+    # Управление воспроизведением — вызывается из потока D-Bus, поэтому
+    # переносим вызов в главный поток Qt (VLC/плеер живут там).
+    def _on_main_thread(self, fn):
+        QTimer.singleShot(0, fn)
+
     def play(self):
-        self.player.resume()
+        self._on_main_thread(self.player.resume)
 
     def pause(self):
-        self.player.pause()
+        self._on_main_thread(self.player.pause)
+
+    def resume(self):
+        self._on_main_thread(self.player.resume)
 
     def stop(self):
-        self.player.pause()
+        self._on_main_thread(self.player.pause)
+
+    def next(self):
+        self._on_main_thread(lambda: self.player.next_requested.emit())
+
+    def previous(self):
+        self._on_main_thread(lambda: self.player.previous_requested.emit())
 
     # Сигналы
     def _on_track_changed(self, track):

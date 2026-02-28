@@ -1,14 +1,10 @@
+"""Мини-виджет трека для отображения текущей композиции."""
+
 import os
 
-from PySide6.QtWidgets import (
-    QWidget,
-    QLabel,
-    QHBoxLayout,
-    QVBoxLayout,
-    QSizePolicy
-)
-from PySide6.QtGui import QPixmap
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QPixmap
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget
 from qasync import asyncSlot
 
 from models import Track
@@ -17,6 +13,8 @@ from services import AsyncDownloader
 
 
 class MiniTrackWidget(QWidget):
+    """Мини-карточка трека: обложка, название, исполнитель."""
+
     def __init__(self, parent=None):
         super().__init__(parent)
 
@@ -74,8 +72,9 @@ class MiniTrackWidget(QWidget):
 
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
-    @asyncSlot()
+    @asyncSlot(object)
     async def update_widget(self, track: Track):
+        """Обновляет отображаемый трек и загружает обложку."""
         path = self.path_provider.get_cover_path(track)
         if not os.path.exists(path):
             await self.downloader.download_cover(track)

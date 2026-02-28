@@ -1,7 +1,6 @@
-"""Виджет-визуализатор аудио (неоновая волна с отражением и свечением).
+"""Виджет визуализатора аудио.
 
-Зависит только от VizualPlayer (FFT-данные), не от Player.
-Single Responsibility: отрисовка спектра.
+Неоновая волна с отражением, использует FFT-данные от VizualPlayer.
 """
 
 from __future__ import annotations
@@ -9,11 +8,9 @@ from __future__ import annotations
 from typing import Optional
 
 import numpy as np
-from PySide6.QtCore import Qt, QTimer, QPointF
-from PySide6.QtGui import (
-    QColor, QPainter, QPen, QPainterPath,
-    QLinearGradient, QBrush,
-)
+
+from PySide6.QtCore import Qt, QPointF, QTimer
+from PySide6.QtGui import QBrush, QColor, QLinearGradient, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QWidget
 
 from player.visualizer import VizualPlayer
@@ -36,7 +33,7 @@ from ui.theme import (
 
 
 def _build_smooth_path(points: list[QPointF]) -> QPainterPath:
-    """Catmull-Rom -> cubic Bezier для идеально гладкой кривой."""
+    """Строит гладкую кривую Catmull-Rom через кубические Безье."""
     path = QPainterPath()
     n = len(points)
     if n < 2:

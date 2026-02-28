@@ -1,13 +1,15 @@
-"""Универсальная карточка трека.
+"""Карточка трека
 
-Используется в поиске, плейлистах и везде, где нужно показать трек.
-Показывает: обложку, название, автора, source-бейдж.
-При ховере: play-кнопка поверх обложки, кнопка скачивания справа.
-Клик на карточку = играть.
+Используется в поиске, плейлистах и везде, где нужно отобразить трек.
+Показывает: обложку, название, автора, бейдж источника.
+При наведении: кнопка play поверх обложки, кнопка скачивания справа.
+Клик по карточке — воспроизведение.
 
 Сигналы:
-  play_requested(Track)     — пользователь хочет проиграть трек
-  download_requested(Track) — пользователь хочет скачать трек
+  play_requested(Track)
+  download_requested(Track)
+  add_to_playlist_requested(Track)
+  remove_from_playlist_requested(Track)
 """
 
 from __future__ import annotations
@@ -15,12 +17,9 @@ from __future__ import annotations
 import os
 from typing import Optional
 
-from PySide6.QtWidgets import (
-    QWidget, QHBoxLayout, QVBoxLayout,
-    QLabel, QMenu, QSizePolicy, QToolButton,
-)
-from PySide6.QtGui import QPixmap, QColor, QPainter, QIcon
 from PySide6.QtCore import Qt, Signal, QSize
+from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QMenu, QSizePolicy, QToolButton, QVBoxLayout, QWidget
 from qasync import asyncSlot
 
 from models import Track
@@ -50,7 +49,7 @@ _BTN_STYLE = """
 
 
 class _PlayOverlay(QToolButton):
-    """Play button that sits on top of the cover."""
+    """Кнопка воспроизведения поверх обложки."""
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -67,7 +66,7 @@ class _PlayOverlay(QToolButton):
 
 
 class _DownloadButton(QToolButton):
-    """Small download button that appears on hover."""
+    """Кнопка скачивания, видима при наведении."""
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -188,7 +187,7 @@ class TrackCard(QWidget):
     # --- public API ---
 
     def set_track(self, track: Track, index: int = 0) -> None:
-        """Set or update the displayed track."""
+        """Устанавливает или обновляет отображаемый трек."""
         self._track = track
         self._index = index
         self._update_index_label()
@@ -228,14 +227,14 @@ class TrackCard(QWidget):
         return f"{listens} {word}"
 
     def set_playing(self, is_playing: bool) -> None:
-        """Set visual state for the currently playing track."""
+        """Включает или выключает подсветку воспроизводимого трека."""
         self._is_playing = is_playing
         self._update_index_label()
         self.update()
 
     @asyncSlot()
     async def load_cover(self) -> None:
-        """Load cover async (download if missing)."""
+        """Асинхронно загружает обложку, при необходимости скачивает."""
         if self._track is None:
             return
         path = self._path_provider.get_cover_path(self._track)

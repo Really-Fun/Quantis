@@ -75,3 +75,14 @@ class UpgradeCycle:
         if self._index != 0:
             return self.values[self._index - 1]
         return self.values[len(self.values) - 1]
+
+    def set_index(self, index: int) -> None:
+        self._index = index
+
+    def advance_and_peek(self) -> Optional[Any]:
+        """Переход на следующий трек и возврат нового текущего (для move_next)."""
+        n = len(self.values)
+        if n == 0:
+            return None
+        self._index = (self._index + 1) % n
+        return self.values[self._index]

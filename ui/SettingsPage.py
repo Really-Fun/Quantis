@@ -1,19 +1,33 @@
-"""Страница настроек."""
+"""Страница настроек.
+
+Аудио, внешний вид, визуализатор, о приложении.
+"""
 
 import os
 import re
 
-from utils import asset_path
-from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame,
-    QScrollArea, QSlider, QComboBox, QLineEdit, QToolButton, QSizePolicy,
-)
-from PySide6.QtGui import QColor, QPainter, QPainterPath, QLinearGradient, QBrush, QPen
 from PySide6.QtCore import Qt, QRectF, Signal
+from PySide6.QtGui import QBrush, QColor, QLinearGradient, QPainter, QPainterPath, QPen
+from PySide6.QtWidgets import (
+    QComboBox,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QLineEdit,
+    QScrollArea,
+    QSizePolicy,
+    QSlider,
+    QToolButton,
+    QVBoxLayout,
+    QWidget,
+)
+
 from ui.theme import COMBO_QSS, PANEL_DARK, PANEL_RADIUS, REFRESH_MS_MAX, REFRESH_MS_MIN, scroll_qss
+from utils import asset_path
 
 
 class SettingsPage(QWidget):
+    """Страница настроек приложения."""
 
     go_back = Signal()
     background_changed = Signal(str)
@@ -200,8 +214,10 @@ class SettingsPage(QWidget):
         if mode:
             self.visualizer_mode_changed.emit(str(mode))
 
-    def set_visualizer_settings(self, delay_ms: int, color_rgb: tuple[int, int, int], mode: str) -> None:
-        """Устанавливает начальные значения настроек визуализатора."""
+    def set_visualizer_settings(
+        self, delay_ms: int, color_rgb: tuple[int, int, int], mode: str
+    ) -> None:
+        """Восстанавливает сохранённые настройки визуализатора."""
         self._viz_delay.blockSignals(True)
         self._viz_delay.setValue(max(REFRESH_MS_MIN, min(REFRESH_MS_MAX, int(delay_ms))))
         self._viz_delay.blockSignals(False)
@@ -220,7 +236,7 @@ class SettingsPage(QWidget):
 
     @staticmethod
     def _parse_rgb_text(text: str) -> tuple[int, int, int] | None:
-        """Парсит строку вида '255 255 255' или '255,255,255'."""
+        """Разбирает строку вида '255 255 255' или '255,255,255'."""
         chunks = [c for c in re.split(r"[,\s]+", text.strip()) if c]
         if len(chunks) != 3:
             return None
@@ -242,7 +258,7 @@ class SettingsPage(QWidget):
 
 
 class _ToggleButton(QWidget):
-    """Кастомный переключатель вкл/выкл."""
+    """Переключатель вкл/выкл."""
 
     toggled_changed = Signal(bool)
 
@@ -291,6 +307,7 @@ class _ToggleButton(QWidget):
 
 
 class _SettingsHeader(QWidget):
+    """Шапка страницы настроек с кнопкой назад."""
 
     back_clicked = Signal()
 
@@ -395,7 +412,7 @@ class _Section(QWidget):
 
 
 class _SettingRow(QWidget):
-    """Одна строка настройки: слева подпись, справа контрол."""
+    """Строка настройки: подпись слева, контрол справа."""
 
     def __init__(self, label: str, parent=None):
         super().__init__(parent)

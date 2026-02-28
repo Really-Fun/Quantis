@@ -1,15 +1,29 @@
-from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLineEdit,
-    QLabel, QMessageBox, QSizePolicy, QScrollArea, QFrame, QInputDialog,
-)
+"""Страница поиска треков.
+
+Строка ввода с анимированной рамкой, панель результатов с карточками.
+"""
+
+from PySide6.QtCore import Qt, QRectF, Signal, QTimeLine
 from PySide6.QtGui import QColor, QPainter, QPen
-from PySide6.QtCore import Qt, QTimeLine, QRectF, Signal
+from PySide6.QtWidgets import (
+    QFrame,
+    QHBoxLayout,
+    QInputDialog,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QScrollArea,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
+)
 from qasync import asyncSlot
 
-from services import AsyncFinder, AsyncDownloader
 from player import Player
+from services import AsyncDownloader, AsyncFinder
 from ui.TrackCard import TrackCard
-from utils import add_track_to_user_playlist, list_user_playlist_names
+from utils import add_track_to_user_playlist
+from utils import list_user_playlist_names
 
 _LINE_COLOR = QColor(0, 220, 255)
 _LINE_WIDTH = 2
@@ -20,7 +34,7 @@ _ALPHA_MAX = 160
 
 
 class SearchBar(QWidget):
-    """Search input with breathing border."""
+    """Поле поиска с пульсирующей рамкой."""
 
     search_requested = Signal(str)
 
@@ -87,6 +101,7 @@ class SearchBar(QWidget):
 
 
 class SearchPage(QWidget):
+    """Страница поиска по трекам и исполнителям."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -158,7 +173,7 @@ class SearchPage(QWidget):
 
         self.main_layout.addWidget(self._results_panel, stretch=1)
 
-    @asyncSlot()
+    @asyncSlot(str)
     async def _do_search(self, query: str) -> None:
         self._status.setText("Ищем...")
         self._status.show()

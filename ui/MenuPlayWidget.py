@@ -1,17 +1,22 @@
-from PySide6.QtCore import QSize, Qt, QTimer, QRectF
-from PySide6.QtGui import QIcon, QPixmap, QColor, QPainter, QPainterPath
-from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QToolButton, QSlider, QLabel,
-    QSizePolicy,
-)
-from qasync import asyncSlot
+"""Нижняя панель плеера.
 
-from player import Player
-from services import AsyncDownloader
-from providers import PlaylistManager, PathProvider
-from models import Track
-from utils import asset_path
+Управление воспроизведением, перемотка, громкость, следующая/предыдущая.
+"""
+
+import asyncio
 import os
+
+from PySide6.QtCore import QRectF, QSize, Qt, QTimer
+from PySide6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPixmap
+from PySide6.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QSlider, QToolButton, QVBoxLayout, QWidget
+from qasync import asyncSlot
+from PySide6.QtGui import QKeySequence, QShortcut
+
+from models import Track
+from player import Player
+from providers import PathProvider, PlaylistManager
+from services import AsyncDownloader
+from utils import asset_path
 
 _BG_COLOR = QColor(0, 0, 0, 200)
 _BG_RADIUS = 18
@@ -66,7 +71,7 @@ _ARTIST_QSS = "color: rgba(255,255,255,110); font-size: 11px; background: transp
 
 
 class PlayMenu(QWidget):
-    """Нижняя панель управления плеером."""
+    """Панель управления воспроизведением."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -216,7 +221,22 @@ class PlayMenu(QWidget):
         self.btn_repeat.clicked.connect(self._cycle_repeat_mode)
         self.btn_prev.clicked.connect(self.play_previous_track)
         self.btn_next.clicked.connect(self.play_next_track)
+        self.player.next_requested.connect(self._on_next_requested)
+        self.player.previous_requested.connect(self._on_previous_requested)
         self.btn_download.clicked.connect(self.download_track)
+
+        # ── реакция на нажатие клавиш ──
+        self.btn_play.setShortcut(QKeySequence("Space"))
+        self.btn_prev.setShortcut(QKeySequence("Left"))
+        self.btn_next.setShortcut(QKeySequence("Right"))
+        self.btn_repeat.setShortcut(QKeySequence("R"))
+        self.btn_download.setShortcut(QKeySequence("D"))
+        self.btn_wave.setShortcut(QKeySequence("W"))
+
+        key_shortcut_for_volume_up = QShortcut(QKeySequence("Up"), self)
+        key_shortcut_for_volume_up.activated.connect(self._on_volume_up)
+        key_shortcut_for_volume_down = QShortcut(QKeySequence("Down"), self)
+        key_shortcut_for_volume_down.activated.connect(self._on_volume_down)
 
         # ── реакция на завершение трека ──
         self.player.track_finished.connect(self._on_track_finished)
@@ -305,12 +325,26 @@ class PlayMenu(QWidget):
         await self.set_track(track)
         self.btn_play.setIcon(QIcon(asset_path("assets/icons/pause.png")))
 
+    def _on_previous_requested(self):
+        """Обработка запроса предыдущего трека (MPRIS, кнопки на наушниках)."""
+        try:
+            asyncio.get_running_loop().create_task(self.play_previous_track())
+        except RuntimeError:
+            pass
+
     @asyncSlot()
     async def play_next_track(self):
         track = self.playlist_manager.current_playlist.move_next_track()
         await self.player.play_track(track)
         await self.set_track(track)
         self.btn_play.setIcon(QIcon(asset_path("assets/icons/pause.png")))
+
+    def _on_next_requested(self):
+        """Обработка запроса следующего трека (MPRIS, кнопки на наушниках)."""
+        try:
+            asyncio.get_running_loop().create_task(self.play_next_track())
+        except RuntimeError:
+            pass
 
     def _cycle_repeat_mode(self) -> None:
         """Цикл: выкл → один трек → весь плейлист → выкл."""
@@ -322,7 +356,7 @@ class PlayMenu(QWidget):
         self._update_repeat_button_style()
 
     def _update_repeat_button_style(self) -> None:
-        """Подсветка кнопки повтора, когда режим включён."""
+        """Обновляет визуальное состояние кнопки повтора."""
         size = 30
         if self._repeat_mode == "off":
             style = """
@@ -362,6 +396,14 @@ class PlayMenu(QWidget):
 
     def _on_volume(self) -> None:
         self.player.volume = self._vol.value()
+
+    def _on_volume_up(self) -> None:
+        self.player.volume = min(100, self.player.volume + 10)
+        self._vol.setValue(self.player.volume)
+
+    def _on_volume_down(self) -> None:
+        self.player.volume = max(0, self.player.volume - 10)
+        self._vol.setValue(self.player.volume)
 
     # ── фабрика кнопок ──
 

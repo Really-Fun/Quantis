@@ -1,24 +1,22 @@
+"""Боковая панель навигации.
+
+Кнопки переключения страниц, настройки, папка, профиль.
+"""
+
 import sys
 from pathlib import Path
 
 from PySide6.QtCore import Qt, QSize, Signal, QUrl
-from PySide6.QtWidgets import (
-    QWidget,
-    QVBoxLayout,
-    QPushButton,
-    QFrame, QToolButton, QHBoxLayout,
-)
-from PySide6.QtGui import QIcon, QDesktopServices
+from PySide6.QtGui import QDesktopServices, QIcon
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QPushButton, QToolButton, QVBoxLayout, QWidget
 
 from utils import asset_path
 
 
 class MenuTabs(QWidget):
-    """Левая панель навигации. Сигнал ``page_changed(int)`` при клике."""
+    """Левая панель навигации. Эмитит page_changed(int) при смене страницы."""
 
     page_changed = Signal(int)
-
-    # Индексы страниц (должны совпадать со Stack)
     HOME = 0
     SEARCH = 1
     LIBRARY = 2
@@ -147,7 +145,7 @@ class MenuTabs(QWidget):
 
     @staticmethod
     def _open_app_folder() -> None:
-        """Открывает папку приложения (рядом с music/covers/assets)."""
+        """Открывает директорию приложения в проводнике."""
         if getattr(sys, "frozen", False):
             app_dir = Path(sys.executable).resolve().parent
         else:
