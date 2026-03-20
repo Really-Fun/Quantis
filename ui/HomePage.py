@@ -35,14 +35,14 @@ from utils import (
     touch_user_playlist_file,
 )
 
-_COLUMNS = 4
-_CARD_SPACING = 14
-_PANEL_RADIUS = 16
+COLUMNS = 4
+CARD_SPACING = 14
+PANEL_RADIUS = 16
 logger = logging.getLogger(__name__)
 
-_SCROLL_QSS = """
+SCROLL_QSS = """
     QScrollArea { background: transparent; border: none; }
-    QWidget#_scrollContent { background: transparent; }
+    QWidget#scrollContent { background: transparent; }
     QScrollBar:vertical {
         width: 5px; background: transparent;
     }
@@ -61,8 +61,8 @@ class HomePage(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        self._pm = PlaylistManager()
-        self._history_service = TrackHistoryService()
+        self.pm = PlaylistManager()
+        self.history_service = TrackHistoryService()
         self.setObjectName("HomePage")
 
         root = QVBoxLayout(self)
@@ -70,7 +70,7 @@ class HomePage(QWidget):
         root.setSpacing(0)
 
         # ═══════ HEADER ═══════
-        header = _HeaderPanel()
+        header = HeaderPanel()
         root.addWidget(header)
         root.addSpacing(12)
 
@@ -79,26 +79,26 @@ class HomePage(QWidget):
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setFrameShape(QFrame.NoFrame)
-        scroll.setStyleSheet(_SCROLL_QSS)
+        scroll.setStyleSheet(SCROLL_QSS)
 
         content = QWidget()
-        content.setObjectName("_scrollContent")
-        self._content_lay = QVBoxLayout(content)
-        self._content_lay.setContentsMargins(0, 0, 0, 0)
-        self._content_lay.setSpacing(14)
+        content.setObjectName("scrollContent")
+        self.content_lay = QVBoxLayout(content)
+        self.content_lay.setContentsMargins(0, 0, 0, 0)
+        self.content_lay.setSpacing(14)
 
         # ── section: system playlists ──
-        self._sys_section = _PlaylistSection("Библиотека", accent=True)
-        self._content_lay.addWidget(self._sys_section)
-        self._load_system_playlists()
+        self.sys_section = PlaylistSection("Библиотека", accent=True)
+        self.content_lay.addWidget(self.sys_section)
+        self.load_system_playlists()
 
         # ── section: user playlists ──
-        self._user_section = _PlaylistSection("Ваши плейлисты", allow_create=True)
-        self._user_section.create_requested.connect(self._create_playlist)
-        self._content_lay.addWidget(self._user_section)
-        self._load_user_playlists()
+        self.user_section = PlaylistSection("Ваши плейлисты", allow_create=True)
+        self.user_section.create_requested.connect(self.create_playlist)
+        self.content_lay.addWidget(self.user_section)
+        self.load_user_playlists()
 
-        self._content_lay.addStretch()
+        self.content_lay.addStretch()
 
         scroll.setWidget(content)
         root.addWidget(scroll, stretch=1)
@@ -108,34 +108,34 @@ class HomePage(QWidget):
     async def load_recomendation(self) -> None:
         rl = await AsyncRecomendation().get_personal_playlist()
         if rl and rl.tracks.values:
-            self._add_card(self._sys_section, rl)
+            self.add_card(self.sys_section, rl)
 
-    def _load_system_playlists(self) -> None:
+    def load_system_playlists(self) -> None:
         """Загружает системные плейлисты и запускает фоновую загрузку истории."""
         try:
             dl = DownloadPlaylist.get_playlist_from_path("")
             if dl and dl.tracks.values:
-                self._add_card(self._sys_section, dl)
+                self.add_card(self.sys_section, dl)
         except Exception:
             logger.exception("Не удалось загрузить системный плейлист скачанных треков")
 
-        QTimer.singleShot(0, self._load_recent_played_async)
+        QTimer.singleShot(0, self.load_recent_played_async)
 
     @asyncSlot()
-    async def _load_recent_played_async(self) -> None:
+    async def load_recent_played_async(self) -> None:
         """Подгружает плейлист недавно прослушанных из БД."""
         try:
-            recent = await self._history_service.get_recent_playlist(limit=50)
+            recent = await self.history_service.get_recent_playlist(limit=50)
             if recent is None:
                 recent = RecentlyPlayedPlaylist(tracks=())
-            self._add_card(self._sys_section, recent)
+            self.add_card(self.sys_section, recent)
         except Exception:
             logger.exception("Не удалось загрузить плейлист недавно прослушанных")
 
-        if not self._sys_section.has_cards():
-            self._sys_section.set_empty("Скачайте треки — они появятся здесь")
+        if not self.sys_section.has_cards():
+            self.sys_section.set_empty("Скачайте треки — они появятся здесь")
 
-    def _load_user_playlists(self) -> None:
+    def load_user_playlists(self) -> None:
         """Загружает пользовательские плейлисты из директории `playlists/`.
 
         Плейлисты сортируются по времени модификации (новые/недавно открытые — сверху).
@@ -161,22 +161,22 @@ class HomePage(QWidget):
                 continue
             if playlist is None:
                 continue
-            self._add_card(self._user_section, playlist)
+            self.add_card(self.user_section, playlist)
 
-        if not self._user_section.has_cards():
-            self._user_section.set_empty("Добавьте .json файл в папку playlists/")
+        if not self.user_section.has_cards():
+            self.user_section.set_empty("Добавьте .json файл в папку playlists/")
 
-    def _reload_user_playlists(self) -> None:
+    def reload_user_playlists(self) -> None:
         """Перезагружает блок пользовательских плейлистов на экране."""
-        self._user_section.clear_cards()
-        self._load_user_playlists()
+        self.user_section.clear_cards()
+        self.load_user_playlists()
 
-    def _reload_system_playlists(self) -> None:
+    def reload_system_playlists(self) -> None:
         """Перезагружает системные плейлисты (Скачанные, Недавно прослушанные)."""
-        self._sys_section.clear_cards()
-        self._load_system_playlists()
+        self.sys_section.clear_cards()
+        self.load_system_playlists()
 
-    def _create_playlist(self) -> None:
+    def create_playlist(self) -> None:
         """Открывает диалог создания нового пользовательского плейлиста."""
         name, ok = QInputDialog.getText(
             self,
@@ -198,21 +198,21 @@ class HomePage(QWidget):
             QMessageBox.critical(self, "Ошибка", "Не удалось создать плейлист.")
             return
 
-        self._reload_user_playlists()
+        self.reload_user_playlists()
 
-    def _add_card(self, section: "_PlaylistSection", playlist) -> None:
+    def add_card(self, section: "PlaylistSection", playlist) -> None:
         card = PlaylistPreview(playlist)
-        card.clicked.connect(self._on_click)
+        card.clicked.connect(self.on_click)
         if isinstance(playlist, UserPlaylist):
-            card.rename_requested.connect(self._rename_playlist)
-            card.delete_requested.connect(self._delete_playlist)
+            card.rename_requested.connect(self.rename_playlist)
+            card.delete_requested.connect(self.delete_playlist)
         section.add_card(card)
 
     @asyncSlot(object)
-    async def _on_click(self, playlist) -> None:
+    async def on_click(self, playlist) -> None:
         # Для "Недавно прослушанных" всегда загружаем свежий срез из БД.
         if isinstance(playlist, RecentlyPlayedPlaylist):
-            fresh = await self._history_service.get_recent_playlist(limit=50)
+            fresh = await self.history_service.get_recent_playlist(limit=50)
             playlist = fresh if fresh is not None else RecentlyPlayedPlaylist(tracks=())
         elif isinstance(playlist, UserPlaylist):
             # Перечитываем плейлист с диска, чтобы подхватить добавленные треки,
@@ -225,10 +225,10 @@ class HomePage(QWidget):
                     playlist = fresh
             except Exception:
                 logger.exception("Не удалось перезагрузить пользовательский плейлист")
-        self._pm.set_playlist(playlist)
+        self.pm.set_playlist(playlist)
         self.playlist_opened.emit(playlist)
 
-    def _rename_playlist(self, playlist: UserPlaylist) -> None:
+    def rename_playlist(self, playlist: UserPlaylist) -> None:
         """Переименовывает пользовательский плейлист через контекстное меню."""
         old_name = getattr(playlist, "name", "").strip()
         if not old_name:
@@ -259,9 +259,9 @@ class HomePage(QWidget):
             QMessageBox.critical(self, "Ошибка", "Не удалось переименовать плейлист.")
             return
 
-        self._reload_user_playlists()
+        self.reload_user_playlists()
 
-    def _delete_playlist(self, playlist: UserPlaylist) -> None:
+    def delete_playlist(self, playlist: UserPlaylist) -> None:
         """Удаляет пользовательский плейлист через контекстное меню."""
         name = getattr(playlist, "name", "").strip()
         if not name:
@@ -288,7 +288,7 @@ class HomePage(QWidget):
             QMessageBox.critical(self, "Ошибка", "Не удалось удалить плейлист.")
             return
 
-        self._reload_user_playlists()
+        self.reload_user_playlists()
 
     def paintEvent(self, event) -> None:
         super().paintEvent(event)
@@ -299,7 +299,7 @@ class HomePage(QWidget):
 # ═══════════════════════════════════════════════════════
 
 
-class _PlaylistSection(QWidget):
+class PlaylistSection(QWidget):
     """Секция с заголовком и сеткой карточек плейлистов."""
 
     create_requested = Signal()
@@ -312,18 +312,18 @@ class _PlaylistSection(QWidget):
         parent=None,
     ):
         super().__init__(parent)
-        self._cards: list[PlaylistPreview] = []
-        self._accent = accent
+        self.cards: list[PlaylistPreview] = []
+        self.accent = accent
 
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
         lay.setSpacing(0)
 
         # dark panel
-        self._panel = QFrame()
-        self._panel.setObjectName("SectionPanel")
+        self.panel = QFrame()
+        self.panel.setObjectName("SectionPanel")
 
-        panel_lay = QVBoxLayout(self._panel)
+        panel_lay = QVBoxLayout(self.panel)
         panel_lay.setContentsMargins(16, 14, 16, 14)
         panel_lay.setSpacing(10)
 
@@ -331,11 +331,11 @@ class _PlaylistSection(QWidget):
         title_row = QHBoxLayout()
         title_row.setContentsMargins(0, 0, 0, 0)
 
-        self._title = QLabel(title)
-        self._title.setStyleSheet(
+        self.title = QLabel(title)
+        self.title.setStyleSheet(
             "color: #fff; font-size: 17px; font-weight: 700; background: transparent;"
         )
-        title_row.addWidget(self._title)
+        title_row.addWidget(self.title)
 
         if allow_create:
             create_btn = QPushButton("+")
@@ -374,42 +374,42 @@ class _PlaylistSection(QWidget):
         panel_lay.addLayout(title_row)
 
         # grid
-        self._grid_container = QWidget()
-        self._grid = QGridLayout(self._grid_container)
-        self._grid.setContentsMargins(0, 0, 0, 0)
-        self._grid.setSpacing(_CARD_SPACING)
-        panel_lay.addWidget(self._grid_container)
+        self.grid_container = QWidget()
+        self.grid = QGridLayout(self.grid_container)
+        self.grid.setContentsMargins(0, 0, 0, 0)
+        self.grid.setSpacing(CARD_SPACING)
+        panel_lay.addWidget(self.grid_container)
 
         # empty label (hidden by default)
-        self._empty = QLabel("")
-        self._empty.setAlignment(Qt.AlignCenter)
-        self._empty.setStyleSheet(
+        self.empty = QLabel("")
+        self.empty.setAlignment(Qt.AlignCenter)
+        self.empty.setStyleSheet(
             "color: rgba(255,255,255,40); font-size: 13px; padding: 20px; background: transparent;"
         )
-        self._empty.hide()
-        panel_lay.addWidget(self._empty)
+        self.empty.hide()
+        panel_lay.addWidget(self.empty)
 
-        lay.addWidget(self._panel)
+        lay.addWidget(self.panel)
 
     def add_card(self, card: PlaylistPreview) -> None:
-        idx = len(self._cards)
-        row, col = divmod(idx, _COLUMNS)
-        self._grid.addWidget(card, row, col)
-        self._cards.append(card)
-        self._empty.hide()
+        idx = len(self.cards)
+        row, col = divmod(idx, COLUMNS)
+        self.grid.addWidget(card, row, col)
+        self.cards.append(card)
+        self.empty.hide()
 
     def has_cards(self) -> bool:
-        return bool(self._cards)
+        return bool(self.cards)
 
     def clear_cards(self) -> None:
         """Очищает текущие карточки секции."""
-        for card in self._cards:
+        for card in self.cards:
             card.hide()
             card.setParent(None)
             card.deleteLater()
-        self._cards.clear()
-        while self._grid.count():
-            item = self._grid.takeAt(0)
+        self.cards.clear()
+        while self.grid.count():
+            item = self.grid.takeAt(0)
             widget = item.widget()
             if widget is not None:
                 widget.hide()
@@ -417,8 +417,8 @@ class _PlaylistSection(QWidget):
                 widget.deleteLater()
 
     def set_empty(self, text: str) -> None:
-        self._empty.setText(text)
-        self._empty.show()
+        self.empty.setText(text)
+        self.empty.show()
 
     def paintEvent(self, event) -> None:
         p = QPainter(self)
@@ -426,16 +426,16 @@ class _PlaylistSection(QWidget):
         rect = QRectF(0, 0, self.width(), self.height())
         p.setPen(Qt.NoPen)
 
-        if self._accent:
+        if self.accent:
             # slightly different tint for system section
             p.setBrush(QColor(0, 0, 0, 190))
         else:
             p.setBrush(QColor(0, 0, 0, 190))
 
-        p.drawRoundedRect(rect, _PANEL_RADIUS, _PANEL_RADIUS)
+        p.drawRoundedRect(rect, PANEL_RADIUS, PANEL_RADIUS)
 
         # subtle top border for accent section
-        if self._accent:
+        if self.accent:
             line_grad = QLinearGradient(0, 0, self.width(), 0)
             line_grad.setColorAt(0.0, QColor(0, 220, 255, 0))
             line_grad.setColorAt(0.3, QColor(0, 220, 255, 25))
@@ -448,7 +448,7 @@ class _PlaylistSection(QWidget):
         super().paintEvent(event)
 
 
-class _HeaderPanel(QWidget):
+class HeaderPanel(QWidget):
     """Верхняя шапка с приветствием и градиентным фоном."""
 
     def __init__(self, parent=None):
@@ -459,11 +459,11 @@ class _HeaderPanel(QWidget):
         lay = QHBoxLayout(self)
         lay.setContentsMargins(20, 0, 20, 0)
 
-        self._greeting = QLabel("Главная")
-        self._greeting.setStyleSheet(
+        self.greeting = QLabel("Главная")
+        self.greeting.setStyleSheet(
             "color: #fff; font-size: 26px; font-weight: 800; background: transparent;"
         )
-        lay.addWidget(self._greeting)
+        lay.addWidget(self.greeting)
         lay.addStretch()
 
         sub = QLabel("CleanPlayer")
@@ -479,7 +479,7 @@ class _HeaderPanel(QWidget):
 
         rect = QRectF(0, 0, self.width(), self.height())
         clip = QPainterPath()
-        clip.addRoundedRect(rect, _PANEL_RADIUS, _PANEL_RADIUS)
+        clip.addRoundedRect(rect, PANEL_RADIUS, PANEL_RADIUS)
         p.setClipPath(clip)
 
         grad = QLinearGradient(0, 0, self.width(), 0)

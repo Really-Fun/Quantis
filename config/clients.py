@@ -17,74 +17,70 @@ from pylast import LastFMNetwork
 from ytmusicapi import YTMusic
 from keyring import get_password
 
-from config.constants import SERVICE_NAME_YANDEX, SERVICE_NAME_LASTFM_API, SERVICE_NAME_LASTFM_SECRET, USER
-
+from config.constants import (
+    SERVICE_NAME_YANDEX,
+    SERVICE_NAME_LASTFM_API,
+    SERVICE_NAME_LASTFM_SECRET,
+    USER,
+)
 
 
 class InitClients:
     """Класс, инициализирующий клиенты:
-    _yandex_client - Асинхронная версия яндекс музыки
-    _ytmusic_client - синхронный клиент ютуб музыки
-    _lastfm_client - синхронный клиент LastFm
+    init_yandex_client - Асинхронная версия яндекс музыки
+    init_lastfm_client - синхронный клиент ютуб музыки
+    init_ytmusic_client - синхронный клиент LastFm
     """
 
-    def __init__(self) -> None:
-        """Инициализация клиентов
-        """
-        self._init_yandex_client()
-        self._init_ytmusic_client()
-        self._init_lastfm_client()
-        
-    def _init_yandex_client(self) -> None:
+    def init_yandex_client(self) -> None:
         try:
-            self._yandex_client = ClientAsync(get_password(SERVICE_NAME_YANDEX, USER))
+            yandex_client = ClientAsync(get_password(SERVICE_NAME_YANDEX, USER))
         except TimedOutError:
-            self._yandex_client = None
+            yandex_client = None
         except NetworkErrorYandex:
-            self._yandex_client = None
-    
-    def _init_lastfm_client(self) -> None:
+            yandex_client = None
+        finally:
+            return yandex_client
+
+    def init_lastfm_client(self) -> None:
         LASTFM_API_KEY = get_password(SERVICE_NAME_LASTFM_API, USER)
         LASTFM_API_SECRET = get_password(SERVICE_NAME_LASTFM_SECRET, USER)
         if LASTFM_API_KEY is None or LASTFM_API_SECRET is None:
-            self._lastfm_client = None
-            return None
+            lastfm_client = None
         try:
-            self._lastfm_client = LastFMNetwork(LASTFM_API_KEY, LASTFM_API_SECRET)
+            lastfm_client = LastFMNetwork(LASTFM_API_KEY, LASTFM_API_SECRET)
         except WSError:
             pass
         except NetworkErrorLastFm:
             pass
         else:
             pass
-    
-    def _init_ytmusic_client(self) -> None:
-        # language=en, location="" — регион по серверу (по IP), иначе в РФ по "кино" и др. пусто
-        self._ytmusic_client = YTMusic(language="ru", location="")
+        finally:
+            return lastfm_client
 
-    def return_clients(self) -> List[Union[ClientAsync | None, YTMusic, LastFMNetwork]]:
-        return [self._yandex_client, self._ytmusic_client, self._lastfm_client]
-        
+    def init_ytmusic_client(self) -> None:
+        ytmusic_client = YTMusic(language="ru", location="")
+        return ytmusic_client
+
 
 class GetClients:
-    
+
     def __new__(cls):
         if not hasattr(cls, "instance"):
             cls.instance = super().__new__(cls)
         return cls.instance
-    
+
     def __init__(self) -> None:
-        self.__yandex : ClientAsync
-        self.__youtube: YTMusic
-        self.__lastfm: LastFMNetwork
-        for name, client in zip(["__yandex", "__youtube", "__lastfm"], InitClients().return_clients()):
-            setattr(self, "_GetClients" + name, client)
-    
+        initializator = InitClients()
+        self.__yandex = initializator.init_yandex_client()
+        self.__youtube = initializator.init_ytmusic_client()
+        self.__lastfm = initializator.init_lastfm_client()
+
     def get_yandex_client(self) -> ClientAsync | None:
         return self.__yandex
-    
+
     def get_youtube_client(self) -> YTMusic:
         return self.__youtube
-    
+
     def get_lastfm_client(self) -> LastFMNetwork:
         return self.__lastfm

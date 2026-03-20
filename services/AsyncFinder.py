@@ -34,7 +34,7 @@ class AsyncYandexFinder(AsyncFinderInterface):
         if self.client is None:
             return []
         try:
-            tracks = await self.client.search(title)
+            tracks = await self.client.search(title,)
             return [YandexTrack(
                                 track["id"],
                                 track["title"],

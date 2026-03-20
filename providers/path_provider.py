@@ -1,5 +1,5 @@
 from os import path
-from models import Track
+from models.Tracks import Track
 
 
 class PathProvider:

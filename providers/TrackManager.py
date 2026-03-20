@@ -1,4 +1,4 @@
-from models import YandexTrack, YoutubeTrack
+from models.Tracks import YandexTrack, YoutubeTrack
 from pathlib import Path
 
 

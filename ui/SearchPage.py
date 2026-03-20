@@ -3,7 +3,7 @@
 Строка ввода с анимированной рамкой, панель результатов с карточками.
 """
 
-from PySide6.QtCore import Qt, QRectF, Signal, QTimeLine
+from PySide6.QtCore import QRectF, Qt, QTimeLine, Signal
 from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import (
     QFrame,
@@ -11,9 +11,8 @@ from PySide6.QtWidgets import (
     QInputDialog,
     QLabel,
     QLineEdit,
+    QListView,
     QMessageBox,
-    QScrollArea,
-    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )
@@ -22,8 +21,7 @@ from qasync import asyncSlot
 from player import Player
 from services import AsyncDownloader, AsyncFinder
 from ui.TrackCard import TrackCard
-from utils import add_track_to_user_playlist
-from utils import list_user_playlist_names
+from utils import add_track_to_user_playlist, list_user_playlist_names
 
 _LINE_COLOR = QColor(0, 220, 255)
 _LINE_WIDTH = 2
@@ -87,14 +85,18 @@ class SearchBar(QWidget):
         super().paintEvent(event)
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing, True)
-        color = QColor(_LINE_COLOR.red(), _LINE_COLOR.green(), _LINE_COLOR.blue(), self._alpha)
+        color = QColor(
+            _LINE_COLOR.red(), _LINE_COLOR.green(), _LINE_COLOR.blue(), self._alpha
+        )
         pen = QPen(color)
         pen.setWidthF(_LINE_WIDTH)
         painter.setPen(pen)
         painter.setBrush(Qt.NoBrush)
         rect = QRectF(
-            _LINE_WIDTH / 2, _LINE_WIDTH / 2,
-            self.width() - _LINE_WIDTH, self.height() - _LINE_WIDTH,
+            _LINE_WIDTH / 2,
+            _LINE_WIDTH / 2,
+            self.width() - _LINE_WIDTH,
+            self.height() - _LINE_WIDTH,
         )
         painter.drawRoundedRect(rect, _BORDER_RADIUS, _BORDER_RADIUS)
         painter.end()
@@ -140,13 +142,15 @@ class SearchPage(QWidget):
             "color: rgba(255,255,255,80); font-size: 14px; padding: 24px; background: transparent;"
         )
 
-        self._scroll = QScrollArea()
-        self._scroll.setWidgetResizable(True)
-        self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self._scroll.setFrameShape(QFrame.NoFrame)
-        self._scroll.setStyleSheet("""
-            QScrollArea { background: transparent; }
-            QWidget#ResultsList { background: transparent; }
+        self._track_list = QListView()
+        self._track_list.setObjectName("ResultsList")
+        self._track_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self._track_list.setFrameShape(QFrame.NoFrame)
+        self._track_list.setSelectionMode(QListView.NoSelection)
+        self._track_list.setMouseTracking(True)
+        self._track_list.setStyleSheet("""
+            QListView { background: transparent; border: none; outline: none; }
+            QListView::item:hover { background: transparent; }
             QScrollBar:vertical {
                 width: 6px; background: transparent;
             }
@@ -158,59 +162,94 @@ class SearchPage(QWidget):
             QScrollBar::sub-line:vertical { height: 0px; }
         """)
 
-        self._results_container = QWidget()
-        self._results_container.setObjectName("ResultsList")
-        self._results_layout = QVBoxLayout(self._results_container)
-        self._results_layout.setContentsMargins(0, 0, 0, 0)
-        self._results_layout.setSpacing(4)
-        self._results_layout.addStretch()
+        from models import TrackListModel
+        from ui.delegates.TrackDelegate import TrackDelegate
 
-        self._scroll.setWidget(self._results_container)
+        self.track_model = TrackListModel()
+        self.track_delegate = TrackDelegate(self._track_list)
+
+        self.track_delegate.signals.play_requested.connect(self._play_track)
+        self.track_delegate.signals.download_requested.connect(self._download_track)
+        self.track_delegate.signals.context_menu_requested.connect(
+            self._on_context_menu
+        )
+
+        self._track_list.setModel(self.track_model)
+        self._track_list.setItemDelegate(self.track_delegate)
 
         results_inner.addWidget(self._status)
-        results_inner.addWidget(self._scroll)
-        self._scroll.hide()
+        results_inner.addWidget(self._track_list)
+        self._track_list.hide()
 
         self.main_layout.addWidget(self._results_panel, stretch=1)
 
     @asyncSlot(str)
     async def _do_search(self, query: str) -> None:
-        self._status.setText("Ищем...")
+        self._status.setText("Поиск треков запущен...")
         self._status.show()
-        self._scroll.hide()
+        self._track_list.hide()
 
         tracks = await self._finder.get_tracks(query, value=5)
-
-        # clear old results
-        while self._results_layout.count() > 1:
-            item = self._results_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
 
         if not tracks:
             self._status.setText("Ничего не найдено")
             self._status.show()
-            self._scroll.hide()
+            self._track_list.hide()
             return
 
         self._status.hide()
-        self._scroll.show()
+        self._track_list.show()
 
-        for i, track in enumerate(tracks, start=1):
-            card = TrackCard(track, index=i)
-            card.play_requested.connect(self._play_track)
-            card.download_requested.connect(self._download_track)
-            card.add_to_playlist_requested.connect(self._add_track_to_playlist)
-            await card.load_cover()
-            self._results_layout.insertWidget(self._results_layout.count() - 1, card)
+        self.track_model.set_tracks(tracks)
+
+        # We don't need to manually trigger track cover loads here anymore,
+        # the TrackDelegate handles synchronous drawing if the file exists.
+        # However, to start downloading missing covers we can iterate over tracks:
+        import asyncio
+        import os
+
+        from providers import PathProvider
+
+        path_provider = PathProvider()
+        for track in tracks:
+            path = path_provider.get_cover_path(track)
+            if not os.path.isfile(path):
+                try:
+                    await self._downloader.download_cover(track)
+                    # Tell model data changed to repaint
+                    idx = tracks.index(track)
+                    self.track_model.dataChanged.emit(
+                        self.track_model.index(idx), self.track_model.index(idx)
+                    )
+                except Exception:
+                    pass
+            await asyncio.sleep(0)
 
     @asyncSlot(object)
     async def _play_track(self, track) -> None:
         await self._player.play_track(track)
+        self.track_model.set_playing_track(track)
 
     @asyncSlot(object)
     async def _download_track(self, track) -> None:
         await self._downloader.download_track(track)
+
+    @asyncSlot(object, object)
+    async def _on_context_menu(self, track, global_pos):
+        from PySide6.QtWidgets import QMenu
+
+        menu = QMenu(self)
+        play_action = menu.addAction("Играть")
+        add_action = menu.addAction("Добавить в плейлист")
+        download_action = menu.addAction("Скачать")
+
+        chosen = menu.exec(global_pos)
+        if chosen == play_action:
+            await self._play_track(track)
+        elif chosen == add_action:
+            await self._add_track_to_playlist(track)
+        elif chosen == download_action:
+            await self._download_track(track)
 
     @asyncSlot(object)
     async def _add_track_to_playlist(self, track) -> None:
@@ -248,4 +287,6 @@ class SearchPage(QWidget):
         if added:
             QMessageBox.information(self, "Готово", f"Трек добавлен в '{selected}'.")
         else:
-            QMessageBox.information(self, "Уже есть", f"Трек уже находится в '{selected}'.")
+            QMessageBox.information(
+                self, "Уже есть", f"Трек уже находится в '{selected}'."
+            )

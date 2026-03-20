@@ -22,11 +22,12 @@ import os.path
 from typing import Iterable, Tuple
 from abc import ABC, abstractmethod
 
-from models import Track, YandexTrack, YoutubeTrack, UpgradeCycle
+from models.Tracks import Track, YandexTrack, YoutubeTrack
+from models.upgrade_cycle import UpgradeCycle
 from providers import TrackManager
 
 
-class Playlist(ABC):
+class BasePlaylist(ABC):
 
     def __init__(
         self, name: str, tracks: Iterable[Track], cover_path: str | None = None
@@ -130,7 +131,7 @@ class Playlist(ABC):
         pass
 
 
-class UserPlaylist(Playlist):
+class UserPlaylist(BasePlaylist):
 
     @classmethod
     def get_playlist_from_path(cls, path_to_playlist: str) -> "UserPlaylist | None":
@@ -156,7 +157,7 @@ class UserPlaylist(Playlist):
         return tuple(self.tracks.values)
 
 
-class RecomendationPlaylist(Playlist):
+class RecomendationPlaylist(BasePlaylist):
     """плейлист рекомендаций"""
 
     def __init__(
@@ -180,7 +181,7 @@ class RecomendationPlaylist(Playlist):
         pass
 
 
-class DownloadPlaylist(Playlist):
+class DownloadPlaylist(BasePlaylist):
     """плейлист скачанных треков из music"""
 
     def __init__(
@@ -254,7 +255,7 @@ class DownloadPlaylist(Playlist):
         return tuple(tracks)
 
 
-class RecentlyPlayedPlaylist(Playlist):
+class RecentlyPlayedPlaylist(BasePlaylist):
     """Системный плейлист недавно прослушанных треков."""
 
     def __init__(
