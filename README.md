@@ -1,4 +1,4 @@
-# CleanPlayer
+# YMusic
 
 [![Python](https://img.shields.io/badge/python-3.14.2-informational)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
