@@ -1,5 +1,7 @@
-from models.Tracks import YandexTrack, YoutubeTrack
 from pathlib import Path
+from typing import List
+
+from models.Tracks import YandexTrack, YoutubeTrack
 
 
 class TrackManager:
@@ -16,12 +18,23 @@ class TrackManager:
         self._ids_cache = None
 
     @property
-    def ids(self):
+    def ids(self) -> List[str]:
+        """Свойство возвращает список треков
+
+        Returns:
+            List[str]: _description_
+        """
         if self._ids_cache is None:
             self._ids_cache = self._load_ids()
         return self._ids_cache
 
-    def _load_ids(self):
+    def _load_ids(self) -> List[str]:
+        """Загрузка айди треков, содержащихся в папке music/
+        для применения данных в логике программы
+
+        Returns:
+            List[str]: Список айди треков
+        """
         ids = set()
         if not self.music_dir.exists():
             return ids
@@ -31,7 +44,15 @@ class TrackManager:
                 ids.add(track_id)
         return ids
 
-    def is_downloaded(self, track_id):
+    def is_downloaded(self, track_id) -> bool:
+        """Проверка, что трек скачан
+
+        Args:
+            track_id (_type_): id трека
+
+        Returns:
+            bool: True or False 
+        """        
         return track_id in self.ids
 
     def get_track_from_playlist(self, track_id: str, title: str, author: str) -> YandexTrack | YoutubeTrack:
