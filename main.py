@@ -26,7 +26,7 @@ if __name__ == "__main__":
 
     if current_os == "Linux":
         from mpris_server.server import Server
-        from player import NeonAppAdapter, NeonEventHandler
+        from player.MprisAdapter import NeonAppAdapter, NeonEventHandler
         mpris_adapter = NeonAppAdapter(player)
         mpris = Server("NeonApp", mpris_adapter)
         event_handler = NeonEventHandler(mpris.root, mpris.player)
@@ -34,9 +34,9 @@ if __name__ == "__main__":
         mpris.publish()
 
     elif current_os == "Windows":
-        from windows_adapter import WindowsSMTCAdapter 
-        windows_adapter = WindowsSMTCAdapter(player)
-        windows_adapter.publish()
+        from player.windows_adapter import WindowsSMTCAdapter 
+        windows_adapter = WindowsSMTCAdapter(player, loop)
+        # windows_adapter.publish()
 
     window = NeonMusic()
     window.show()

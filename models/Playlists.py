@@ -99,6 +99,7 @@ class BasePlaylist(ABC):
         with open(playlist_path, encoding="utf-8", mode="r") as file:
             playlist = json.load(file)
             name = playlist["name"]
+            cover_path = playlist.get("cover_path", None)
             track_manager = TrackManager()
             tracks = [
                 track_manager.get_track_from_playlist(
@@ -106,7 +107,7 @@ class BasePlaylist(ABC):
                 )
                 for track in playlist["tracks"]
             ]
-        return name, tracks
+        return name, tracks, cover_path
 
     @classmethod
     @abstractmethod
@@ -228,11 +229,12 @@ class DownloadPlaylist(BasePlaylist):
         for track_file in os.listdir(music_dir):
             try:
                 name, ext = os.path.splitext(track_file)
+                ext = ext.replace(".", "")
                 parts = name.split("_", 2)
                 if len(parts) < 3:
                     continue
                 track_id, track_title, track_author = parts
-                if ext == ".mp3":
+                if track_id.isdigit():
                     tracks.append(
                         YandexTrack(
                             track_id=track_id,
@@ -241,13 +243,14 @@ class DownloadPlaylist(BasePlaylist):
                             downloaded=True,
                         )
                     )
-                elif ext == ".m4a":
+                else:
                     tracks.append(
                         YoutubeTrack(
                             track_id=track_id,
                             title=track_title,
                             author=track_author,
                             downloaded=True,
+                            extension=ext
                         )
                     )
             except Exception:

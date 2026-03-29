@@ -20,7 +20,7 @@ def log(method: F) -> F:
     logger = logging.getLogger(method.__module__)
 
     @functools.wraps(method)
-    def wrapper(*args: Any, **kwargs: Any) -> Any:  # noqa: ANN401:
+    def wrapper(*args: Any, **kwargs: Any) -> Any:
         logger.debug(f'Entering: {method.__name__}')
 
         result = method(*args, **kwargs)
@@ -83,13 +83,9 @@ class AsyncYoutubeDownloader(AsyncDownloaderInterface):
             "format": "bestaudio",
             "postprocessors": [],
         }
-        adv_opts = self.opts
-        adv_opts["skip_download"] = True
-        self.yt = YoutubeDL(adv_opts)
         self.path_provider = PathProvider()
     
     async def download_track(self, track: Track) -> None:
-        # Формируем единый шаблон имени файла для корректного чтения плейлистов.
         self.opts["outtmpl"] = self.path_provider.get_track_path(track, extension="%(ext)s")
         with ThreadPoolExecutor() as pool:
             await get_running_loop().run_in_executor(pool, self.sync_download, self.opts, track.track_id)

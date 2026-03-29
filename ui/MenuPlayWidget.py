@@ -328,7 +328,7 @@ class PlayMenu(QWidget):
     def _on_previous_requested(self):
         """Обработка запроса предыдущего трека (MPRIS, кнопки на наушниках)."""
         try:
-            asyncio.get_running_loop().create_task(self.play_previous_track())
+            self.play_previous_track()
         except RuntimeError:
             pass
 
@@ -342,7 +342,7 @@ class PlayMenu(QWidget):
     def _on_next_requested(self):
         """Обработка запроса следующего трека (MPRIS, кнопки на наушниках)."""
         try:
-            asyncio.get_running_loop().create_task(self.play_next_track())
+            self.play_next_track()
         except RuntimeError:
             pass
 
