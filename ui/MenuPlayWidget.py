@@ -391,7 +391,7 @@ class PlayMenu(QWidget):
     @asyncSlot()
     async def download_track(self):
         await self.downloader.download_track(
-            self.playlist_manager.current_playlist.get_current_track(),
+            self.player.current_track,
         )
 
     def _on_volume(self) -> None:

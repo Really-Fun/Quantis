@@ -46,5 +46,6 @@ assets/background/*
 assets/icons/*
 
 CleanPlayer.spec
-build.bat"build/" 
-"dist/" 
+build.bat
+build/
+dist/

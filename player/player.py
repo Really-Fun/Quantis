@@ -134,7 +134,7 @@ class Player(QObject):
             try:
                 if hasattr(track, "extension"):
                     return self._path_provider.get_track_path(track, track.extension)
-                return self._path_provider.get_track_path(track, track.extension)
+                return self._path_provider.get_track_path(track)
             except FileNotFoundError:
                 return None
         return await self._streamer.get_stream_url(track)

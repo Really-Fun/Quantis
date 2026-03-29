@@ -27,6 +27,7 @@ class NeonMusic(QMainWindow):
         viz_b = int(self._settings.value("visualizer/color_b", 255))
         viz_color = (viz_r, viz_g, viz_b)
 
+
         self.setWindowTitle("NeonMusic")
         # Широкая ширина, обычная высота — чтобы всё было видно
         self.resize(1100, 750)
@@ -40,7 +41,11 @@ class NeonMusic(QMainWindow):
 
         # ================== ФОН ==================
         self.background = QLabel(central)
-        self.background.setPixmap(QPixmap(asset_path("assets/background/real.jpg")))
+        try:
+            self._settings.value("visualizer/bg")
+            self.background.setPixmap(QPixmap(asset_path(self._settings.value("visualizer/bg"))))
+        except:
+            self.background.setPixmap(QPixmap(asset_path("assets/background/default.jpg")))
         self.background.setScaledContents(True)
 
         # ================== ТЕМНОЕ ПЕРЕКРЫТИЕ ==================
@@ -131,6 +136,7 @@ class NeonMusic(QMainWindow):
     # ================== СМЕНА ФОНА ==================
     def _change_bg(self, path: str) -> None:
         pm = QPixmap(path)
+        self._settings.setValue("visualizer/bg", path)
         if not pm.isNull():
             self.background.setPixmap(pm)
 
