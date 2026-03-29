@@ -1,11 +1,11 @@
 import sys
 import os
 import asyncio
+import platform
 
 from qasync import QEventLoop
 from PySide6.QtWidgets import QApplication
 from qt_material import apply_stylesheet
-from mpris_server.server import Server
 
 from player import Player, NeonAppAdapter, NeonEventHandler
 from services import TrackHistoryService
@@ -20,11 +20,14 @@ if __name__ == "__main__":
     asyncio.set_event_loop(loop)
 
     player = Player()
-    mpris_adapter = NeonAppAdapter(player)
-    mpris = Server("NeonApp", mpris_adapter)
-    event_handler = NeonEventHandler(mpris.root, mpris.player)
-    mpris_adapter.set_event_handler(event_handler)
-    mpris.publish()
+
+    if platform.system() == "Linux":
+        from mpris_server.server import Server
+        mpris_adapter = NeonAppAdapter(player)
+        mpris = Server("NeonApp", mpris_adapter)
+        event_handler = NeonEventHandler(mpris.root, mpris.player)
+        mpris_adapter.set_event_handler(event_handler)
+        mpris.publish()
     window = NeonMusic()
     window.show()
 
