@@ -48,3 +48,4 @@ class YandexTrack(Track):
 class YoutubeTrack(Track):
     """Класс трека YouTube"""
     source: str = "youtube"
+    extension: str = "m4a"

@@ -132,7 +132,9 @@ class Player(QObject):
         """Возвращает путь к файлу или URL стрима."""
         if track.downloaded:
             try:
-                return self._path_provider.get_track_path(track)
+                if hasattr(track, "extension"):
+                    return self._path_provider.get_track_path(track, track.extension)
+                return self._path_provider.get_track_path(track, track.extension)
             except FileNotFoundError:
                 return None
         return await self._streamer.get_stream_url(track)
