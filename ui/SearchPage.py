@@ -254,22 +254,80 @@ class SearchPage(QWidget):
     @asyncSlot(object)
     async def _add_track_to_playlist(self, track) -> None:
         names = list_user_playlist_names()
+        
+        # Общий стиль для всех всплывающих окон в духе твоего интерфейса
+        dialog_style = """
+            QDialog, QMessageBox {
+                background-color: #121212;
+                border: 2px solid rgba(0, 220, 255, 80);
+                border-radius: 14px;
+            }
+            QLabel {
+                color: rgba(255, 255, 255, 220);
+                font-size: 14px;
+            }
+            QPushButton {
+                background-color: rgba(0, 220, 255, 20);
+                border: 1px solid rgba(0, 220, 255, 100);
+                border-radius: 8px;
+                color: white;
+                padding: 6px 16px;
+                min-width: 80px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: rgba(0, 220, 255, 60);
+                border: 1px solid rgba(0, 220, 255, 255);
+            }
+            QPushButton:pressed {
+                background-color: rgba(0, 220, 255, 100);
+            }
+            /* Стилизация выпадающего списка в QInputDialog */
+            QComboBox {
+                background-color: rgba(0, 0, 0, 60);
+                border: 1px solid rgba(0, 220, 255, 80);
+                border-radius: 8px;
+                color: white;
+                padding: 6px 12px;
+                font-size: 14px;
+            }
+            QComboBox::drop-down {
+                border: none;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #1a1a1a;
+                color: white;
+                border: 1px solid rgba(0, 220, 255, 80);
+                selection-background-color: rgba(0, 220, 255, 80);
+                selection-color: white;
+                outline: none;
+            }
+            /* Убираем рамку фокуса у кнопок */
+            QPushButton:focus {
+                outline: none;
+            }
+        """
+
         if not names:
-            QMessageBox.information(
-                self,
-                "Нет плейлистов",
-                "Сначала создайте пользовательский плейлист на главной странице.",
-            )
+            msg = QMessageBox(self)
+            msg.setWindowTitle("Нет плейлистов")
+            msg.setText("Сначала создайте пользовательский плейлист на главной странице.")
+            msg.setIcon(QMessageBox.Information)
+            msg.setStyleSheet(dialog_style)
+            msg.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint) 
+            msg.exec()
             return
 
-        selected, ok = QInputDialog.getItem(
-            self,
-            "Добавить в плейлист",
-            "Выберите плейлист:",
-            names,
-            0,
-            False,
-        )
+        dialog = QInputDialog(self)
+        dialog.setWindowTitle("Добавить в плейлист")
+        dialog.setLabelText("Выберите плейлист:")
+        dialog.setComboBoxItems(names)
+        dialog.setOption(QInputDialog.UseListViewForComboBoxItems) # Важно для красивого выпадающего списка
+        dialog.setStyleSheet(dialog_style)
+        
+        ok = dialog.exec()
+        selected = dialog.textValue()
+
         if not ok:
             return
 
@@ -281,12 +339,21 @@ class SearchPage(QWidget):
                 author=track.author,
             )
         except Exception:
-            QMessageBox.warning(self, "Ошибка", "Не удалось добавить трек в плейлист.")
+            msg = QMessageBox(self)
+            msg.setWindowTitle("Ошибка")
+            msg.setText("Не удалось добавить трек в плейлист.")
+            msg.setIcon(QMessageBox.Warning)
+            msg.setStyleSheet(dialog_style)
+            msg.exec()
             return
 
+        # Финальное окно успеха
+        success_msg = QMessageBox(self)
+        success_msg.setStyleSheet(dialog_style)
         if added:
-            QMessageBox.information(self, "Готово", f"Трек добавлен в '{selected}'.")
+            success_msg.setWindowTitle("Готово")
+            success_msg.setText(f"Трек добавлен в '{selected}'.")
         else:
-            QMessageBox.information(
-                self, "Уже есть", f"Трек уже находится в '{selected}'."
-            )
+            success_msg.setWindowTitle("Уже есть")
+            success_msg.setText(f"Трек уже находится в '{selected}'.")
+        success_msg.exec()

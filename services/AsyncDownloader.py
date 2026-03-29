@@ -57,7 +57,15 @@ class AsyncYandexDownloader(AsyncDownloaderInterface):
             return
         try:
             track_info = await self.client.tracks(track.track_id)
-            await track_info[0].download_async(self.path_provider.get_track_path(track))
+            current_track = track_info[0]
+            file_path = self.path_provider.get_track_path(track)
+            
+            is_authorized = bool(getattr(self.client, 'token', None))
+            
+            if is_authorized:
+                await current_track.download_async(file_path)
+            else:
+                await current_track.download_async(file_path, bitrate_in_kbps=192)
         except Exception:
             logger.exception("Не удалось скачать трек с Яндекс.Музыки: %s", track)
 
