@@ -145,6 +145,10 @@ utils/       # файловые и вспомогательные утилиты
 
 ![Плеер](assets/readme/player.gif)
 
+### Обновленный вид (Update)
+
+![Обновление](assets/readme/update.jpg)
+
 ---
 
 ## Ближайший план
