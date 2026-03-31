@@ -293,6 +293,23 @@ class HomePage(QWidget):
     def paintEvent(self, event) -> None:
         super().paintEvent(event)
 
+    def add_recommendation_section(self, playlist):
+        """Добавляет новую секцию с рекомендациями в начало списка."""
+        # Создаем виджет для отображения плейлиста
+        # В твоем проекте PlaylistPreview отвечает за карточку плейлиста
+        preview = PlaylistPreview(playlist)
+        
+        # Коннектим открытие (чтобы по клику на "радио" открывался список треков)
+        preview.clicked.connect(lambda: self.playlist_opened.emit(playlist))
+        
+        # Добавляем в начало твоего контента. 
+        # Если у тебя QVBoxLayout, используй insertWidget, чтобы радио было сверху.
+        if hasattr(self, 'scroll_layout'):
+            self.scroll_layout.insertWidget(0, preview)
+        else:
+            # Если layout называется иначе, подставь свое имя
+            self.layout().insertWidget(0, preview)
+
 
 # ═══════════════════════════════════════════════════════
 #  Internal widgets

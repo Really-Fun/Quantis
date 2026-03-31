@@ -6,7 +6,7 @@
 import asyncio
 import os
 
-from PySide6.QtCore import QRectF, QSize, Qt, QTimer
+from PySide6.QtCore import QRectF, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QSlider, QToolButton, QVBoxLayout, QWidget
 from qasync import asyncSlot
@@ -15,7 +15,7 @@ from PySide6.QtGui import QKeySequence, QShortcut
 from models import Track
 from player import Player
 from providers import PathProvider, PlaylistManager
-from services import AsyncDownloader
+from services import AsyncDownloader, AsyncRecomendation
 from utils import asset_path
 
 _BG_COLOR = QColor(0, 0, 0, 200)
@@ -72,6 +72,7 @@ _ARTIST_QSS = "color: rgba(255,255,255,110); font-size: 11px; background: transp
 
 class PlayMenu(QWidget):
     """Панель управления воспроизведением."""
+    playlist_generated = Signal(object)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -224,6 +225,7 @@ class PlayMenu(QWidget):
         self.player.next_requested.connect(self._on_next_requested)
         self.player.previous_requested.connect(self._on_previous_requested)
         self.btn_download.clicked.connect(self.download_track)
+        self.btn_wave.clicked.connect(self.generate_playlist)
 
         # ── реакция на нажатие клавиш ──
         self.btn_play.setShortcut(QKeySequence("Space"))
@@ -338,6 +340,16 @@ class PlayMenu(QWidget):
         await self.player.play_track(track)
         await self.set_track(track)
         self.btn_play.setIcon(QIcon(asset_path("assets/icons/pause.png")))
+
+    @asyncSlot()
+    async def generate_playlist(self):
+        recomendation_service = AsyncRecomendation()
+        
+        current_track = self.player.current_track 
+        
+        if current_track:
+            playlist = await recomendation_service.generate_radio_from_track(current_track)
+            self.playlist_generated.emit(playlist)
 
     def _on_next_requested(self):
         """Обработка запроса следующего трека (MPRIS, кнопки на наушниках)."""

@@ -128,6 +128,8 @@ class NeonMusic(QMainWindow):
             }
         """)
 
+        self.play_menu.playlist_generated.connect(self.display_radio_on_home)
+
     # ================== ОТКРЫТИЕ ПЛЕЙЛИСТА ==================
     @asyncSlot(object)
     async def _open_playlist(self, playlist) -> None:
@@ -185,6 +187,14 @@ class NeonMusic(QMainWindow):
         )
 
         super().resizeEvent(event)
+
+    def display_radio_on_home(self, playlist):
+        self.stack.home_page.add_recommendation_section(playlist)
+        
+        self.stack.setCurrentWidget(self.stack.home_page)
+        
+        self.menu_tabs.set_active_tab(0)
+    
 
 
 if __name__ == "__main__":
