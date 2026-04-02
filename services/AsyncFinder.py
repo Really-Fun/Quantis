@@ -85,13 +85,19 @@ class AsyncYoutubeFinder(AsyncFinderInterface):
     def sync_get_tracks(self, title: str, value: int = 5) -> list[Track]:
         try:
             results = self.client.search(query=title, filter="songs", limit=value)
+            if not results:
+                results = [self.client.get_song(videoId=title)["videoDetails"]]
         except Exception:
             return []
         tracks = []
         for track in results:
             track_id = track.get("videoId")
             track_title = track.get("title")
-            authors = " | ".join([author["name"] for author in track["artists"]])
+            try:
+                authors = " | ".join([author["name"] for author in track["artists"]])
+            except:
+                authors = "Author"
+            print(authors)
             tracks.append(
                 YoutubeTrack(
                     track_id=track_id,
@@ -100,6 +106,7 @@ class AsyncYoutubeFinder(AsyncFinderInterface):
                     downloaded=False
                 )
             )
+        print(tracks)
         return tracks
 
     def sync_get_track(self, id: int) -> Track | None:
@@ -119,8 +126,14 @@ class AsyncFinder(AsyncFinderInterface):
         self._youtube_finder = AsyncYoutubeFinder()
 
     async def get_tracks(self, title: str, value: int = 5) -> list[Track]:
-        yandex_tracks = await self._yandex_finder.get_tracks(title, value)
-        youtube_tracks = await self._youtube_finder.get_tracks(title, value)
+        try:
+            yandex_tracks = await self._yandex_finder.get_tracks(title, value)
+        except:
+            yandex_tracks = []
+        try:
+            youtube_tracks = await self._youtube_finder.get_tracks(title, value)
+        except:
+            youtube_tracks = []
         return yandex_tracks + youtube_tracks
 
     async def get_track(self, id: int) -> Track:

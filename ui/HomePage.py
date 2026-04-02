@@ -98,6 +98,9 @@ class HomePage(QWidget):
         self.content_lay.addWidget(self.user_section)
         self.load_user_playlists()
 
+        self.recommend_section = PlaylistSection("Рекомендации")
+        self.content_lay.insertWidget(0, self.recommend_section)
+
         self.content_lay.addStretch()
 
         scroll.setWidget(content)
@@ -294,17 +297,8 @@ class HomePage(QWidget):
         super().paintEvent(event)
 
     def add_recommendation_section(self, playlist):
-        """Добавляет новую секцию с рекомендациями в начало списка."""
-        preview = PlaylistPreview(playlist)
-
-        self.user_section.add_card(preview)
-
-        preview.clicked.connect(lambda: self.playlist_opened.emit(playlist))
-        
-        if hasattr(self, 'scroll_layout'):
-            self.scroll_layout.insertWidget(0, preview)
-        else:
-            self.layout().insertWidget(0, preview)
+        self.recommend_section.clear_cards()
+        self.add_card(self.recommend_section, playlist)
 
 
 # ═══════════════════════════════════════════════════════
