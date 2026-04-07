@@ -2,16 +2,17 @@ from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor
 from asyncio import get_running_loop
 from typing import Callable, TypeVar, Any
+from pathlib import Path
 import functools
 import logging
-from pathlib import Path
 
 from config import GetClients
-from models.Tracks import Track
+from models.Tracks import Track, YandexTrack, YoutubeTrack
 from providers import PathProvider
 
-import aiohttp
 from yt_dlp import YoutubeDL
+import aiohttp
+
 
 F = TypeVar('F', bound=Callable[..., Any])
 logger = logging.getLogger(__name__)
@@ -20,10 +21,10 @@ def log(method: F) -> F:
     logger = logging.getLogger(method.__module__)
 
     @functools.wraps(method)
-    def wrapper(*args: Any, **kwargs: Any) -> Any:
+    async def wrapper(*args: Any, **kwargs: Any) -> Any:
         logger.debug(f'Entering: {method.__name__}')
 
-        result = method(*args, **kwargs)
+        result = await method(*args, **kwargs)
         logger.debug(result)
 
         logger.debug(f'Exiting: {method.__name__}')
@@ -52,7 +53,12 @@ class AsyncYandexDownloader(AsyncDownloaderInterface):
         self.path_provider = PathProvider()
         self.client = GetClients().get_yandex_client()
     
-    async def download_track(self, track: Track) -> None:
+    async def download_track(self, track: YandexTrack) -> None:
+        """Скачивает трек с яндекса. Асинхронное скачивание
+
+        Args:
+            track (YandexTrack): Трек с Яндекса
+        """
         if self.client is None:
             return
         try:
@@ -69,7 +75,12 @@ class AsyncYandexDownloader(AsyncDownloaderInterface):
         except Exception:
             logger.exception("Не удалось скачать трек с Яндекс.Музыки: %s", track)
 
-    async def download_cover(self, track: Track) -> None:
+    async def download_cover(self, track: YandexTrack) -> None:
+        """Скачивает обложку трека с платформы Яндекс. Асинхронное скачивание
+
+        Args:
+            track (YandexTrack): Трек с Яндекса
+        """
         if self.client is None:
             return
         try:
@@ -92,19 +103,30 @@ class AsyncYoutubeDownloader(AsyncDownloaderInterface):
             "postprocessors": [],
         }
         self.path_provider = PathProvider()
+        self._executor = ThreadPoolExecutor(max_workers=10)
     
-    async def download_track(self, track: Track) -> None:
+    async def download_track(self, track: YoutubeTrack) -> None:
+        """Асинхронная функция для скачивания трека с ютуба.
+        Основана на ThreadPoolExecutor и синхронном скачивании с ytdlp
+
+        Args:
+            track (YoutubeTrack): трек с Ютуба
+        """
         self.opts["outtmpl"] = self.path_provider.get_track_path(track, extension="%(ext)s")
-        with ThreadPoolExecutor() as pool:
-            await get_running_loop().run_in_executor(pool, self.sync_download, self.opts, track.track_id)
+        await get_running_loop().run_in_executor(self._executor, self.sync_download, self.opts, track.track_id)
         track.track_path = self.opts["outtmpl"]
             
-    async def download_cover(self, track: Track) -> None:
+    async def download_cover(self, track: YoutubeTrack) -> None:
+        """Асинхронное получение обложки с ютуб.
+
+        Args:
+            track (YoutubeTrack): Трек с Ютуба
+        """
         cover_url = f"https://img.youtube.com/vi/{track.track_id}/hqdefault.jpg"
         track.cover_path = self.path_provider.get_cover_path(track)
-
+        
         async with aiohttp.ClientSession() as session:
-            async with session.get(cover_url) as response:
+            async with self._session.session.get(cover_url) as response:
                 if response.status != 200:
                     return
                 data = await response.read()
@@ -131,6 +153,7 @@ class AsyncDownloader(AsyncDownloaderInterface):
         self._yandex_downloader = AsyncYandexDownloader()
         self._youtube_downloader = AsyncYoutubeDownloader()
 
+    @log
     async def download_track(self, track: Track) -> None:
         match track.source:
             case "yandex":
@@ -138,6 +161,7 @@ class AsyncDownloader(AsyncDownloaderInterface):
             case "youtube":
                 await self._youtube_downloader.download_track(track)
 
+    @log
     async def download_cover(self, track: Track) -> None:
         match track.source:
             case "yandex":
