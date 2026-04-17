@@ -89,7 +89,7 @@ class Player(QObject):
 
     def is_playing(self) -> bool:
         return self._engine.playback_player.is_playing()
-    
+
     def _on_end(self, _event=None) -> None:
         """Обрабатывает завершение трека от VLC и эмитит сигнал окончания."""
         if self.current_track is not None:

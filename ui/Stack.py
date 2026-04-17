@@ -60,7 +60,7 @@ class Stack(QWidget):
             page.go_back.connect(lambda: self.switch_to(self.HOME))
         else:
             page = QWidget()
-        
+
         # Replace dummy widget with the real page
         old_widget = self._stack.widget(index)
         self._stack.insertWidget(index, page)
@@ -94,7 +94,7 @@ class Stack(QWidget):
     def switch_to(self, index: int) -> None:
         """Переключает активную страницу по индексу."""
         if 0 <= index < self._stack.count():
-            self._get_page(index) # Ensure it's loaded
+            self._get_page(index)  # Ensure it's loaded
             self._stack.setCurrentIndex(index)
             if index == self.HOME:
                 self.home_page.reload_system_playlists()

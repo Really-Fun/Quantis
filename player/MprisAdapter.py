@@ -30,7 +30,12 @@ class NeonAppAdapter(MprisAdapter):
     # минимальные метаданные, иначе _get_metadata() даёт None и D-Bus ломается на пустом Metadata.
     def metadata(self) -> Metadata:
         if not self.player.current_track:
-            return Metadata(**{MetadataEntries.TITLE: "", MetadataEntries.TRACK_ID: "/org/mpris/MediaPlayer2/NoTrack"})
+            return Metadata(
+                **{
+                    MetadataEntries.TITLE: "",
+                    MetadataEntries.TRACK_ID: "/org/mpris/MediaPlayer2/NoTrack",
+                }
+            )
         t = self.player.current_track
         length_us = max(0, self.player.duration) * 1000  # ms -> µs
         meta = {

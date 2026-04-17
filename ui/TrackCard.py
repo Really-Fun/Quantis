@@ -19,7 +19,15 @@ from typing import Optional
 
 from PySide6.QtCore import Qt, Signal, QSize
 from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QMenu, QSizePolicy, QToolButton, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QHBoxLayout,
+    QLabel,
+    QMenu,
+    QSizePolicy,
+    QToolButton,
+    QVBoxLayout,
+    QWidget,
+)
 from qasync import asyncSlot
 
 from models import Track
@@ -57,11 +65,13 @@ class _PlayOverlay(QToolButton):
         self.setIconSize(QSize(22, 22))
         self.setIcon(QIcon(asset_path("assets/icons/play.png")))
         self.setCursor(Qt.PointingHandCursor)
-        self.setStyleSheet(_BTN_STYLE.format(
-            bg="0, 0, 0, 140",
-            bg_hover="0, 0, 0, 190",
-            radius=_COVER_SIZE // 4,
-        ))
+        self.setStyleSheet(
+            _BTN_STYLE.format(
+                bg="0, 0, 0, 140",
+                bg_hover="0, 0, 0, 190",
+                radius=_COVER_SIZE // 4,
+            )
+        )
         self.hide()
 
 
@@ -74,11 +84,13 @@ class _DownloadButton(QToolButton):
         self.setIconSize(QSize(16, 16))
         self.setIcon(QIcon(asset_path("assets/icons/download.png")))
         self.setCursor(Qt.PointingHandCursor)
-        self.setStyleSheet(_BTN_STYLE.format(
-            bg="255, 255, 255, 15",
-            bg_hover="0, 220, 255, 50",
-            radius=14,
-        ))
+        self.setStyleSheet(
+            _BTN_STYLE.format(
+                bg="255, 255, 255, 15",
+                bg_hover="0, 220, 255, 50",
+                radius=14,
+            )
+        )
         self.hide()
 
 
@@ -242,7 +254,8 @@ class TrackCard(QWidget):
             await self._downloader.download_cover(self._track)
         if os.path.exists(path):
             pixmap = QPixmap(path).scaled(
-                _COVER_SIZE, _COVER_SIZE,
+                _COVER_SIZE,
+                _COVER_SIZE,
                 Qt.KeepAspectRatioByExpanding,
                 Qt.SmoothTransformation,
             )
@@ -312,7 +325,11 @@ class TrackCard(QWidget):
             self._on_play()
         elif chosen == add_action and self._track is not None:
             self.add_to_playlist_requested.emit(self._track)
-        elif remove_action is not None and chosen == remove_action and self._track is not None:
+        elif (
+            remove_action is not None
+            and chosen == remove_action
+            and self._track is not None
+        ):
             self.remove_from_playlist_requested.emit(self._track)
         elif chosen == download_action:
             self._on_download()

@@ -64,7 +64,6 @@ class InitClients:
 
 
 class GetClients:
-
     def __new__(cls):
         if not hasattr(cls, "instance"):
             cls.instance = super().__new__(cls)

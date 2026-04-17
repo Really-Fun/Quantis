@@ -254,7 +254,7 @@ class SearchPage(QWidget):
     @asyncSlot(object)
     async def _add_track_to_playlist(self, track) -> None:
         names = list_user_playlist_names()
-        
+
         # Общий стиль для всех всплывающих окон в духе твоего интерфейса
         dialog_style = """
             QDialog, QMessageBox {
@@ -311,10 +311,12 @@ class SearchPage(QWidget):
         if not names:
             msg = QMessageBox(self)
             msg.setWindowTitle("Нет плейлистов")
-            msg.setText("Сначала создайте пользовательский плейлист на главной странице.")
+            msg.setText(
+                "Сначала создайте пользовательский плейлист на главной странице."
+            )
             msg.setIcon(QMessageBox.Information)
             msg.setStyleSheet(dialog_style)
-            msg.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint) 
+            msg.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
             msg.exec()
             return
 
@@ -322,9 +324,11 @@ class SearchPage(QWidget):
         dialog.setWindowTitle("Добавить в плейлист")
         dialog.setLabelText("Выберите плейлист:")
         dialog.setComboBoxItems(names)
-        dialog.setOption(QInputDialog.UseListViewForComboBoxItems) # Важно для красивого выпадающего списка
+        dialog.setOption(
+            QInputDialog.UseListViewForComboBoxItems
+        )  # Важно для красивого выпадающего списка
         dialog.setStyleSheet(dialog_style)
-        
+
         ok = dialog.exec()
         selected = dialog.textValue()
 

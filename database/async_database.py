@@ -44,12 +44,16 @@ class AsyncDatabase:
         await self.ensure_initialized()
         await self._execute_sync(query, tuple(params))
 
-    async def fetchone(self, query: str, params: Iterable[Any] = ()) -> dict[str, Any] | None:
+    async def fetchone(
+        self, query: str, params: Iterable[Any] = ()
+    ) -> dict[str, Any] | None:
         """Возвращает одну запись в виде словаря или ``None``."""
         await self.ensure_initialized()
         return await self._fetchone_sync(query, tuple(params))
 
-    async def fetchall(self, query: str, params: Iterable[Any] = ()) -> list[dict[str, Any]]:
+    async def fetchall(
+        self, query: str, params: Iterable[Any] = ()
+    ) -> list[dict[str, Any]]:
         """Возвращает список записей в виде словарей."""
         await self.ensure_initialized()
         return await self._fetchall_sync(query, tuple(params))
@@ -102,13 +106,17 @@ class AsyncDatabase:
         await self._conn.execute(query, params)
         await self._conn.commit()
 
-    async def _fetchone_sync(self, query: str, params: tuple[Any, ...]) -> dict[str, Any] | None:
+    async def _fetchone_sync(
+        self, query: str, params: tuple[Any, ...]
+    ) -> dict[str, Any] | None:
         assert self._conn is not None
         async with self._conn.execute(query, params) as cursor:
             row = await cursor.fetchone()
         return dict(row) if row is not None else None
 
-    async def _fetchall_sync(self, query: str, params: tuple[Any, ...]) -> list[dict[str, Any]]:
+    async def _fetchall_sync(
+        self, query: str, params: tuple[Any, ...]
+    ) -> list[dict[str, Any]]:
         assert self._conn is not None
         async with self._conn.execute(query, params) as cursor:
             rows = await cursor.fetchall()

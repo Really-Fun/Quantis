@@ -4,6 +4,7 @@ from PySide6.QtCore import QAbstractListModel, Qt, QModelIndex
 from typing import List, Optional
 from models import Track
 
+
 class TrackListModel(QAbstractListModel):
     # Custom roles
     TrackRole = Qt.UserRole + 1
@@ -55,6 +56,8 @@ class TrackListModel(QAbstractListModel):
     def set_playing_track(self, track: Optional[Track]):
         self._playing_track = track
         # Trigger an update for all items since indices might not have changed
-        # but the playing state did. 
+        # but the playing state did.
         # For full optimization, we could emit dataChanged just for the old and new track rows.
-        self.dataChanged.emit(self.index(0), self.index(self.rowCount() - 1), [self.IsPlayingRole])
+        self.dataChanged.emit(
+            self.index(0), self.index(self.rowCount() - 1), [self.IsPlayingRole]
+        )

@@ -70,7 +70,9 @@ class TrackHistoryService:
         )
         self._last_saved_by_key[track_key] = now
 
-    async def mark_track_finished(self, track: Track, position_ms: int, duration_ms: int) -> None:
+    async def mark_track_finished(
+        self, track: Track, position_ms: int, duration_ms: int
+    ) -> None:
         """Сохраняет финальное состояние и увеличивает число прослушиваний."""
         track_key = self.build_track_key(track)
         await self._repo.upsert_progress(
@@ -84,7 +86,9 @@ class TrackHistoryService:
         )
         self._last_saved_by_key[track_key] = monotonic()
 
-    async def get_recent_playlist(self, limit: int = 24) -> RecentlyPlayedPlaylist | None:
+    async def get_recent_playlist(
+        self, limit: int = 24
+    ) -> RecentlyPlayedPlaylist | None:
         """Формирует системный плейлист недавно прослушанных треков."""
         entries = await self._repo.get_recent_entries(limit=limit)
         if not entries:

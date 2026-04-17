@@ -42,7 +42,6 @@ class VLCEngine:
 
         self._initialized = True
 
-
     @property
     def instance(self) -> Instance:
         return self._vlc_instance
@@ -57,7 +56,7 @@ class VLCEngine:
 
     def load_media(self, source: str) -> Media:
         """Создаёт Media из пути или URL.
-        
+
         Args:
             source (str): Путь к медиа-файлу или URL.
 
@@ -68,7 +67,7 @@ class VLCEngine:
 
     def play_both(self, source: str) -> None:
         """Запускает playback сразу, analysis с задержкой для синхронизации.
-        
+
         Args:
             source (str): Путь к медиа-файлу или URL.
         """

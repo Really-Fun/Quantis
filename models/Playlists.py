@@ -28,7 +28,6 @@ from providers import TrackManager
 
 
 class BasePlaylist(ABC):
-
     def __init__(
         self, name: str, tracks: Iterable[Track], cover_path: str | None = None
     ) -> None:
@@ -133,7 +132,6 @@ class BasePlaylist(ABC):
 
 
 class UserPlaylist(BasePlaylist):
-
     @classmethod
     def get_playlist_from_path(cls, path_to_playlist: str) -> "UserPlaylist | None":
         """Получаем плейлист из файла
@@ -250,7 +248,7 @@ class DownloadPlaylist(BasePlaylist):
                             title=track_title,
                             author=track_author,
                             downloaded=True,
-                            extension=ext
+                            extension=ext,
                         )
                     )
             except Exception:

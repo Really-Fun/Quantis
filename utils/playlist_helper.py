@@ -80,7 +80,9 @@ def rename_user_playlist_file(
         payload = {"name": old_clean, "tracks": []}
 
     payload["name"] = new_clean
-    new_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    new_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
     if old_path.resolve() != new_path.resolve():
         old_path.unlink(missing_ok=True)
     return new_path
@@ -144,7 +146,9 @@ def add_track_to_user_playlist(
             "author": author,
         }
     )
-    playlist_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    playlist_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
     return True
 
 
@@ -168,17 +172,23 @@ def remove_track_from_user_playlist(
         return False
 
     payload["tracks"] = new_tracks
-    playlist_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    playlist_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
     return True
 
 
-def touch_user_playlist_file(playlist_name: str, playlists_dir: str = "playlists") -> None:
+def touch_user_playlist_file(
+    playlist_name: str, playlists_dir: str = "playlists"
+) -> None:
     """Обновляет время модификации файла плейлиста (для сортировки по mtime)."""
     playlist_path = _find_playlist_path_by_name(playlist_name, playlists_dir)
     playlist_path.touch()
 
 
-def get_user_playlist_path_by_name(playlist_name: str, playlists_dir: str = "playlists") -> Path:
+def get_user_playlist_path_by_name(
+    playlist_name: str, playlists_dir: str = "playlists"
+) -> Path:
     """Возвращает путь к JSON-файлу пользовательского плейлиста по имени."""
     return _find_playlist_path_by_name(playlist_name, playlists_dir)
 

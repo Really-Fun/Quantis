@@ -39,9 +39,7 @@ class MiniTrackWidget(QWidget):
         pixmap = QPixmap("covers/631110.jpg")
         self.cover.setPixmap(
             pixmap.scaled(
-                48, 48,
-                Qt.KeepAspectRatioByExpanding,
-                Qt.SmoothTransformation
+                48, 48, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation
             )
         )
 
@@ -79,8 +77,10 @@ class MiniTrackWidget(QWidget):
         if not os.path.exists(path):
             await self.downloader.download_cover(track)
         pixmap = QPixmap(path)
-        self.cover.setPixmap(pixmap.scaled(48, 48,
-                Qt.KeepAspectRatioByExpanding,
-                Qt.SmoothTransformation))
+        self.cover.setPixmap(
+            pixmap.scaled(
+                48, 48, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation
+            )
+        )
         self.title.setText(track.title)
         self.artist.setText(track.author)

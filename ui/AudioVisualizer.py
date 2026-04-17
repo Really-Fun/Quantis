@@ -128,7 +128,9 @@ class AudioVisualizer(QWidget):
     def set_color_rgb(self, color_rgb: tuple[int, int, int]) -> None:
         """Обновляет цвет визуализатора (R, G, B)."""
         r, g, b = color_rgb
-        self._color = QColor(max(0, min(255, r)), max(0, min(255, g)), max(0, min(255, b)))
+        self._color = QColor(
+            max(0, min(255, r)), max(0, min(255, g)), max(0, min(255, b))
+        )
 
     def set_mode(self, mode: str) -> None:
         """Устанавливает режим визуализатора: smooth/sharp/choppy."""
@@ -164,7 +166,9 @@ class AudioVisualizer(QWidget):
 
     # --- Points ---
 
-    def _make_points(self, w: int, mid: float, amplitude: float, flip: bool = False) -> list[QPointF]:
+    def _make_points(
+        self, w: int, mid: float, amplitude: float, flip: bool = False
+    ) -> list[QPointF]:
         step = w / max(1, self._bar_count - 1)
         sign = 1.0 if not flip else -1.0
         pts: list[QPointF] = []
@@ -202,8 +206,12 @@ class AudioVisualizer(QWidget):
             bot_path = _build_smooth_path(bot_pts)
 
         # Fill gradient (subtle area under/over curve)
-        fill_color_top = QColor(self._color.red(), self._color.green(), self._color.blue(), 25)
-        fill_color_mid = QColor(self._color.red(), self._color.green(), self._color.blue(), 0)
+        fill_color_top = QColor(
+            self._color.red(), self._color.green(), self._color.blue(), 25
+        )
+        fill_color_mid = QColor(
+            self._color.red(), self._color.green(), self._color.blue(), 0
+        )
 
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing, True)
@@ -229,7 +237,9 @@ class AudioVisualizer(QWidget):
 
         grad_bot = QLinearGradient(0, mid, 0, h)
         grad_bot.setColorAt(0.0, fill_color_mid)
-        grad_bot.setColorAt(1.0, QColor(self._color.red(), self._color.green(), self._color.blue(), 15))
+        grad_bot.setColorAt(
+            1.0, QColor(self._color.red(), self._color.green(), self._color.blue(), 15)
+        )
         painter.setBrush(QBrush(grad_bot))
         painter.drawPath(fill_bot)
 

@@ -149,7 +149,7 @@ class _TokenSection(QFrame):
 
         lay.addWidget(self.yandex_token)
         lay.addWidget(self.youtube_key)
-        
+
         lay.addWidget(custom_api)
 
         save_btn = QPushButton("Сохранить")
@@ -166,7 +166,7 @@ class _TokenSection(QFrame):
     def get_apis(self):
         yandex_api = self.yandex_token.text().strip()
         return {"YANDEX_TOKEN_NEON_APP": yandex_api}
-    
+
     def is_correct(self, apis: dict) -> bool:
         return True
 
