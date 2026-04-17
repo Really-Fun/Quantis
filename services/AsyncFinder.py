@@ -96,9 +96,9 @@ class AsyncYoutubeFinder(AsyncFinderInterface):
             track_title = track.get("title")
             try:
                 authors = " | ".join([author["name"] for author in track["artists"]])
-            except Exception: # Лучше указать конкретное исключение
+            except Exception:  # Лучше указать конкретное исключение
                 authors = "Author"
-            print(authors) # Это обязательно?
+            print(authors)  # Это обязательно?
             tracks.append(
                 YoutubeTrack(
                     track_id=track_id,
@@ -134,7 +134,7 @@ class AsyncFinder(AsyncFinderInterface):
             yandex_tracks = []
         try:
             youtube_tracks = await self._youtube_finder.get_tracks(title, value)
-        except Exception: # Лучше указать конкретное исключение
+        except Exception:  # Лучше указать конкретное исключение
             youtube_tracks = []
         return yandex_tracks + youtube_tracks
 

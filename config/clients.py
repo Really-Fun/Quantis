@@ -8,7 +8,6 @@
 
 """
 
-
 from yandex_music import ClientAsync
 from yandex_music.exceptions import TimedOutError, NetworkError as NetworkErrorYandex
 from pylast import WSError, NetworkError as NetworkErrorLastFm
