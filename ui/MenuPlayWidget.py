@@ -3,11 +3,10 @@
 Управление воспроизведением, перемотка, громкость, следующая/предыдущая.
 """
 
-import asyncio
 import os
 
 from PySide6.QtCore import QRectF, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPixmap
+from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -391,22 +390,21 @@ class PlayMenu(QWidget):
 
     def _update_repeat_button_style(self) -> None:
         """Обновляет визуальное состояние кнопки повтора."""
-        size = 30
         if self._repeat_mode == "off":
             style = """
                 QToolButton { border-radius: 15px; background: transparent; border: none; }
                 QToolButton:hover { background: rgba(255,255,255,15); }
             """
         else:
-            style = f"""
-                QToolButton {{
+            style = """
+                QToolButton {
                     border-radius: 15px;
                     background: rgba(0,220,255,40);
                     border: none;
-                }}
-                QToolButton:hover {{
+                }
+                QToolButton:hover {
                     background: rgba(0,220,255,60);
-                }}
+                }
             """
         self.btn_repeat.setStyleSheet(style)
 

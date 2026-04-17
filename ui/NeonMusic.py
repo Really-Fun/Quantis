@@ -53,7 +53,7 @@ class NeonMusic(QMainWindow):
             self.background.setPixmap(
                 QPixmap(asset_path(self._settings.value("visualizer/bg")))
             )
-        except:
+        except Exception:
             self.background.setPixmap(
                 QPixmap(asset_path("assets/background/default.jpg"))
             )

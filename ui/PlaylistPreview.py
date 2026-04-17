@@ -17,7 +17,6 @@ from PySide6.QtWidgets import (
     QGraphicsDropShadowEffect,
     QLabel,
     QMenu,
-    QSizePolicy,
     QVBoxLayout,
     QWidget,
 )

@@ -11,15 +11,11 @@ from PySide6.QtGui import (
     QFont,
     QIcon,
     QPixmap,
-    QPen,
-    QFontMetrics,
-    QCursor,
     QPainterPath,
 )
 from PySide6.QtWidgets import (
     QStyledItemDelegate,
     QStyleOptionViewItem,
-    QApplication,
     QStyle,
 )
 

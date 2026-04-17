@@ -15,7 +15,6 @@ from PySide6.QtWidgets import QWidget
 
 from player.visualizer import VizualPlayer
 from ui.theme import (
-    ACCENT,
     ACCENT_DIM,
     AMPLITUDE,
     DECAY,
