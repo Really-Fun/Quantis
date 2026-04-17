@@ -6,7 +6,6 @@ from PySide6.QtCore import QTimer
 from mpris_server.adapters import MprisAdapter
 from mpris_server.base import MAX_RATE, MIN_RATE, PlayState
 from mpris_server.events import EventAdapter
-from mpris_server.server import Server
 from mpris_server import Metadata
 from mpris_server.mpris.metadata import MetadataEntries
 

@@ -11,12 +11,11 @@ import asyncio
 import logging
 import os
 
-from PySide6.QtCore import Qt, QRectF, Signal, QSize
+from PySide6.QtCore import Qt, QRectF, Signal
 from PySide6.QtGui import (
     QBrush,
     QColor,
     QFont,
-    QIcon,
     QLinearGradient,
     QPainter,
     QPainterPath,
@@ -27,7 +26,6 @@ from PySide6.QtWidgets import (
     QFrame,
     QLabel,
     QMessageBox,
-    QScrollArea,
     QSizePolicy,
     QToolButton,
     QVBoxLayout,
@@ -36,7 +34,7 @@ from PySide6.QtWidgets import (
 )
 from qasync import asyncSlot
 
-from models import Track, UserPlaylist
+from models import UserPlaylist
 from player import Player
 from providers import PlaylistManager, PathProvider
 from services import AsyncDownloader

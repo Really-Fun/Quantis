@@ -20,7 +20,6 @@ from qasync import asyncSlot
 
 from player import Player
 from services import AsyncDownloader, AsyncFinder
-from ui.TrackCard import TrackCard
 from utils import add_track_to_user_playlist, list_user_playlist_names
 
 _LINE_COLOR = QColor(0, 220, 255)

@@ -131,7 +131,7 @@ class AsyncYoutubeDownloader(AsyncDownloaderInterface):
         cover_url = f"https://img.youtube.com/vi/{track.track_id}/hqdefault.jpg"
         track.cover_path = self.path_provider.get_cover_path(track)
 
-        async with aiohttp.ClientSession() as session:
+        async with aiohttp.ClientSession() as session: # noqa Создаём сессию но не используем, может лучше создать 1 глобальную?
             async with self._session.session.get(cover_url) as response:
                 if response.status != 200:
                     return

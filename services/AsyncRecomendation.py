@@ -1,10 +1,9 @@
-from abc import ABC
 from concurrent.futures import ThreadPoolExecutor
 import asyncio
 
 from ytmusicapi import YTMusic
 
-from models import Track, YandexTrack, YoutubeTrack, RecomendationPlaylist
+from models import Track, YoutubeTrack, RecomendationPlaylist
 from config import GetClients
 from .AsyncFinder import AsyncYoutubeFinder
 
