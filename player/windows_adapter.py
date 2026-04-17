@@ -1,7 +1,13 @@
 import asyncio
 
-from winrt.windows.media.playback import MediaPlayer
-from winrt.windows.media import MediaPlaybackType, MediaPlaybackStatus, SystemMediaTransportControlsButton
+try:
+    from winrt.windows.media.playback import MediaPlayer
+    from winrt.windows.media import MediaPlaybackType, MediaPlaybackStatus, SystemMediaTransportControlsButton
+except ImportError:
+    raise ImportError(
+        "Для работы с Windows SMTC необходимо установить пакет winrt: "
+        '"pip install winrt-Windows.media winrt-Windows.media.playback winrt-Windows.foundation"' # Импорт обязательных модулей
+    )
 
 from models import Track
 # Импортируй свой Player, если нужна строгая типизация (from player import Player)
