@@ -52,7 +52,7 @@ python main.py
 
 ```bat
 pip install pyinstaller
-build.bat
+pyinstaller main.spec
 ```
 
 Исполняемый файл и ресурсы появятся в `dist\CleanPlayer\`. Запуск: `dist\CleanPlayer\CleanPlayer.exe`. В spec подключены локали **ytmusicapi** (в т.ч. RU) через `collect_all('ytmusicapi')`.
