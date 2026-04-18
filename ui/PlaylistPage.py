@@ -11,12 +11,11 @@ import asyncio
 import logging
 import os
 
-from PySide6.QtCore import Qt, QRectF, Signal, QSize
+from PySide6.QtCore import Qt, QRectF, Signal
 from PySide6.QtGui import (
     QBrush,
     QColor,
     QFont,
-    QIcon,
     QLinearGradient,
     QPainter,
     QPainterPath,
@@ -27,7 +26,6 @@ from PySide6.QtWidgets import (
     QFrame,
     QLabel,
     QMessageBox,
-    QScrollArea,
     QSizePolicy,
     QToolButton,
     QVBoxLayout,
@@ -36,7 +34,7 @@ from PySide6.QtWidgets import (
 )
 from qasync import asyncSlot
 
-from models import Track, UserPlaylist
+from models import UserPlaylist
 from player import Player
 from providers import PlaylistManager, PathProvider
 from services import AsyncDownloader
@@ -141,7 +139,7 @@ class PlaylistPage(QWidget):
         self.track_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.track_list.setFrameShape(QFrame.NoFrame)
         self.track_list.setSelectionMode(QListView.NoSelection)
-        self.track_list.setMouseTracking(True) # Required for hover events in delegate
+        self.track_list.setMouseTracking(True)  # Required for hover events in delegate
         self.track_list.setStyleSheet(
             """
             QListView { background: transparent; border: none; outline: none; }
@@ -161,11 +159,11 @@ class PlaylistPage(QWidget):
 
         self.track_model = TrackListModel()
         self.track_delegate = TrackDelegate(self.track_list)
-        
+
         self.track_delegate.signals.play_requested.connect(self.on_play)
         self.track_delegate.signals.download_requested.connect(self.on_download)
         self.track_delegate.signals.context_menu_requested.connect(self.on_context_menu)
-        
+
         self.track_list.setModel(self.track_model)
         self.track_list.setItemDelegate(self.track_delegate)
 
@@ -185,7 +183,9 @@ class PlaylistPage(QWidget):
         new_key = self.build_playlist_cache_key(playlist)
 
         # Если открыт тот же плейлист без изменений — не пересоздаем карточки.
-        if self.playlist_cache_key == new_key and self.track_model.rowCount() == len(tracks):
+        if self.playlist_cache_key == new_key and self.track_model.rowCount() == len(
+            tracks
+        ):
             self.header.set_info(
                 name=playlist.name,
                 count=len(tracks),
@@ -222,11 +222,11 @@ class PlaylistPage(QWidget):
                     count=len(self.playlist.tracks.values),
                     pixmap=cover_pm,
                 )
-        
+
         # We don't need to manually trigger track cover loads here anymore,
         # the TrackDelegate handles synchronous drawing if the file exists.
         # However, to start downloading missing covers we can iterate over tracks:
-        # Note: In a real app we'd dispatch this to a separate worker thread queue 
+        # Note: In a real app we'd dispatch this to a separate worker thread queue
         # so it truly runs in the background. Here we just loop with asyncio.sleep(0)
         tracks = self.track_model._tracks
         # Download in background
@@ -237,7 +237,9 @@ class PlaylistPage(QWidget):
                     await self.dl.download_cover(track)
                     # Tell model data changed to repaint
                     idx = tracks.index(track)
-                    self.track_model.dataChanged.emit(self.track_model.index(idx), self.track_model.index(idx))
+                    self.track_model.dataChanged.emit(
+                        self.track_model.index(idx), self.track_model.index(idx)
+                    )
                 except Exception:
                     logger.exception("Не удалось загрузить обложку трека")
             await asyncio.sleep(0)
@@ -331,11 +333,12 @@ class PlaylistPage(QWidget):
             current_track if current_track is not None else self.player.current_track
         )
         self.track_model.set_playing_track(track)
-        
+
     @asyncSlot(object, object)
     async def on_context_menu(self, track, global_pos):
         """Контекстное меню для трека."""
         from PySide6.QtWidgets import QMenu
+
         menu = QMenu(self)
         play_action = menu.addAction("Играть")
         add_action = menu.addAction("Добавить в плейлист")

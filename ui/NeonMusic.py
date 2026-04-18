@@ -4,7 +4,15 @@ import sys
 
 from PySide6.QtCore import QSettings, Qt
 from PySide6.QtGui import QGuiApplication, QPixmap
-from PySide6.QtWidgets import QApplication, QFrame, QHBoxLayout, QLabel, QMainWindow, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QApplication,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QMainWindow,
+    QVBoxLayout,
+    QWidget,
+)
 from qasync import asyncSlot
 
 from ui.AudioVisualizer import AudioVisualizer
@@ -27,7 +35,6 @@ class NeonMusic(QMainWindow):
         viz_b = int(self._settings.value("visualizer/color_b", 255))
         viz_color = (viz_r, viz_g, viz_b)
 
-
         self.setWindowTitle("NeonMusic")
         # Широкая ширина, обычная высота — чтобы всё было видно
         self.resize(1100, 750)
@@ -43,9 +50,13 @@ class NeonMusic(QMainWindow):
         self.background = QLabel(central)
         try:
             self._settings.value("visualizer/bg")
-            self.background.setPixmap(QPixmap(asset_path(self._settings.value("visualizer/bg"))))
-        except:
-            self.background.setPixmap(QPixmap(asset_path("assets/background/default.jpg")))
+            self.background.setPixmap(
+                QPixmap(asset_path(self._settings.value("visualizer/bg")))
+            )
+        except Exception:
+            self.background.setPixmap(
+                QPixmap(asset_path("assets/background/default.jpg"))
+            )
         self.background.setScaledContents(True)
 
         # ================== ТЕМНОЕ ПЕРЕКРЫТИЕ ==================
@@ -113,9 +124,15 @@ class NeonMusic(QMainWindow):
         # ================== СВЯЗЬ НАСТРОЕК ==================
         self.stack.settings_page.background_changed.connect(self._change_bg)
         self.stack.settings_page.visualizer_toggled.connect(self._toggle_viz)
-        self.stack.settings_page.visualizer_delay_changed.connect(self._set_visualizer_delay)
-        self.stack.settings_page.visualizer_color_changed.connect(self._set_visualizer_color)
-        self.stack.settings_page.visualizer_mode_changed.connect(self._set_visualizer_mode)
+        self.stack.settings_page.visualizer_delay_changed.connect(
+            self._set_visualizer_delay
+        )
+        self.stack.settings_page.visualizer_color_changed.connect(
+            self._set_visualizer_color
+        )
+        self.stack.settings_page.visualizer_mode_changed.connect(
+            self._set_visualizer_mode
+        )
         self.stack.settings_page.set_visualizer_settings(viz_delay, viz_color, viz_mode)
 
         # ================== ОБЩИЙ СТИЛЬ ==================
@@ -190,11 +207,10 @@ class NeonMusic(QMainWindow):
 
     def display_radio_on_home(self, playlist):
         self.stack.home_page.add_recommendation_section(playlist)
-        
+
         self.stack.setCurrentWidget(self.stack.home_page)
-        
+
         self.menu_tabs.set_active_tab(0)
-    
 
 
 if __name__ == "__main__":

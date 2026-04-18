@@ -3,12 +3,19 @@
 Управление воспроизведением, перемотка, громкость, следующая/предыдущая.
 """
 
-import asyncio
 import os
 
 from PySide6.QtCore import QRectF, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QIcon, QPainter, QPainterPath, QPixmap
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QSizePolicy, QSlider, QToolButton, QVBoxLayout, QWidget
+from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
+from PySide6.QtWidgets import (
+    QHBoxLayout,
+    QLabel,
+    QSizePolicy,
+    QSlider,
+    QToolButton,
+    QVBoxLayout,
+    QWidget,
+)
 from qasync import asyncSlot
 from PySide6.QtGui import QKeySequence, QShortcut
 
@@ -72,6 +79,7 @@ _ARTIST_QSS = "color: rgba(255,255,255,110); font-size: 11px; background: transp
 
 class PlayMenu(QWidget):
     """Панель управления воспроизведением."""
+
     playlist_generated = Signal(object)
 
     def __init__(self, parent=None):
@@ -98,7 +106,9 @@ class PlayMenu(QWidget):
         self._cover = QLabel()
         self._cover.setFixedSize(48, 48)
         self._cover.setAlignment(Qt.AlignCenter)
-        self._cover.setStyleSheet("border-radius: 6px; background: rgba(255,255,255,8);")
+        self._cover.setStyleSheet(
+            "border-radius: 6px; background: rgba(255,255,255,8);"
+        )
 
         txt = QVBoxLayout()
         txt.setSpacing(2)
@@ -260,7 +270,9 @@ class PlayMenu(QWidget):
         p.setRenderHint(QPainter.Antialiasing, True)
         p.setPen(Qt.NoPen)
         p.setBrush(_BG_COLOR)
-        p.drawRoundedRect(QRectF(0, 0, self.width(), self.height()), _BG_RADIUS, _BG_RADIUS)
+        p.drawRoundedRect(
+            QRectF(0, 0, self.width(), self.height()), _BG_RADIUS, _BG_RADIUS
+        )
         p.end()
         super().paintEvent(event)
 
@@ -281,7 +293,10 @@ class PlayMenu(QWidget):
             await self.downloader.download_cover(track)
         if os.path.exists(path):
             pm = QPixmap(path).scaled(
-                48, 48, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation,
+                48,
+                48,
+                Qt.KeepAspectRatioByExpanding,
+                Qt.SmoothTransformation,
             )
             self._cover.setPixmap(pm)
 
@@ -344,11 +359,13 @@ class PlayMenu(QWidget):
     @asyncSlot()
     async def generate_playlist(self):
         recomendation_service = AsyncRecomendation()
-        
-        current_track = self.player.current_track 
-        
+
+        current_track = self.player.current_track
+
         if current_track:
-            playlist = await recomendation_service.generate_radio_from_track(current_track)
+            playlist = await recomendation_service.generate_radio_from_track(
+                current_track
+            )
             self.playlist_generated.emit(playlist)
 
     def _on_next_requested(self):
@@ -363,28 +380,31 @@ class PlayMenu(QWidget):
         modes = ("off", "one", "all")
         idx = (modes.index(self._repeat_mode) + 1) % len(modes)
         self._repeat_mode = modes[idx]
-        tips = {"off": "Повтор: выкл", "one": "Повтор: один трек", "all": "Повтор: плейлист"}
+        tips = {
+            "off": "Повтор: выкл",
+            "one": "Повтор: один трек",
+            "all": "Повтор: плейлист",
+        }
         self.btn_repeat.setToolTip(tips[self._repeat_mode])
         self._update_repeat_button_style()
 
     def _update_repeat_button_style(self) -> None:
         """Обновляет визуальное состояние кнопки повтора."""
-        size = 30
         if self._repeat_mode == "off":
             style = """
                 QToolButton { border-radius: 15px; background: transparent; border: none; }
                 QToolButton:hover { background: rgba(255,255,255,15); }
             """
         else:
-            style = f"""
-                QToolButton {{
+            style = """
+                QToolButton {
                     border-radius: 15px;
                     background: rgba(0,220,255,40);
                     border: none;
-                }}
-                QToolButton:hover {{
+                }
+                QToolButton:hover {
                     background: rgba(0,220,255,60);
-                }}
+                }
             """
         self.btn_repeat.setStyleSheet(style)
 
@@ -440,6 +460,7 @@ class PlayMenu(QWidget):
 
 
 # ── вспомогательные функции ──
+
 
 def _fmt(ms: int) -> str:
     s = max(0, ms // 1000)

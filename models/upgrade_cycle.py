@@ -9,8 +9,8 @@ Dependency - from Iterable (but this is okay)
 
 from typing import Iterable, Any, Optional
 
-class UpgradeCycle:
 
+class UpgradeCycle:
     def __init__(self, values: Iterable[Any]) -> None:
         """Инициализируем цикл
 
@@ -37,7 +37,7 @@ class UpgradeCycle:
         temp = self.values[self._index]
         self._index = (self._index + 1) % len(self.values)
         return temp
-    
+
     def __len__(self) -> int:
         """Возвращаем длину цикла
 

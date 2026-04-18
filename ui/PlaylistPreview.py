@@ -3,8 +3,23 @@
 import os
 
 from PySide6.QtCore import Qt, QRectF, Signal, QTimeLine
-from PySide6.QtGui import QBrush, QColor, QFont, QLinearGradient, QPainter, QPainterPath, QPen, QPixmap
-from PySide6.QtWidgets import QGraphicsDropShadowEffect, QLabel, QMenu, QSizePolicy, QVBoxLayout, QWidget
+from PySide6.QtGui import (
+    QBrush,
+    QColor,
+    QFont,
+    QLinearGradient,
+    QPainter,
+    QPainterPath,
+    QPen,
+    QPixmap,
+)
+from PySide6.QtWidgets import (
+    QGraphicsDropShadowEffect,
+    QLabel,
+    QMenu,
+    QVBoxLayout,
+    QWidget,
+)
 
 from providers import PathProvider
 from utils import get_ru_words_for_number
@@ -38,14 +53,18 @@ class PlaylistPreview(QWidget):
 
         # ── layout ──
         lay = QVBoxLayout(self)
-        lay.setContentsMargins((_CARD_W - _COVER_SIZE) // 2, 12, (_CARD_W - _COVER_SIZE) // 2, 10)
+        lay.setContentsMargins(
+            (_CARD_W - _COVER_SIZE) // 2, 12, (_CARD_W - _COVER_SIZE) // 2, 10
+        )
         lay.setSpacing(8)
 
         # ── cover ──
         self._cover_label = QLabel()
         self._cover_label.setFixedSize(_COVER_SIZE, _COVER_SIZE)
         self._cover_label.setAlignment(Qt.AlignCenter)
-        self._cover_label.setStyleSheet(f"border-radius: {_COVER_RADIUS}px; background: transparent;")
+        self._cover_label.setStyleSheet(
+            f"border-radius: {_COVER_RADIUS}px; background: transparent;"
+        )
         self._cover_pixmap: QPixmap | None = None
         self._load_cover()
         lay.addWidget(self._cover_label, alignment=Qt.AlignCenter)
@@ -89,7 +108,10 @@ class PlaylistPreview(QWidget):
         base = get_ru_words_for_number(track_count)
         if not self._playlist:
             return base
-        total_listens = sum(max(0, int(getattr(t, "listen_count", 0))) for t in self._playlist.tracks.values)
+        total_listens = sum(
+            max(0, int(getattr(t, "listen_count", 0)))
+            for t in self._playlist.tracks.values
+        )
         if total_listens <= 0:
             return base
         return f"{base} · {self._format_listens(total_listens)}"
@@ -118,8 +140,10 @@ class PlaylistPreview(QWidget):
             pm = QPixmap(cover_path)
             if not pm.isNull():
                 self._cover_pixmap = pm.scaled(
-                    _COVER_SIZE, _COVER_SIZE,
-                    Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation,
+                    _COVER_SIZE,
+                    _COVER_SIZE,
+                    Qt.KeepAspectRatioByExpanding,
+                    Qt.SmoothTransformation,
                 )
         # if still None — paintEvent will draw placeholder
 
@@ -141,8 +165,10 @@ class PlaylistPreview(QWidget):
     def set_cover_pixmap(self, pm: QPixmap) -> None:
         """Вызывается извне после асинхронной загрузки обложки."""
         self._cover_pixmap = pm.scaled(
-            _COVER_SIZE, _COVER_SIZE,
-            Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation,
+            _COVER_SIZE,
+            _COVER_SIZE,
+            Qt.KeepAspectRatioByExpanding,
+            Qt.SmoothTransformation,
         )
         self.update()
 
@@ -190,8 +216,10 @@ class PlaylistPreview(QWidget):
         # subtle bottom gradient over cover (text readability)
         p.setClipPath(cover_clip)
         bottom_grad = QLinearGradient(
-            cover_rect.bottomLeft().x(), cover_rect.bottom() - 40,
-            cover_rect.bottomLeft().x(), cover_rect.bottom(),
+            cover_rect.bottomLeft().x(),
+            cover_rect.bottom() - 40,
+            cover_rect.bottomLeft().x(),
+            cover_rect.bottom(),
         )
         bottom_grad.setColorAt(0.0, QColor(0, 0, 0, 0))
         bottom_grad.setColorAt(1.0, QColor(0, 0, 0, 60))

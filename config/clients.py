@@ -8,8 +8,6 @@
 
 """
 
-from typing import List, Union
-
 from yandex_music import ClientAsync
 from yandex_music.exceptions import TimedOutError, NetworkError as NetworkErrorYandex
 from pylast import WSError, NetworkError as NetworkErrorLastFm
@@ -64,7 +62,6 @@ class InitClients:
 
 
 class GetClients:
-
     def __new__(cls):
         if not hasattr(cls, "instance"):
             cls.instance = super().__new__(cls)

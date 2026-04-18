@@ -125,7 +125,10 @@ class VizualPlayer:
                 return
 
             max_size = int(
-                self._sample_rate * self._channels * BYTES_PER_SAMPLE * BUFFER_DURATION_SEC
+                self._sample_rate
+                * self._channels
+                * BYTES_PER_SAMPLE
+                * BUFFER_DURATION_SEC
             )
             with self._lock:
                 self._buffer.extend(raw)
@@ -144,9 +147,7 @@ class VizualPlayer:
         except Exception:
             pass
         try:
-            mp.audio_set_callbacks(
-                self._cb_play, None, None, None, None, self._opaque
-            )
+            mp.audio_set_callbacks(self._cb_play, None, None, None, None, self._opaque)
         except Exception:
             pass
 

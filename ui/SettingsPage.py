@@ -22,7 +22,14 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ui.theme import COMBO_QSS, PANEL_DARK, PANEL_RADIUS, REFRESH_MS_MAX, REFRESH_MS_MIN, scroll_qss
+from ui.theme import (
+    COMBO_QSS,
+    PANEL_DARK,
+    PANEL_RADIUS,
+    REFRESH_MS_MAX,
+    REFRESH_MS_MIN,
+    scroll_qss,
+)
 from utils import asset_path
 
 
@@ -97,7 +104,8 @@ class SettingsPage(QWidget):
         bg_dir = asset_path("assets/background")
         if os.path.isdir(bg_dir):
             bg_files = sorted(
-                f for f in os.listdir(bg_dir)
+                f
+                for f in os.listdir(bg_dir)
                 if f.lower().endswith((".jpg", ".png", ".jpeg"))
             )
         else:
@@ -175,13 +183,17 @@ class SettingsPage(QWidget):
 
         info = _SettingRow("NeonMusic CleanPlayer")
         ver = QLabel("Beta 0.1.0")
-        ver.setStyleSheet("color: rgba(255,255,255,50); font-size: 12px; background: transparent;")
+        ver.setStyleSheet(
+            "color: rgba(255,255,255,50); font-size: 12px; background: transparent;"
+        )
         info.add_right(ver)
         sec.add_row(info)
 
         dev = _SettingRow("Разработчик")
         dev_name = QLabel("reallyfun")
-        dev_name.setStyleSheet("color: rgba(0,220,255,160); font-size: 13px; background: transparent;")
+        dev_name.setStyleSheet(
+            "color: rgba(0,220,255,160); font-size: 13px; background: transparent;"
+        )
         dev.add_right(dev_name)
         sec.add_row(dev)
 
@@ -219,7 +231,9 @@ class SettingsPage(QWidget):
     ) -> None:
         """Восстанавливает сохранённые настройки визуализатора."""
         self._viz_delay.blockSignals(True)
-        self._viz_delay.setValue(max(REFRESH_MS_MIN, min(REFRESH_MS_MAX, int(delay_ms))))
+        self._viz_delay.setValue(
+            max(REFRESH_MS_MIN, min(REFRESH_MS_MAX, int(delay_ms)))
+        )
         self._viz_delay.blockSignals(False)
         self._viz_delay_label.setText(str(self._viz_delay.value()))
 
@@ -363,7 +377,9 @@ class _SettingsHeader(QWidget):
         line_grad.setColorAt(0.7, QColor(0, 220, 255, 40))
         line_grad.setColorAt(1.0, QColor(0, 220, 255, 0))
         p.setPen(QPen(QBrush(line_grad), 1.0))
-        p.drawLine(16, int(rect.bottom() - 1), int(rect.right() - 16), int(rect.bottom() - 1))
+        p.drawLine(
+            16, int(rect.bottom() - 1), int(rect.right() - 16), int(rect.bottom() - 1)
+        )
 
         p.end()
         super().paintEvent(event)

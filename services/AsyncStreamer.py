@@ -20,7 +20,7 @@ def url_cache(func):
     async def wrapper(*args, **kwargs):
         nonlocal urls
         if len(args) == 1:
-            track = kwargs['track']
+            track = kwargs["track"]
         else:
             track = args[1]
         track_url = urls.get(track.track_id, None)
@@ -30,14 +30,13 @@ def url_cache(func):
 
     return wrapper
 
-class AsyncStreamerInterface(ABC):
 
+class AsyncStreamerInterface(ABC):
     @abstractmethod
-    async def get_stream_url(self, track: Track) -> str | None:
-        ...
+    async def get_stream_url(self, track: Track) -> str | None: ...
+
 
 class AsyncYandexStreamer(AsyncStreamerInterface):
-
     def __init__(self):
         self.client = GetClients().get_yandex_client()
 
@@ -53,8 +52,8 @@ class AsyncYandexStreamer(AsyncStreamerInterface):
             logger.exception("Не удалось получить URL потока Яндекс.Музыки: %s", track)
             return None
 
-class AsyncYoutubeStreamer(AsyncStreamerInterface):
 
+class AsyncYoutubeStreamer(AsyncStreamerInterface):
     def __init__(self):
         self.opts = {
             "quiet": True,
@@ -71,7 +70,9 @@ class AsyncYoutubeStreamer(AsyncStreamerInterface):
 
     async def get_stream_url(self, track: Track) -> str | None:
         with ThreadPoolExecutor() as pool:
-            url = await get_running_loop().run_in_executor(pool, self.sync_stream, self.yt, track.track_id)
+            url = await get_running_loop().run_in_executor(
+                pool, self.sync_stream, self.yt, track.track_id
+            )
         return url
 
     @staticmethod
@@ -87,7 +88,6 @@ class AsyncYoutubeStreamer(AsyncStreamerInterface):
 
 
 class AsyncStreamer(AsyncStreamerInterface):
-
     def __init__(self):
         self._async_yandex_streamer = AsyncYandexStreamer()
         self._async_youtube_streamer = AsyncYoutubeStreamer()

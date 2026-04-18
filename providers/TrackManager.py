@@ -5,7 +5,6 @@ from models.Tracks import YandexTrack, YoutubeTrack
 
 
 class TrackManager:
-
     _instance = None
 
     def __new__(cls, *args, **kwargs):
@@ -51,11 +50,13 @@ class TrackManager:
             track_id (_type_): id трека
 
         Returns:
-            bool: True or False 
-        """        
+            bool: True or False
+        """
         return track_id in self.ids
 
-    def get_track_from_playlist(self, track_id: str, title: str, author: str) -> YandexTrack | YoutubeTrack:
+    def get_track_from_playlist(
+        self, track_id: str, title: str, author: str
+    ) -> YandexTrack | YoutubeTrack:
         """Получаем трек по его id, названию и автору
 
         Args:

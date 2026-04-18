@@ -5,7 +5,12 @@ def get_ru_words_for_number(number: int) -> str:
     Returns:
         str: число с правильным словом
     """
-    if number % 100 == 11 or number % 100 == 12 or number % 100 == 13 or number % 100 == 14:
+    if (
+        number % 100 == 11
+        or number % 100 == 12
+        or number % 100 == 13
+        or number % 100 == 14
+    ):
         return f"{number} треков"
     elif number % 10 == 1:
         return f"{number} трек"

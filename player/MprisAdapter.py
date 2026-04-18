@@ -6,7 +6,6 @@ from PySide6.QtCore import QTimer
 from mpris_server.adapters import MprisAdapter
 from mpris_server.base import MAX_RATE, MIN_RATE, PlayState
 from mpris_server.events import EventAdapter
-from mpris_server.server import Server
 from mpris_server import Metadata
 from mpris_server.mpris.metadata import MetadataEntries
 
@@ -30,7 +29,12 @@ class NeonAppAdapter(MprisAdapter):
     # минимальные метаданные, иначе _get_metadata() даёт None и D-Bus ломается на пустом Metadata.
     def metadata(self) -> Metadata:
         if not self.player.current_track:
-            return Metadata(**{MetadataEntries.TITLE: "", MetadataEntries.TRACK_ID: "/org/mpris/MediaPlayer2/NoTrack"})
+            return Metadata(
+                **{
+                    MetadataEntries.TITLE: "",
+                    MetadataEntries.TRACK_ID: "/org/mpris/MediaPlayer2/NoTrack",
+                }
+            )
         t = self.player.current_track
         length_us = max(0, self.player.duration) * 1000  # ms -> µs
         meta = {
