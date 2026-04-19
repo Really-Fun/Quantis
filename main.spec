@@ -11,7 +11,7 @@ a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
-    datas=[ytm_ru_locale], # <-- Передаем локали в сборку
+    datas=[ytm_ru_locale], # <-- Передаем локали в сборку (важно, т.к. без этого не работает поиск по ютубу)
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
@@ -25,17 +25,17 @@ pyz = PYZ(a.pure)
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,        # <-- ДОБАВЛЕНО СЮДА
-    a.datas,           # <-- ДОБАВЛЕНО СЮДА
+    a.binaries,
+    a.datas,
     [],
-    name='CleanPlayer', # <-- Поменял название экзешника
+    name='CleanPlayer',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
     upx_exclude=[],
-    runtime_tmpdir=None, # <-- ВАЖНЫЙ ПАРАМЕТР ДЛЯ ONEFILE
-    console=False,       # Консоль отключена
+    runtime_tmpdir=None,
+    console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,

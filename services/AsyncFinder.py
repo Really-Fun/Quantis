@@ -11,7 +11,7 @@ from asyncio import get_running_loop
 import yandex_music.exceptions
 
 from models import Track, YandexTrack, YoutubeTrack
-from config import GetClients
+from config import Clients
 
 
 class AsyncFinderInterface(ABC):
@@ -24,7 +24,7 @@ class AsyncFinderInterface(ABC):
 
 class AsyncYandexFinder(AsyncFinderInterface):
     def __init__(self):
-        self.client = GetClients().get_yandex_client()
+        self.client = Clients().get_yandex_client()
 
     async def get_tracks(self, title: str, value: int = 5) -> list[Track]:
         if self.client is None:
@@ -67,7 +67,7 @@ class AsyncYandexFinder(AsyncFinderInterface):
 
 class AsyncYoutubeFinder(AsyncFinderInterface):
     def __init__(self) -> None:
-        self.client = GetClients().get_youtube_client()
+        self.client = Clients().get_youtube_client()
 
     async def get_tracks(self, title: str, value: int = 5) -> list[Track]:
         with ThreadPoolExecutor() as pool:

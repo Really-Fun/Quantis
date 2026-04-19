@@ -6,7 +6,7 @@ from pathlib import Path
 import functools
 import logging
 
-from config import GetClients
+from config import Clients
 from models.Tracks import Track, YandexTrack, YoutubeTrack
 from providers import PathProvider
 
@@ -50,7 +50,7 @@ class AsyncYandexDownloader(AsyncDownloaderInterface):
 
     def __init__(self):
         self.path_provider = PathProvider()
-        self.client = GetClients().get_yandex_client()
+        self.client = Clients().get_yandex_client()
 
     async def download_track(self, track: YandexTrack) -> None:
         """Скачивает трек с яндекса. Асинхронное скачивание

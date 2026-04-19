@@ -1,5 +1,5 @@
-from config.clients import GetClients
+from config.clients import Clients
 
 __all__ = [
-    "GetClients",
+    "Clients",
 ]

@@ -5,7 +5,6 @@
 - Spotify (TODO) - приоритет
 - SoundCloud (TODO)
 - Vk Music (TODO)
-
 """
 
 from yandex_music import ClientAsync
@@ -37,31 +36,28 @@ class InitClients:
             yandex_client = None
         except NetworkErrorYandex:
             yandex_client = None
-        finally:
-            return yandex_client
+        return yandex_client
 
     def init_lastfm_client(self) -> None:
         LASTFM_API_KEY = get_password(SERVICE_NAME_LASTFM_API, USER)
         LASTFM_API_SECRET = get_password(SERVICE_NAME_LASTFM_SECRET, USER)
         if LASTFM_API_KEY is None or LASTFM_API_SECRET is None:
             lastfm_client = None
+            return lastfm_client
         try:
             lastfm_client = LastFMNetwork(LASTFM_API_KEY, LASTFM_API_SECRET)
         except WSError:
-            pass
+            lastfm_client = None
         except NetworkErrorLastFm:
-            pass
-        else:
-            pass
-        finally:
-            return lastfm_client
+            lastfm_client = None
+        return lastfm_client
 
     def init_ytmusic_client(self) -> None:
         ytmusic_client = YTMusic(language="ru", location="")
         return ytmusic_client
 
 
-class GetClients:
+class Clients:
     def __new__(cls):
         if not hasattr(cls, "instance"):
             cls.instance = super().__new__(cls)

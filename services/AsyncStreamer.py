@@ -5,7 +5,7 @@ from functools import wraps
 from time import time
 import logging
 
-from config import GetClients
+from config import Clients
 from models import Track
 
 from yt_dlp import YoutubeDL
@@ -38,7 +38,7 @@ class AsyncStreamerInterface(ABC):
 
 class AsyncYandexStreamer(AsyncStreamerInterface):
     def __init__(self):
-        self.client = GetClients().get_yandex_client()
+        self.client = Clients().get_yandex_client()
 
     async def get_stream_url(self, track: Track) -> str | None:
         if self.client is None:

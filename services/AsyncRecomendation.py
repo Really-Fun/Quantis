@@ -4,13 +4,13 @@ import asyncio
 from ytmusicapi import YTMusic
 
 from models import Track, YoutubeTrack, RecomendationPlaylist
-from config import GetClients
+from config import Clients
 from .AsyncFinder import AsyncYoutubeFinder
 
 
 class AsyncRecomendation:
     def __init__(self):
-        self.client: YTMusic = GetClients().get_youtube_client()
+        self.client: YTMusic = Clients().get_youtube_client()
         self.finder: AsyncYoutubeFinder = AsyncYoutubeFinder()
 
     async def generate_radio_from_track(self, track: Track):
