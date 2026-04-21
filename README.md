@@ -1,4 +1,6 @@
-# Quantis
+<p align="center">
+  <img src="assets/readme/quantis.png" alt="Quantis Logo" width="400">
+</p>
 
 [![Python](https://img.shields.io/badge/python-3.13%2B-informational)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-GPL3.0-blue)](LICENSE)
