@@ -1,15 +1,19 @@
-<p align="center">
+<div align="center">
   <img src="assets/readme/quantis.png" alt="Quantis Logo" width="400">
-</p>
 
-[![Python](https://img.shields.io/badge/python-3.13%2B-informational)](https://www.python.org/)
-[![License](https://img.shields.io/badge/license-GPL3.0-blue)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-brightgreen)](https://github.com/Really-Fun/Quantis)
-[![Status](https://img.shields.io/badge/status-Active-success)](https://github.com/Really-Fun/Quantis)
-[![Release](https://img.shields.io/github/v/release/Really-Fun/Quantis)](https://github.com/Really-Fun/Quantis/releases)
+  <br><br>
 
-Быстрый кроссплатформенный десктопный плеер на `PySide6 + asyncio`. Обеспечивает поиск, стриминг, скачивание треков и ведение истории прослушивания, опираясь на чистую асинхронную архитектуру.
+  [![Python](https://img.shields.io/badge/python-3.13%2B-informational?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+  [![License](https://img.shields.io/badge/license-GPL3.0-blue?style=for-the-badge)](LICENSE)
+  [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-brightgreen?style=for-the-badge)](https://github.com/Really-Fun/Quantis)
+  [![Status](https://img.shields.io/badge/status-Active-success?style=for-the-badge)](https://github.com/Really-Fun/Quantis)
+  [![Release](https://img.shields.io/github/v/release/Really-Fun/Quantis?style=for-the-badge)](https://github.com/Really-Fun/Quantis/releases)
+</div>
 
+<br>
+
+> **Quantis** — быстрый кроссплатформенный десктопный плеер на `PySide6` и `asyncio`.  
+> Обеспечивает поиск, стриминг, скачивание треков и ведение истории прослушивания, опираясь на чистую асинхронную архитектуру.
 ---
 
 ## Что уже работает
