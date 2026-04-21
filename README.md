@@ -1,7 +1,7 @@
 # CleanPlayer (или YMusic)
 
 [![Python](https://img.shields.io/badge/python-3.13%2B-informational)](https://www.python.org/)
-[![License](https://img.shields.io/badge/license-GPU V.3-blue)](LICENSE)
+[![License](https://img.shields.io/badge/license-GPU-blue)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-brightgreen)](https://github.com/Really-Fun/CleanPlayer)
 [![Status](https://img.shields.io/badge/status-Active-success)](https://github.com/Really-Fun/CleanPlayer)
 [![Release](https://img.shields.io/github/v/release/Really-Fun/CleanPlayer)](https://github.com/Really-Fun/CleanPlayer/releases)
