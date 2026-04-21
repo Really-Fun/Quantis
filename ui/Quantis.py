@@ -2,8 +2,8 @@
 
 import sys
 
-from PySide6.QtCore import QSettings, Qt
-from PySide6.QtGui import QGuiApplication, QPixmap
+from PySide6.QtCore import QSettings, Qt, QSize
+from PySide6.QtGui import QGuiApplication, QPixmap, QIcon
 from PySide6.QtWidgets import (
     QApplication,
     QFrame,
@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QVBoxLayout,
     QWidget,
+    QPushButton
 )
 from qasync import asyncSlot
 
@@ -27,6 +28,8 @@ class Quantis(QMainWindow):
 
     def __init__(self) -> None:
         super().__init__()
+        
+        # ================== НАСТРОЙКИ И ОКНО ==================
         self._settings = QSettings("ReallyFun", "Quantis")
         viz_delay = int(self._settings.value("visualizer/delay_ms", 25))
         viz_mode = str(self._settings.value("visualizer/mode", "smooth"))
@@ -36,7 +39,6 @@ class Quantis(QMainWindow):
         viz_color = (viz_r, viz_g, viz_b)
 
         self.setWindowTitle("Quantis")
-        # Широкая ширина, обычная высота — чтобы всё было видно
         self.resize(1100, 750)
         self.setMaximumSize(1920, 1080)
         self._center_on_screen()
@@ -61,79 +63,105 @@ class Quantis(QMainWindow):
 
         # ================== ТЕМНОЕ ПЕРЕКРЫТИЕ ==================
         self.dark_overlay = QFrame(central)
-        self.dark_overlay.setStyleSheet("""
-            QFrame {
-                background-color: rgba(0, 0, 0, 150);
-            }
-        """)
+        self.dark_overlay.setStyleSheet("QFrame { background-color: rgba(0, 0, 0, 150); }")
 
-        # ================== ВИЗУАЛИЗАТОР (под контентом) ==================
+        # ================== ВИЗУАЛИЗАТОР ==================
         self.visualizer = AudioVisualizer(
-            central,
-            bar_count=56,
-            height=120,
-            delay_ms=viz_delay,
-            color_rgb=viz_color,
-            mode=viz_mode,
+            central, bar_count=56, height=120, delay_ms=viz_delay, 
+            color_rgb=viz_color, mode=viz_mode
         )
 
-        # Порядок слоев: фон < затемнение < визуализатор < контент
+        # Порядок слоев: фон (самый нижний) < затемнение < визуализатор
         self.background.lower()
         self.dark_overlay.stackUnder(self.visualizer)
 
-        # ================== ОСНОВНОЙ LAYOUT ==================
+        # =========================================================
+        #                  СТРОИМ СЕТКУ ИНТЕРФЕЙСА
+        # =========================================================
         main_layout = QVBoxLayout(central)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
-        # ================== КОНТЕНТ (ЛЕВО + ПРАВО) ==================
-        content_layout = QHBoxLayout()
-        content_layout.setContentsMargins(0, 0, 0, 0)
-        content_layout.setSpacing(0)
+        # ------------------ 1. ШАПКА (ХЕДЕР) ------------------
+        header_frame = QFrame(central)
+        header_frame.setFixedHeight(50)
+        header_frame.setAttribute(Qt.WA_TranslucentBackground)
 
-        # -------- ЛЕВОЕ МЕНЮ --------
+        header_layout = QHBoxLayout(header_frame)
+        header_layout.setContentsMargins(10, 0, 20, 0)
+        header_layout.setSpacing(20)
+
+        self.logo_btn = QPushButton()
+        self.logo_btn.setFixedSize(150, 50)
+        self.logo_btn.setIcon(QIcon(asset_path("assets/icons/logo.png")))
+        self.logo_btn.setIconSize(QSize(150, 50))
+        self.logo_btn.setStyleSheet("background: transparent; border: none;")
+        self.logo_btn.setCursor(Qt.PointingHandCursor)
+
+        self.header_title = QLabel("Главная")
+        self.header_title.setStyleSheet("color: white; font-size: 28px; font-weight: bold;")
+
+        header_layout.addWidget(self.logo_btn)
+        header_layout.addWidget(self.header_title)
+        header_layout.addStretch()
+
+        # Добавляем шапку в самый верх
+        main_layout.addWidget(header_frame)
+
+        # ------------------ 2. ТЕЛО (НИЖНЯЯ ЧАСТЬ) ------------------
+        body_layout = QHBoxLayout()
+        body_layout.setContentsMargins(0, 0, 0, 0)
+        body_layout.setSpacing(0)
+
+        # --- ЛЕВАЯ КОЛОНКА (МЕНЮ) ---
         self.menu_tabs = MenuTabs()
-        self.menu_tabs.setMaximumWidth(10)
-        self.menu_tabs.setAttribute(Qt.WA_TranslucentBackground)
+        self.menu_tabs.setFixedWidth(80) 
+        self.logo_btn.clicked.connect(lambda: self.menu_tabs.btn_home.click())
+        
+        body_layout.addWidget(self.menu_tabs)
 
-        content_layout.addWidget(self.menu_tabs,)
-
-        # -------- ПРАВАЯ ЧАСТЬ --------
+        # --- ПРАВАЯ КОЛОНКА (КОНТЕНТ + ПЛЕЕР) ---
         right_layout = QVBoxLayout()
         right_layout.setContentsMargins(0, 0, 0, 0)
         right_layout.setSpacing(0)
 
+        # 1. Сам контент (списки, плейлисты)
         self.stack = Stack()
         right_layout.addWidget(self.stack, stretch=1)
 
-        # -------- ПАНЕЛЬ ПЛЕЕРА (СНИЗУ) --------
+        # 2. Плеер снизу контента
         self.play_menu = PlayMenu()
         self.play_menu.setFixedHeight(90)
         self.play_menu.setAttribute(Qt.WA_TranslucentBackground)
-
         right_layout.addWidget(self.play_menu)
 
-        content_layout.addLayout(right_layout)
-        main_layout.addLayout(content_layout)
+        # Вставляем правую колонку в тело
+        body_layout.addLayout(right_layout)
 
-        # ================== СВЯЗЬ МЕНЮ -> STACK ==================
+        # Вставляем готовое тело под шапку
+        main_layout.addLayout(body_layout)
+
+
+        # =========================================================
+        #                  СИГНАЛЫ И СВЯЗИ
+        # =========================================================
+        
+        # Смена страниц
         self.menu_tabs.page_changed.connect(self.stack.switch_to)
+        
+        # Динамическая смена заголовка в шапке (если вы добавили этот метод)
+        # self.menu_tabs.page_changed.connect(self._update_header_title)
 
-        # ================== СВЯЗЬ HOME -> PLAYLIST PAGE ==================
+        # Плейлисты
         self.stack.home_page.playlist_opened.connect(self._open_playlist)
+        self.play_menu.playlist_generated.connect(self.display_radio_on_home)
 
-        # ================== СВЯЗЬ НАСТРОЕК ==================
+        # Настройки
         self.stack.settings_page.background_changed.connect(self._change_bg)
         self.stack.settings_page.visualizer_toggled.connect(self._toggle_viz)
-        self.stack.settings_page.visualizer_delay_changed.connect(
-            self._set_visualizer_delay
-        )
-        self.stack.settings_page.visualizer_color_changed.connect(
-            self._set_visualizer_color
-        )
-        self.stack.settings_page.visualizer_mode_changed.connect(
-            self._set_visualizer_mode
-        )
+        self.stack.settings_page.visualizer_delay_changed.connect(self._set_visualizer_delay)
+        self.stack.settings_page.visualizer_color_changed.connect(self._set_visualizer_color)
+        self.stack.settings_page.visualizer_mode_changed.connect(self._set_visualizer_mode)
         self.stack.settings_page.set_visualizer_settings(viz_delay, viz_color, viz_mode)
 
         # ================== ОБЩИЙ СТИЛЬ ==================
@@ -145,8 +173,6 @@ class Quantis(QMainWindow):
                 background: transparent;
             }
         """)
-
-        self.play_menu.playlist_generated.connect(self.display_radio_on_home)
 
     # ================== ОТКРЫТИЕ ПЛЕЙЛИСТА ==================
     @asyncSlot(object)
@@ -195,7 +221,6 @@ class Quantis(QMainWindow):
         self.background.resize(self.size())
         self.dark_overlay.resize(self.size())
 
-        # Визуализатор: во всю ширину и по центру по вертикали.
         viz_h = self.visualizer.height()
         self.visualizer.setGeometry(
             0,

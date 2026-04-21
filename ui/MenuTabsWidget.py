@@ -33,7 +33,7 @@ class MenuTabs(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        self.setFixedWidth(100)
+        self.setFixedWidth(80)
         self.setAttribute(Qt.WA_TranslucentBackground)
 
         # ================= ПАНЕЛЬ =================
@@ -41,8 +41,8 @@ class MenuTabs(QWidget):
         panel.setObjectName("navPanel")
 
         panel_layout = QVBoxLayout(panel)
-        panel_layout.setContentsMargins(8, 10, 8, 10)
-        panel_layout.setSpacing(8)
+        panel_layout.setContentsMargins(0, 0, 0, 0)
+        panel_layout.setSpacing(15)
         panel_layout.setAlignment(Qt.AlignTop)
 
         # --- кнопки навигации ---
@@ -141,6 +141,24 @@ class MenuTabs(QWidget):
         btn.setCursor(Qt.PointingHandCursor)
         btn.setObjectName("navButton")
         btn.setCheckable(True)
+        return btn
+
+    @staticmethod
+    def _make_logo_button(path: str) -> QPushButton:
+        icon = QIcon(path)
+        btn = QPushButton()
+        btn.setFixedSize(110, 150)
+        btn.setIcon(icon)
+        btn.setStyleSheet("""
+            QPushButton {
+                background-color: transparent;
+                border: none;
+            }
+        """)
+        btn.setIconSize(QSize(110, 150))
+        btn.setObjectName("logo")
+        btn.setCheckable(True)
+
         return btn
 
     @staticmethod
