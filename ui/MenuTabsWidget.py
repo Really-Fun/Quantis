@@ -33,7 +33,7 @@ class MenuTabs(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
 
-        self.setFixedWidth(150)
+        self.setFixedWidth(100)
         self.setAttribute(Qt.WA_TranslucentBackground)
 
         # ================= ПАНЕЛЬ =================
@@ -42,7 +42,7 @@ class MenuTabs(QWidget):
 
         panel_layout = QVBoxLayout(panel)
         panel_layout.setContentsMargins(8, 10, 8, 10)
-        panel_layout.setSpacing(6)
+        panel_layout.setSpacing(8)
         panel_layout.setAlignment(Qt.AlignTop)
 
         # --- кнопки навигации ---

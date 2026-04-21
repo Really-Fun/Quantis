@@ -93,9 +93,10 @@ class Quantis(QMainWindow):
 
         # -------- ЛЕВОЕ МЕНЮ --------
         self.menu_tabs = MenuTabs()
+        self.menu_tabs.setMaximumWidth(10)
         self.menu_tabs.setAttribute(Qt.WA_TranslucentBackground)
 
-        content_layout.addWidget(self.menu_tabs)
+        content_layout.addWidget(self.menu_tabs,)
 
         # -------- ПРАВАЯ ЧАСТЬ --------
         right_layout = QVBoxLayout()
