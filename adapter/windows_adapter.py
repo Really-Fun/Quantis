@@ -14,7 +14,6 @@ except ImportError:
     )
 
 from models import Track
-# Импортируй свой Player, если нужна строгая типизация (from player import Player)
 
 
 class WindowsSMTCAdapter:

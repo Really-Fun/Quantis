@@ -1,10 +1,10 @@
-# CleanPlayer (или YMusic)
+# Quantis
 
 [![Python](https://img.shields.io/badge/python-3.13%2B-informational)](https://www.python.org/)
 [![License](https://img.shields.io/badge/license-GPL3.0-blue)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-brightgreen)](https://github.com/Really-Fun/CleanPlayer)
-[![Status](https://img.shields.io/badge/status-Active-success)](https://github.com/Really-Fun/CleanPlayer)
-[![Release](https://img.shields.io/github/v/release/Really-Fun/CleanPlayer)](https://github.com/Really-Fun/CleanPlayer/releases)
+[![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-brightgreen)](https://github.com/Really-Fun/Quantis)
+[![Status](https://img.shields.io/badge/status-Active-success)](https://github.com/Really-Fun/Quantis)
+[![Release](https://img.shields.io/github/v/release/Really-Fun/Quantis)](https://github.com/Really-Fun/Quantis/releases)
 
 Быстрый кроссплатформенный десктопный плеер на `PySide6 + asyncio`. Обеспечивает поиск, стриминг, скачивание треков и ведение истории прослушивания, опираясь на чистую асинхронную архитектуру.
 
@@ -38,8 +38,8 @@
 ## Быстрый старт
 
 ```bash
-git clone https://github.com/Really-Fun/CleanPlayer.git
-cd CleanPlayer
+git clone https://github.com/Really-Fun/Quantis.git
+cd Quantis
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
@@ -55,7 +55,7 @@ pip install pyinstaller
 pyinstaller main.spec
 ```
 
-Исполняемый файл и ресурсы появятся в `dist\CleanPlayer\`. Запуск: `dist\CleanPlayer\CleanPlayer.exe`. В spec подключены локали **ytmusicapi** (в т.ч. RU) через `collect_all('ytmusicapi')`.
+Исполняемый файл и ресурсы появятся в `dist\Quantis\`. Запуск: `dist\Quantis\Quantis.exe`. В spec подключены локали **ytmusicapi** (в т.ч. RU) через `collect_all('ytmusicapi')`.
 
 ---
 
