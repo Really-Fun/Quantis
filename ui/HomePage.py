@@ -473,7 +473,7 @@ class HeaderPanel(QWidget):
         lay.addWidget(self.greeting)
         lay.addStretch()
 
-        sub = QLabel("CleanPlayer")
+        sub = QLabel("Quantis")
         sub.setStyleSheet(
             "color: rgba(255,255,255,40); font-size: 13px; font-weight: 500;"
             " background: transparent;"

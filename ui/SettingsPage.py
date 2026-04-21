@@ -181,8 +181,8 @@ class SettingsPage(QWidget):
     def _build_about_section(self) -> None:
         sec = _Section("О приложении")
 
-        info = _SettingRow("NeonMusic CleanPlayer")
-        ver = QLabel("Beta 0.1.0")
+        info = _SettingRow("Quantis")
+        ver = QLabel("Beta 0.1.1")
         ver.setStyleSheet(
             "color: rgba(255,255,255,50); font-size: 12px; background: transparent;"
         )

@@ -8,7 +8,7 @@ from qt_material import apply_stylesheet
 
 from player import Player
 from services import TrackHistoryService
-from ui import NeonMusic
+from ui import Quantis
 from adapter import CleanAdapter
 
 
@@ -23,7 +23,7 @@ if __name__ == "__main__":
     player = Player()
     CleanAdapter(player)
 
-    window = NeonMusic()
+    window = Quantis()
     window.show()
 
     with loop:

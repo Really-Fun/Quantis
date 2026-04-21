@@ -1,4 +1,4 @@
-"""Главное окно приложения CleanPlayer."""
+"""Главное окно приложения Quantis."""
 
 import sys
 
@@ -22,12 +22,12 @@ from ui.Stack import Stack
 from utils import asset_path
 
 
-class NeonMusic(QMainWindow):
+class Quantis(QMainWindow):
     """Главное окно: меню, контент, плеер, визуализатор."""
 
     def __init__(self) -> None:
         super().__init__()
-        self._settings = QSettings("CleanPlayer", "NeonMusic")
+        self._settings = QSettings("ReallyFun", "Quantis")
         viz_delay = int(self._settings.value("visualizer/delay_ms", 25))
         viz_mode = str(self._settings.value("visualizer/mode", "smooth"))
         viz_r = int(self._settings.value("visualizer/color_r", 0))
@@ -35,7 +35,7 @@ class NeonMusic(QMainWindow):
         viz_b = int(self._settings.value("visualizer/color_b", 255))
         viz_color = (viz_r, viz_g, viz_b)
 
-        self.setWindowTitle("NeonMusic")
+        self.setWindowTitle("Quantis")
         # Широкая ширина, обычная высота — чтобы всё было видно
         self.resize(1100, 750)
         self.setMaximumSize(1920, 1080)
@@ -216,7 +216,7 @@ class NeonMusic(QMainWindow):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
 
-    window = NeonMusic()
+    window = Quantis()
     window.show()
 
     sys.exit(app.exec())
