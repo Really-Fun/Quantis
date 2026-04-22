@@ -21,7 +21,7 @@ if __name__ == "__main__":
     asyncio.set_event_loop(loop)
 
     player = Player()
-    CleanAdapter(player)
+    CleanAdapter(player, loop)
 
     window = Quantis()
     window.show()

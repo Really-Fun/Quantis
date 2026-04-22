@@ -47,7 +47,7 @@ SCROLL_QSS = """
         width: 5px; background: transparent;
     }
     QScrollBar::handle:vertical {
-        background: rgba(255,255,255,30); border-radius: 2px; min-height: 30px;
+        background: rgba(255,255,255,120); border-radius: 2px; min-height: 30px;
     }
     QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
 """
@@ -435,9 +435,9 @@ class PlaylistSection(QWidget):
 
         if self.accent:
             # slightly different tint for system section
-            p.setBrush(QColor(0, 0, 0, 190))
+            p.setBrush(QColor(0, 0, 0, 130))
         else:
-            p.setBrush(QColor(0, 0, 0, 190))
+            p.setBrush(QColor(0, 0, 0, 130))
 
         p.drawRoundedRect(rect, PANEL_RADIUS, PANEL_RADIUS)
 

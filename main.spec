@@ -2,23 +2,25 @@
 import os
 import ytmusicapi
 
-# Вычисляем абсолютный путь к пакету ytmusicapi
 ytm_path = os.path.dirname(ytmusicapi.__file__)
-
 ytm_ru_locale = (os.path.join(ytm_path, 'locales', 'ru'), 'ytmusicapi/locales/ru')
 
 a = Analysis(
     ['main.py'],
     pathex=[],
     binaries=[],
-    datas=[ytm_ru_locale], # <-- Передаем локали в сборку (важно, т.к. без этого не работает поиск по ютубу)
+    # 1. ДОБАВЛЯЕМ ИКОНКУ В datas (чтобы она запаковалась внутрь exe)
+    datas=[
+        ytm_ru_locale,
+        ('assets/icons/exe_logo.png', '.')
+    ], 
     hiddenimports=[],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
     excludes=[],
     noarchive=False,
-    optimize=0,
+    optimize=1,
 )
 pyz = PYZ(a.pure)
 
@@ -28,7 +30,7 @@ exe = EXE(
     a.binaries,
     a.datas,
     [],
-    name='CleanPlayer',
+    name='Quantis',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -41,4 +43,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon='assets/icons/exe_logo.png', 
 )

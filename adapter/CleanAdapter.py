@@ -5,7 +5,7 @@ from player import Player
 
 class CleanAdapter:
 
-    def __init__(self, player: Player) -> CleanAdapter:
+    def __init__(self, player: Player, loop) -> CleanAdapter:
         current_os = platform.system()
 
         if current_os == "Linux":

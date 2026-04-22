@@ -119,7 +119,7 @@ class MenuTabs(QWidget):
             QToolButton#roundButton:hover,
             QToolButton#roundButton:pressed,
             QToolButton#roundButton:checked {
-                background-color: rgba(0, 0, 0, 120);
+                background-color: rgba(0, 0, 0, 0);
                 border: none;
                 outline: none;
             }
