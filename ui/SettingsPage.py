@@ -39,6 +39,7 @@ class SettingsPage(QWidget):
     go_back = Signal()
     background_changed = Signal(str)
     visualizer_toggled = Signal(bool)  # True = вкл, False = выкл
+    cover_wallpaper_toggled = Signal(bool)
     visualizer_delay_changed = Signal(int)
     visualizer_color_changed = Signal(tuple)  # (r, g, b)
     visualizer_mode_changed = Signal(str)  # smooth/sharp/choppy
@@ -58,7 +59,7 @@ class SettingsPage(QWidget):
         root.addWidget(header)
         root.addSpacing(12)
 
-        # ═══════ SCROLL ═══════
+        # ═══════ SCROLL ═══════change_
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -74,6 +75,7 @@ class SettingsPage(QWidget):
         self._build_audio_section()
         self._build_appearance_section()
         self._build_visualizer_section()
+        self._build_dynamic_change_wallpaper()
         self._build_about_section()
 
         self._lay.addStretch()
@@ -176,6 +178,16 @@ class SettingsPage(QWidget):
 
         self._lay.addWidget(sec)
 
+    def _build_dynamic_change_wallpaper(self) -> None:
+        sec = _Section("Фон", icon="〰")
+        row_toggle = _SettingRow("Динамически менять обои на обложку текущего трека")
+        self._cover_toggle = _ToggleButton(checked=True)
+        self._cover_toggle.toggled_changed.connect(self.cover_wallpaper_toggled.emit)
+        row_toggle.add_right(self._cover_toggle)
+        sec.add_row(row_toggle)
+        
+        self._lay.addWidget(sec)
+
     # ── About ──
 
     def _build_about_section(self) -> None:
@@ -248,6 +260,10 @@ class SettingsPage(QWidget):
         self._viz_mode.setCurrentIndex(idx)
         self._viz_mode.blockSignals(False)
 
+    def set_toggle_flags(self, toggle_viz: bool, toggle_cover_wallpaper: bool) -> None:
+        self._viz_toggle.setChecked(toggle_viz)
+        self._cover_toggle.setChecked(toggle_cover_wallpaper)
+
     @staticmethod
     def _parse_rgb_text(text: str) -> tuple[int, int, int] | None:
         """Разбирает строку вида '255 255 255' или '255,255,255'."""
@@ -288,6 +304,13 @@ class _ToggleButton(QWidget):
             self.toggled_changed.emit(self._on)
             self.update()
         super().mousePressEvent(event)
+
+    def setChecked(self, checked: bool) -> None:
+        """Устанавливает конкретное состояние (вкл/выкл)."""
+        if self._on != checked:
+            self._on = checked
+            self.toggled_changed.emit(self._on)
+            self.update() # Обновляем графику (перерисовываем)
 
     def paintEvent(self, event) -> None:
         p = QPainter(self)

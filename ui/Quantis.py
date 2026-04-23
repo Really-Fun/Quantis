@@ -1,6 +1,7 @@
 """Главное окно приложения Quantis."""
 
 import sys
+import os
 
 from PySide6.QtCore import QSettings, Qt
 from PySide6.QtGui import QGuiApplication, QPixmap
@@ -20,6 +21,7 @@ from ui.MenuPlayWidget import PlayMenu
 from ui.MenuTabsWidget import MenuTabs
 from ui.Stack import Stack
 from utils import asset_path
+from providers import PathProvider
 
 
 class Quantis(QMainWindow):
@@ -30,10 +32,13 @@ class Quantis(QMainWindow):
         self._settings = QSettings("ReallyFun", "Quantis")
         viz_delay = int(self._settings.value("visualizer/delay_ms", 25))
         viz_mode = str(self._settings.value("visualizer/mode", "smooth"))
+        self.viz_toggle = bool(self._settings.value("vizualizer/toggle", False, type=bool))
         viz_r = int(self._settings.value("visualizer/color_r", 0))
         viz_g = int(self._settings.value("visualizer/color_g", 220))
         viz_b = int(self._settings.value("visualizer/color_b", 255))
         viz_color = (viz_r, viz_g, viz_b)
+        self.cover_wallpaper_toggle = bool(self._settings.value("background/cover_toggle", False, type=bool))
+        self.path_provider = PathProvider()
 
         self.setWindowTitle("Quantis")
         # Широкая ширина, обычная высота — чтобы всё было видно
@@ -122,6 +127,10 @@ class Quantis(QMainWindow):
         # ================== СВЯЗЬ HOME -> PLAYLIST PAGE ==================
         self.stack.home_page.playlist_opened.connect(self._open_playlist)
 
+        #
+        self._toggle_viz(self.viz_toggle)
+        self.stack.settings_page.set_toggle_flags(self.viz_toggle, self.cover_wallpaper_toggle)
+
         # ================== СВЯЗЬ НАСТРОЕК ==================
         self.stack.settings_page.background_changed.connect(self._change_bg)
         self.stack.settings_page.visualizer_toggled.connect(self._toggle_viz)
@@ -135,6 +144,8 @@ class Quantis(QMainWindow):
             self._set_visualizer_mode
         )
         self.stack.settings_page.set_visualizer_settings(viz_delay, viz_color, viz_mode)
+        self.stack.settings_page.cover_wallpaper_toggled.connect(self._change_dynamic_wallpaper)
+        self.play_menu.player.track_changed.connect(self._change_bg_from_track)
 
         # ================== ОБЩИЙ СТИЛЬ ==================
         self.setStyleSheet("""
@@ -160,12 +171,20 @@ class Quantis(QMainWindow):
         if not pm.isNull():
             self.background.setPixmap(pm)
 
+    def _change_bg_from_track(self, track):
+        if not self.cover_wallpaper_toggle: return
+        path = self.path_provider.get_cover_path(track)
+        if os.path.exists(path):
+            self._change_bg(path)
+
     # ================== ВКЛ/ВЫКЛ ВИЗУАЛИЗАТОРА ==================
     def _toggle_viz(self, on: bool) -> None:
         if on:
+            self._settings.setValue("vizualizer/toggle", True)
             self.visualizer.show()
         else:
             self.visualizer.hide()
+            self._settings.setValue("vizualizer/toggle", False)
 
     def _set_visualizer_delay(self, delay_ms: int) -> None:
         self.visualizer.set_delay_ms(delay_ms)
@@ -205,6 +224,11 @@ class Quantis(QMainWindow):
         )
 
         super().resizeEvent(event)
+
+    def _change_dynamic_wallpaper(self, flag: bool):
+        self._settings.setValue("background/cover_toggle", flag)
+        self.cover_wallpaper_toggle = flag
+
 
     def display_radio_on_home(self, playlist):
         self.stack.home_page.add_recommendation_section(playlist)
