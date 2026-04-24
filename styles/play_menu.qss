@@ -1,0 +1,87 @@
+#trackTitle {
+    color: #fff; 
+    font-size: 13px; 
+    font-weight: 500; 
+    background: transparent;
+}
+#trackArtist {
+    color: rgba(255,255,255,110); 
+    font-size: 11px; 
+    background: transparent;
+}
+#timeLabel {
+    color: rgba(255,255,255,90); 
+    font-size: 11px; 
+    background: transparent;
+}
+#coverLabel {
+    border-radius: 6px; 
+    background: rgba(255,255,255,8);
+}
+#volIcon {
+    font-size: 14px; 
+    background: transparent;
+}
+
+/* --- Ползунок перемотки --- */
+#seekSlider::groove:horizontal {
+    height: 4px;
+    background: rgba(255,255,255,30);
+    border-radius: 2px;
+}
+#seekSlider::handle:horizontal {
+    width: 12px; height: 12px; margin: -4px 0;
+    background: #fff;
+    border-radius: 6px;
+}
+#seekSlider::handle:horizontal:hover {
+    background: rgb(0,220,255);
+}
+#seekSlider::sub-page:horizontal {
+    background: #fff;
+    border-radius: 2px;
+}
+#seekSlider::sub-page:horizontal:hover {
+    background: rgb(0,220,255);
+    border-radius: 2px;
+}
+
+/* --- Ползунок громкости --- */
+#volSlider::groove:horizontal {
+    height: 4px;
+    background: rgba(255,255,255,30);
+    border-radius: 2px;
+}
+#volSlider::handle:horizontal {
+    width: 10px; height: 10px; margin: -3px 0;
+    background: #fff;
+    border-radius: 5px;
+}
+#volSlider::sub-page:horizontal {
+    background: rgba(255,255,255,120);
+    border-radius: 2px;
+}
+
+/* --- Кнопки управления (общие стили) --- */
+#controlButton {
+    background: transparent;
+    border: none;
+}
+#controlButton:hover {
+    background: rgba(255,255,255,15);
+}
+
+/* --- Кнопка повтора (динамические состояния) --- */
+#repeatButton {
+    background: transparent;
+    border: none;
+}
+#repeatButton:hover {
+    background: rgba(255,255,255,15);
+}
+#repeatButton[state="active"] {
+    background: rgba(0,220,255,40);
+}
+#repeatButton[state="active"]:hover {
+    background: rgba(0,220,255,60);
+}

@@ -1,5 +1,4 @@
-"""Путь к ресурсам (assets). В exe — папка, где лежит exe (рядом assets/icons/ и т.д.)."""
-
+"""Путь к ресурсам (assets)"""
 import os
 import sys
 

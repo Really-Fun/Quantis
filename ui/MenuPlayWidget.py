@@ -6,7 +6,7 @@
 import os
 
 from PySide6.QtCore import QRectF, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
+from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -17,7 +17,6 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 from qasync import asyncSlot
-from PySide6.QtGui import QKeySequence, QShortcut
 
 from models import Track
 from player import Player
@@ -29,54 +28,6 @@ _BG_COLOR = QColor(0, 0, 0, 200)
 _BG_RADIUS = 18
 
 
-# ── фрагменты стилей ──
-
-_SLIDER_QSS = """
-    QSlider::groove:horizontal {
-        height: 4px;
-        background: rgba(255,255,255,30);
-        border-radius: 2px;
-    }
-    QSlider::handle:horizontal {
-        width: 12px; height: 12px; margin: -4px 0;
-        background: #fff;
-        border-radius: 6px;
-    }
-    QSlider::handle:horizontal:hover {
-        background: rgb(0,220,255);
-    }
-    QSlider::sub-page:horizontal {
-        background: #fff;
-        border-radius: 2px;
-    }
-    QSlider::sub-page:horizontal:hover {
-        background: rgb(0,220,255);
-        border-radius: 2px;
-    }
-"""
-
-_VOL_QSS = """
-    QSlider::groove:horizontal {
-        height: 4px;
-        background: rgba(255,255,255,30);
-        border-radius: 2px;
-    }
-    QSlider::handle:horizontal {
-        width: 10px; height: 10px; margin: -3px 0;
-        background: #fff;
-        border-radius: 5px;
-    }
-    QSlider::sub-page:horizontal {
-        background: rgba(255,255,255,120);
-        border-radius: 2px;
-    }
-"""
-
-_TIME_QSS = "color: rgba(255,255,255,90); font-size: 11px; background: transparent;"
-_TITLE_QSS = "color: #fff; font-size: 13px; font-weight: 500; background: transparent;"
-_ARTIST_QSS = "color: rgba(255,255,255,110); font-size: 11px; background: transparent;"
-
-
 class PlayMenu(QWidget):
     """Панель управления воспроизведением."""
 
@@ -84,16 +35,19 @@ class PlayMenu(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        
+        # Применяем стили ко всему виджету панели
+        with open("styles/play_menu.qss") as file:
+            self.setStyleSheet(file.read())
 
         self.playlist_manager = PlaylistManager()
         self.player = Player()
         self.downloader = AsyncDownloader()
         self._path_provider = PathProvider()
 
-        self._seeking = False  # True, пока пользователь двигает ползунок перемотки
-        self._repeat_mode = "off"  # "off" | "one" | "all"
+        self._seeking = False
+        self._repeat_mode = "off"
 
-        # ────────── корневой layout: 3 колонки ──────────
         root = QHBoxLayout(self)
         root.setContentsMargins(12, 4, 12, 6)
         root.setSpacing(0)
@@ -104,23 +58,21 @@ class PlayMenu(QWidget):
         left.setContentsMargins(0, 0, 0, 0)
 
         self._cover = QLabel()
+        self._cover.setObjectName("coverLabel")
         self._cover.setFixedSize(48, 48)
         self._cover.setAlignment(Qt.AlignCenter)
-        self._cover.setStyleSheet(
-            "border-radius: 6px; background: rgba(255,255,255,8);"
-        )
 
         txt = QVBoxLayout()
         txt.setSpacing(2)
         txt.setContentsMargins(0, 4, 0, 4)
 
         self._title = QLabel("—")
-        self._title.setStyleSheet(_TITLE_QSS)
+        self._title.setObjectName("trackTitle")
         self._title.setMaximumWidth(180)
         self._title.setWordWrap(False)
 
         self._artist = QLabel("")
-        self._artist.setStyleSheet(_ARTIST_QSS)
+        self._artist.setObjectName("trackArtist")
         self._artist.setMaximumWidth(180)
         self._artist.setWordWrap(False)
 
@@ -141,13 +93,15 @@ class PlayMenu(QWidget):
         center.setSpacing(2)
         center.setContentsMargins(0, 2, 0, 2)
 
-        # ряд кнопок
         btns = QHBoxLayout()
         btns.setSpacing(8)
         btns.setAlignment(Qt.AlignCenter)
 
         self.btn_repeat = self._btn(asset_path("assets/icons/repeat_playlist.png"), 30)
+        self.btn_repeat.setObjectName("repeatButton")
+        self.btn_repeat.setProperty("state", "off")
         self.btn_repeat.setToolTip("Повтор: выкл")
+        
         self.btn_prev = self._btn(asset_path("assets/icons/backward.png"), 34)
         self.btn_play = self._btn(asset_path("assets/icons/play.png"), 40)
         self.btn_next = self._btn(asset_path("assets/icons/forward.png"), 34)
@@ -161,27 +115,26 @@ class PlayMenu(QWidget):
 
         center.addLayout(btns)
 
-        # ряд перемотки: время - ползунок - время
         seek_row = QHBoxLayout()
         seek_row.setSpacing(6)
         seek_row.setContentsMargins(0, 0, 0, 0)
 
         self._lbl_cur = QLabel("0:00")
-        self._lbl_cur.setStyleSheet(_TIME_QSS)
+        self._lbl_cur.setObjectName("timeLabel")
         self._lbl_cur.setFixedWidth(36)
         self._lbl_cur.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
         self._seek = QSlider(Qt.Horizontal)
+        self._seek.setObjectName("seekSlider")
         self._seek.setRange(0, 1000)
         self._seek.setValue(0)
         self._seek.setCursor(Qt.PointingHandCursor)
-        self._seek.setStyleSheet(_SLIDER_QSS)
         self._seek.sliderPressed.connect(self._on_seek_press)
         self._seek.sliderReleased.connect(self._on_seek_release)
         self._seek.setMinimumWidth(200)
 
         self._lbl_tot = QLabel("0:00")
-        self._lbl_tot.setStyleSheet(_TIME_QSS)
+        self._lbl_tot.setObjectName("timeLabel")
         self._lbl_tot.setFixedWidth(36)
         self._lbl_tot.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
 
@@ -204,13 +157,13 @@ class PlayMenu(QWidget):
         self.btn_download = self._btn(asset_path("assets/icons/download.png"), 30)
 
         vol_icon = QLabel("🔊")
-        vol_icon.setStyleSheet("font-size: 14px; background: transparent;")
+        vol_icon.setObjectName("volIcon")
 
         self._vol = QSlider(Qt.Horizontal)
+        self._vol.setObjectName("volSlider")
         self._vol.setRange(0, 100)
         self._vol.setValue(70)
         self._vol.setFixedWidth(90)
-        self._vol.setStyleSheet(_VOL_QSS)
         self._vol.valueChanged.connect(self._on_volume)
 
         right.addWidget(self.btn_download)
@@ -250,20 +203,13 @@ class PlayMenu(QWidget):
         key_shortcut_for_volume_down = QShortcut(QKeySequence("Down"), self)
         key_shortcut_for_volume_down.activated.connect(self._on_volume_down)
 
-        # ── реакция на завершение трека ──
         self.player.track_finished.connect(self._on_track_finished)
 
-        # ── таймер обновления ──
         self._timer = QTimer(self)
         self._timer.timeout.connect(self._tick)
         self._timer.start(250)
 
-        # ── реакция на смену трека ──
         self.player.track_changed.connect(self._on_track_changed)
-
-        self._update_repeat_button_style()
-
-    # ── темный овальный фон ──
 
     def paintEvent(self, event) -> None:
         p = QPainter(self)
@@ -276,14 +222,10 @@ class PlayMenu(QWidget):
         p.end()
         super().paintEvent(event)
 
-    # ── трек сменился из любого места приложения ──
-
     @asyncSlot(object)
     async def _on_track_changed(self, track) -> None:
         await self.set_track(track)
         self.btn_play.setIcon(QIcon(asset_path("assets/icons/pause.png")))
-
-    # ── обновление информации о треке ──
 
     async def set_track(self, track: Track) -> None:
         self._title.setText(_elide(track.title, 22))
@@ -300,8 +242,6 @@ class PlayMenu(QWidget):
             )
             self._cover.setPixmap(pm)
 
-    # ── тик таймера ──
-
     def _tick(self) -> None:
         if self._seeking:
             return
@@ -312,8 +252,6 @@ class PlayMenu(QWidget):
             self._lbl_cur.setText(_fmt(t))
             self._lbl_tot.setText(_fmt(d))
 
-    # ── взаимодействие с перемоткой ──
-
     def _on_seek_press(self) -> None:
         self._seeking = True
 
@@ -323,8 +261,6 @@ class PlayMenu(QWidget):
             ratio = self._seek.value() / 1000
             self.player.time = int(ratio * d)
         self._seeking = False
-
-    # ── слоты ──
 
     @asyncSlot()
     async def toggle_playback(self):
@@ -343,7 +279,6 @@ class PlayMenu(QWidget):
         self.btn_play.setIcon(QIcon(asset_path("assets/icons/pause.png")))
 
     def _on_previous_requested(self):
-        """Обработка запроса предыдущего трека (MPRIS, кнопки на наушниках)."""
         try:
             self.play_previous_track()
         except RuntimeError:
@@ -359,9 +294,7 @@ class PlayMenu(QWidget):
     @asyncSlot()
     async def generate_playlist(self):
         recomendation_service = AsyncRecomendation()
-
         current_track = self.player.current_track
-
         if current_track:
             playlist = await recomendation_service.generate_radio_from_track(
                 current_track
@@ -369,14 +302,12 @@ class PlayMenu(QWidget):
             self.playlist_generated.emit(playlist)
 
     def _on_next_requested(self):
-        """Обработка запроса следующего трека (MPRIS, кнопки на наушниках)."""
         try:
             self.play_next_track()
         except RuntimeError:
             pass
 
     def _cycle_repeat_mode(self) -> None:
-        """Цикл: выкл → один трек → весь плейлист → выкл."""
         modes = ("off", "one", "all")
         idx = (modes.index(self._repeat_mode) + 1) % len(modes)
         self._repeat_mode = modes[idx]
@@ -389,28 +320,18 @@ class PlayMenu(QWidget):
         self._update_repeat_button_style()
 
     def _update_repeat_button_style(self) -> None:
-        """Обновляет визуальное состояние кнопки повтора."""
+        """Обновляет визуальное состояние кнопки повтора через Property."""
         if self._repeat_mode == "off":
-            style = """
-                QToolButton { border-radius: 15px; background: transparent; border: none; }
-                QToolButton:hover { background: rgba(255,255,255,15); }
-            """
+            self.btn_repeat.setProperty("state", "off")
         else:
-            style = """
-                QToolButton {
-                    border-radius: 15px;
-                    background: rgba(0,220,255,40);
-                    border: none;
-                }
-                QToolButton:hover {
-                    background: rgba(0,220,255,60);
-                }
-            """
-        self.btn_repeat.setStyleSheet(style)
+            self.btn_repeat.setProperty("state", "active")
+        
+        # Заставляем Qt пересчитать стили виджета с учетом нового свойства
+        self.btn_repeat.style().unpolish(self.btn_repeat)
+        self.btn_repeat.style().polish(self.btn_repeat)
 
     @asyncSlot()
     async def _on_track_finished(self) -> None:
-        """По завершении трека: повтор одного или переход к следующему."""
         if self._repeat_mode == "one":
             current = self.playlist_manager.current_playlist.get_current_track()
             if current is not None:
@@ -437,36 +358,25 @@ class PlayMenu(QWidget):
         self.player.volume = max(0, self.player.volume - 10)
         self._vol.setValue(self.player.volume)
 
-    # ── фабрика кнопок ──
-
     @staticmethod
     def _btn(icon_path: str, size: int = 50) -> QToolButton:
         b = QToolButton()
+        b.setObjectName("controlButton")
         b.setIcon(QIcon(icon_path))
         b.setIconSize(QSize(int(size * 0.6), int(size * 0.6)))
         b.setFixedSize(size, size)
         b.setCursor(Qt.PointingHandCursor)
-        b.setStyleSheet(f"""
-            QToolButton {{
-                border-radius: {size // 2}px;
-                background: transparent;
-                border: none;
-            }}
-            QToolButton:hover {{
-                background: rgba(255,255,255,15);
-            }}
-        """)
+        
+        # Динамически задаем радиус скругления через инлайн-стиль, 
+        # так как он зависит от аргумента `size`, но базовый стиль берется из QSS.
+        b.setStyleSheet(f"border-radius: {size // 2}px;")
         return b
-
-
-# ── вспомогательные функции ──
 
 
 def _fmt(ms: int) -> str:
     s = max(0, ms // 1000)
     m, s = divmod(s, 60)
     return f"{m}:{s:02d}"
-
 
 def _elide(text: str, max_len: int) -> str:
     return text if len(text) <= max_len else text[: max_len - 1] + "…"

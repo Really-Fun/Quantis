@@ -1,3 +1,5 @@
+"""Скачивание треков"""
+
 from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor
 from asyncio import get_running_loop

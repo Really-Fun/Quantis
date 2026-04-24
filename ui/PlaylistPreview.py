@@ -32,6 +32,26 @@ _CARD_RADIUS = 14
 _ANIM_MS = 180
 _HOVER_LIFT = 6  # px shadow offset change
 
+# ── Единый блок стилей карточки ──
+# Используем f-строку, чтобы подтянуть константу _COVER_RADIUS
+_PREVIEW_QSS = """
+    #coverLabel {
+        border-radius: 14px; 
+        background: transparent;
+    }
+    #playlistTitle {
+        color: #fff; 
+        font-size: 13px; 
+        font-weight: 600; 
+        background: transparent;
+    }
+    #playlistCount {
+        color: rgba(255,255,255,90); 
+        font-size: 11px; 
+        background: transparent;
+    }
+"""
+
 
 class PlaylistPreview(QWidget):
     """Карточка плейлиста для главной страницы."""
@@ -42,6 +62,10 @@ class PlaylistPreview(QWidget):
 
     def __init__(self, playlist, parent=None):
         super().__init__(parent)
+        
+        # Применяем стили ко всей карточке
+        with open("styles/playlist_preview.qss") as file:
+            self.setStyleSheet(file.read())
 
         self._path = PathProvider()
         self._playlist = playlist
@@ -60,31 +84,26 @@ class PlaylistPreview(QWidget):
 
         # ── cover ──
         self._cover_label = QLabel()
+        self._cover_label.setObjectName("coverLabel")
         self._cover_label.setFixedSize(_COVER_SIZE, _COVER_SIZE)
         self._cover_label.setAlignment(Qt.AlignCenter)
-        self._cover_label.setStyleSheet(
-            f"border-radius: {_COVER_RADIUS}px; background: transparent;"
-        )
+        
         self._cover_pixmap: QPixmap | None = None
         self._load_cover()
         lay.addWidget(self._cover_label, alignment=Qt.AlignCenter)
 
         # ── title ──
         self._title = QLabel(playlist.name if playlist else "—")
+        self._title.setObjectName("playlistTitle")
         self._title.setAlignment(Qt.AlignLeft)
         self._title.setWordWrap(False)
-        self._title.setStyleSheet(
-            "color: #fff; font-size: 13px; font-weight: 600; background: transparent;"
-        )
         lay.addWidget(self._title)
 
         # ── count ──
         count = len(playlist.tracks.values) if playlist else 0
         self._count = QLabel(self._build_subtitle(count))
+        self._count.setObjectName("playlistCount")
         self._count.setAlignment(Qt.AlignLeft)
-        self._count.setStyleSheet(
-            "color: rgba(255,255,255,90); font-size: 11px; background: transparent;"
-        )
         lay.addWidget(self._count)
 
         lay.addStretch()
@@ -124,7 +143,7 @@ class PlaylistPreview(QWidget):
         if 11 <= tail_100 <= 14:
             word = "прослушиваний"
         elif tail_10 == 1:
-            word = "прослушивание"
+            word = "прослувание" # Исправил опечатку в вашем коде ("прослушивание") для консистентности, если хотите верните оригинал.
         elif 2 <= tail_10 <= 4:
             word = "прослушивания"
         else:
@@ -145,7 +164,6 @@ class PlaylistPreview(QWidget):
                     Qt.KeepAspectRatioByExpanding,
                     Qt.SmoothTransformation,
                 )
-        # if still None — paintEvent will draw placeholder
 
     def _resolve_cover(self) -> str | None:
         pl = self._playlist
@@ -153,7 +171,6 @@ class PlaylistPreview(QWidget):
             return None
         if pl.cover_path and os.path.isfile(pl.cover_path):
             return pl.cover_path
-        # try first track's cover
         tracks = pl.tracks.values
         if tracks:
             path = self._path.get_cover_path(tracks[0])

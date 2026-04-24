@@ -40,18 +40,6 @@ CARD_SPACING = 14
 PANEL_RADIUS = 16
 logger = logging.getLogger(__name__)
 
-SCROLL_QSS = """
-    QScrollArea { background: transparent; border: none; }
-    QWidget#scrollContent { background: transparent; }
-    QScrollBar:vertical {
-        width: 5px; background: transparent;
-    }
-    QScrollBar::handle:vertical {
-        background: rgba(255,255,255,120); border-radius: 2px; min-height: 30px;
-    }
-    QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
-"""
-
 
 class HomePage(QWidget):
     """Главная страница с карточками плейлистов."""
@@ -64,6 +52,10 @@ class HomePage(QWidget):
         self.pm = PlaylistManager()
         self.history_service = TrackHistoryService()
         self.setObjectName("HomePage")
+
+        with open("styles/home.qss") as file:
+            self.setStyleSheet(file.read())
+
 
         root = QVBoxLayout(self)
         root.setContentsMargins(10, 10, 10, 10)
@@ -79,7 +71,6 @@ class HomePage(QWidget):
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setFrameShape(QFrame.NoFrame)
-        scroll.setStyleSheet(SCROLL_QSS)
 
         content = QWidget()
         content.setObjectName("scrollContent")
@@ -114,7 +105,6 @@ class HomePage(QWidget):
             self.add_card(self.sys_section, rl)
 
     def load_system_playlists(self) -> None:
-        """Загружает системные плейлисты и запускает фоновую загрузку истории."""
         try:
             dl = DownloadPlaylist.get_playlist_from_path("")
             if dl and dl.tracks.values:
@@ -126,7 +116,6 @@ class HomePage(QWidget):
 
     @asyncSlot()
     async def load_recent_played_async(self) -> None:
-        """Подгружает плейлист недавно прослушанных из БД."""
         try:
             recent = await self.history_service.get_recent_playlist(limit=50)
             if recent is None:
@@ -139,10 +128,6 @@ class HomePage(QWidget):
             self.sys_section.set_empty("Скачайте треки — они появятся здесь")
 
     def load_user_playlists(self) -> None:
-        """Загружает пользовательские плейлисты из директории `playlists/`.
-
-        Плейлисты сортируются по времени модификации (новые/недавно открытые — сверху).
-        """
         playlists_dir = Path("playlists")
         if not playlists_dir.is_dir():
             playlists_dir.mkdir(parents=True, exist_ok=True)
@@ -170,17 +155,14 @@ class HomePage(QWidget):
             self.user_section.set_empty("Добавьте .json файл в папку playlists/")
 
     def reload_user_playlists(self) -> None:
-        """Перезагружает блок пользовательских плейлистов на экране."""
         self.user_section.clear_cards()
         self.load_user_playlists()
 
     def reload_system_playlists(self) -> None:
-        """Перезагружает системные плейлисты (Скачанные, Недавно прослушанные)."""
         self.sys_section.clear_cards()
         self.load_system_playlists()
 
     def create_playlist(self) -> None:
-        """Открывает диалог создания нового пользовательского плейлиста."""
         name, ok = QInputDialog.getText(
             self,
             "Новый плейлист",
@@ -213,13 +195,10 @@ class HomePage(QWidget):
 
     @asyncSlot(object)
     async def on_click(self, playlist) -> None:
-        # Для "Недавно прослушанных" всегда загружаем свежий срез из БД.
         if isinstance(playlist, RecentlyPlayedPlaylist):
             fresh = await self.history_service.get_recent_playlist(limit=50)
             playlist = fresh if fresh is not None else RecentlyPlayedPlaylist(tracks=())
         elif isinstance(playlist, UserPlaylist):
-            # Перечитываем плейлист с диска, чтобы подхватить добавленные треки,
-            # и обновляем mtime файла, чтобы он поднимался вверх списка.
             try:
                 touch_user_playlist_file(playlist.name)
                 path = get_user_playlist_path_by_name(playlist.name)
@@ -232,7 +211,6 @@ class HomePage(QWidget):
         self.playlist_opened.emit(playlist)
 
     def rename_playlist(self, playlist: UserPlaylist) -> None:
-        """Переименовывает пользовательский плейлист через контекстное меню."""
         old_name = getattr(playlist, "name", "").strip()
         if not old_name:
             QMessageBox.warning(self, "Ошибка", "Не удалось определить имя плейлиста.")
@@ -265,7 +243,6 @@ class HomePage(QWidget):
         self.reload_user_playlists()
 
     def delete_playlist(self, playlist: UserPlaylist) -> None:
-        """Удаляет пользовательский плейлист через контекстное меню."""
         name = getattr(playlist, "name", "").strip()
         if not name:
             QMessageBox.warning(self, "Ошибка", "Не удалось определить имя плейлиста.")
@@ -339,41 +316,21 @@ class PlaylistSection(QWidget):
         title_row.setContentsMargins(0, 0, 0, 0)
 
         self.title = QLabel(title)
-        self.title.setStyleSheet(
-            "color: #fff; font-size: 17px; font-weight: 700; background: transparent;"
-        )
+        self.title.setObjectName("sectionTitle")
         title_row.addWidget(self.title)
 
         if allow_create:
             create_btn = QPushButton("+")
+            create_btn.setObjectName("createPlaylistBtn")
             create_btn.setFixedSize(22, 22)
             create_btn.setCursor(Qt.PointingHandCursor)
-            create_btn.setStyleSheet(
-                """
-                QPushButton {
-                    color: white;
-                    font-size: 14px;
-                    font-weight: 700;
-                    border: none;
-                    border-radius: 11px;
-                    background: rgba(255,255,255,18);
-                }
-                QPushButton:hover {
-                    background: rgba(0,220,255,55);
-                }
-                """
-            )
             create_btn.clicked.connect(self.create_requested.emit)
             title_row.addSpacing(8)
             title_row.addWidget(create_btn)
 
         if accent:
             badge = QLabel("СИСТЕМА")
-            badge.setStyleSheet(
-                "color: rgba(0,220,255,180); font-size: 10px; font-weight: 700;"
-                " letter-spacing: 1px; background: rgba(0,220,255,20);"
-                " border-radius: 6px; padding: 2px 8px;"
-            )
+            badge.setObjectName("systemBadge")
             title_row.addSpacing(8)
             title_row.addWidget(badge)
 
@@ -389,10 +346,8 @@ class PlaylistSection(QWidget):
 
         # empty label (hidden by default)
         self.empty = QLabel("")
+        self.empty.setObjectName("emptyLabel")
         self.empty.setAlignment(Qt.AlignCenter)
-        self.empty.setStyleSheet(
-            "color: rgba(255,255,255,40); font-size: 13px; padding: 20px; background: transparent;"
-        )
         self.empty.hide()
         panel_lay.addWidget(self.empty)
 
@@ -409,7 +364,6 @@ class PlaylistSection(QWidget):
         return bool(self.cards)
 
     def clear_cards(self) -> None:
-        """Очищает текущие карточки секции."""
         for card in self.cards:
             card.hide()
             card.setParent(None)
@@ -434,14 +388,12 @@ class PlaylistSection(QWidget):
         p.setPen(Qt.NoPen)
 
         if self.accent:
-            # slightly different tint for system section
             p.setBrush(QColor(0, 0, 0, 130))
         else:
             p.setBrush(QColor(0, 0, 0, 130))
 
         p.drawRoundedRect(rect, PANEL_RADIUS, PANEL_RADIUS)
 
-        # subtle top border for accent section
         if self.accent:
             line_grad = QLinearGradient(0, 0, self.width(), 0)
             line_grad.setColorAt(0.0, QColor(0, 220, 255, 0))
@@ -467,17 +419,12 @@ class HeaderPanel(QWidget):
         lay.setContentsMargins(20, 0, 20, 0)
 
         self.greeting = QLabel("Главная")
-        self.greeting.setStyleSheet(
-            "color: #fff; font-size: 26px; font-weight: 800; background: transparent;"
-        )
+        self.greeting.setObjectName("headerGreeting")
         lay.addWidget(self.greeting)
         lay.addStretch()
 
         sub = QLabel("Quantis")
-        sub.setStyleSheet(
-            "color: rgba(255,255,255,40); font-size: 13px; font-weight: 500;"
-            " background: transparent;"
-        )
+        sub.setObjectName("headerSub")
         lay.addWidget(sub)
 
     def paintEvent(self, event) -> None:

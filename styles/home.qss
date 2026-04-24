@@ -1,0 +1,68 @@
+/* --- Скроллбар и область прокрутки --- */
+QScrollArea { 
+    background: transparent; 
+    border: none; 
+}
+QWidget#scrollContent { 
+    background: transparent; 
+}
+QScrollBar:vertical {
+    width: 5px; 
+    background: transparent;
+}
+QScrollBar::handle:vertical {
+    background: rgba(255,255,255,120); 
+    border-radius: 2px; 
+    min-height: 30px;
+}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { 
+    height: 0; 
+}
+
+/* --- Секции плейлистов --- */
+#sectionTitle {
+    color: #fff; 
+    font-size: 17px; 
+    font-weight: 700; 
+    background: transparent;
+}
+#createPlaylistBtn {
+    color: white;
+    font-size: 14px;
+    font-weight: 700;
+    border: none;
+    border-radius: 11px;
+    background: rgba(255,255,255,18);
+}
+#createPlaylistBtn:hover {
+    background: rgba(0,220,255,55);
+}
+#systemBadge {
+    color: rgba(0,220,255,180); 
+    font-size: 10px; 
+    font-weight: 700;
+    letter-spacing: 1px; 
+    background: rgba(0,220,255,20);
+    border-radius: 6px; 
+    padding: 2px 8px;
+}
+#emptyLabel {
+    color: rgba(255,255,255,40); 
+    font-size: 13px; 
+    padding: 20px; 
+    background: transparent;
+}
+
+/* --- Шапка (Header) --- */
+#headerGreeting {
+    color: #fff; 
+    font-size: 26px; 
+    font-weight: 800; 
+    background: transparent;
+}
+#headerSub {
+    color: rgba(255,255,255,40); 
+    font-size: 13px; 
+    font-weight: 500;
+    background: transparent;
+}

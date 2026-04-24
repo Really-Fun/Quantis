@@ -89,41 +89,8 @@ class MenuTabs(QWidget):
         self._nav_buttons = [self.btn_home, self.btn_search, self.btn_library]
 
         # ================= СТИЛИ =================
-        self.setStyleSheet("""
-            QFrame#navPanel {
-                background: rgba(0, 0, 0, 160);
-                border-right: 1px solid rgba(0, 255, 255, 120);
-            }
-
-            QPushButton#navButton {
-                color: #e6ffff;
-                font-size: 16px;
-                border-radius: 10px;
-                background: transparent;
-            }
-
-            QPushButton#navButton:hover {
-                background: rgba(0, 255, 255, 70);
-            }
-
-            QPushButton#navButton:pressed {
-                background: rgba(0, 255, 255, 140);
-            }
-
-            QPushButton#navButton:checked {
-                background: rgba(0, 255, 255, 160);
-                color: white;
-            }
-
-            QToolButton#roundButton,
-            QToolButton#roundButton:hover,
-            QToolButton#roundButton:pressed,
-            QToolButton#roundButton:checked {
-                background-color: rgba(0, 0, 0, 0);
-                border: none;
-                outline: none;
-            }
-        """)
+        with open("styles/nav_panel.qss", "r") as file:
+            self.setStyleSheet(file.read())
 
     # --- переключение ---
 

@@ -1,0 +1,15 @@
+#coverLabel {
+    border-radius: 14px; 
+    background: transparent;
+}
+#playlistTitle {
+    color: #fff; 
+    font-size: 13px; 
+    font-weight: 600; 
+    background: transparent;
+}
+#playlistCount {
+    color: rgba(255,255,255,90); 
+    font-size: 11px; 
+    background: transparent;
+}
