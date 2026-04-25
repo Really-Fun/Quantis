@@ -40,5 +40,5 @@ shiboken6==6.10.2
 urllib3==2.6.3
 yandex-music==2.2.0
 yarl==1.22.0
-yt-dlp==2026.2.4
+yt-dlp==2026.2.21
 ytmusicapi==1.11.5
