@@ -34,7 +34,7 @@ PySocks==1.7.1
 python-vlc==3.0.21203
 qasync==0.28.0
 qt-material==2.17
-requests==2.32.5
+requests==2.33.0
 SecretStorage==3.5.0
 shiboken6==6.10.2
 urllib3==2.6.3
