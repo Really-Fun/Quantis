@@ -3,6 +3,9 @@
 Строка ввода с анимированной рамкой, панель результатов с карточками.
 """
 
+import asyncio
+import os
+
 from PySide6.QtCore import QRectF, Qt, QTimeLine, Signal
 from PySide6.QtGui import QColor, QPainter, QPen
 from PySide6.QtWidgets import (
@@ -11,18 +14,20 @@ from PySide6.QtWidgets import (
     QInputDialog,
     QLabel,
     QLineEdit,
-    QListView,
     QMessageBox,
+    QScrollArea,
     QVBoxLayout,
     QWidget,
 )
 from qasync import asyncSlot
 
 from player import Player
+from providers import PathProvider
 from services import AsyncDownloader, AsyncFinder
+from ui.ThemeManager import ThemeManager
+from ui.TrackCard import TrackCard
 from utils import add_track_to_user_playlist, list_user_playlist_names
 
-_LINE_COLOR = QColor(0, 220, 255)
 _LINE_WIDTH = 2
 _BREATH_MS = 3000
 _BORDER_RADIUS = 14
@@ -44,23 +49,11 @@ class SearchBar(QWidget):
         layout.setSpacing(0)
 
         self._input = QLineEdit()
+        self._input.setObjectName("searchInput")
         self._input.setPlaceholderText("Трек, исполнитель или альбом...")
         self._input.setClearButtonEnabled(True)
         self._input.returnPressed.connect(self._on_submit)
-        self._input.setStyleSheet("""
-            QLineEdit {
-                padding: 14px 18px;
-                font-size: 16px;
-                color: white;
-                background: rgba(0, 0, 0, 60);
-                border: none;
-                border-radius: 14px;
-                selection-background-color: rgba(0, 220, 255, 80);
-            }
-            QLineEdit::placeholder {
-                color: rgba(255, 255, 255, 90);
-            }
-        """)
+        
         layout.addWidget(self._input)
 
         self._alpha = _ALPHA_MIN
@@ -84,8 +77,10 @@ class SearchBar(QWidget):
         super().paintEvent(event)
         painter = QPainter(self)
         painter.setRenderHint(QPainter.Antialiasing, True)
+        
+        base_color = ThemeManager.get_color("search_line")
         color = QColor(
-            _LINE_COLOR.red(), _LINE_COLOR.green(), _LINE_COLOR.blue(), self._alpha
+            base_color.red(), base_color.green(), base_color.blue(), self._alpha
         )
         pen = QPen(color)
         pen.setWidthF(_LINE_WIDTH)
@@ -111,6 +106,7 @@ class SearchPage(QWidget):
         self._finder = AsyncFinder()
         self._player = Player()
         self._downloader = AsyncDownloader()
+        self._path_provider = PathProvider()
 
         self.main_layout = QVBoxLayout(self)
         self.main_layout.setContentsMargins(8, 8, 8, 8)
@@ -124,61 +120,34 @@ class SearchPage(QWidget):
         # ========== RESULTS PANEL ==========
         self._results_panel = QFrame()
         self._results_panel.setObjectName("ResultsPanel")
-        self._results_panel.setStyleSheet("""
-            QFrame#ResultsPanel {
-                background: rgba(0, 0, 0, 60);
-                border-radius: 14px;
-            }
-        """)
 
         results_inner = QVBoxLayout(self._results_panel)
         results_inner.setContentsMargins(8, 8, 8, 8)
         results_inner.setSpacing(0)
 
         self._status = QLabel("Введите запрос и нажмите Enter")
+        self._status.setObjectName("searchStatusLabel")
         self._status.setAlignment(Qt.AlignCenter)
-        self._status.setStyleSheet(
-            "color: rgba(255,255,255,80); font-size: 14px; padding: 24px; background: transparent;"
-        )
 
-        self._track_list = QListView()
-        self._track_list.setObjectName("ResultsList")
-        self._track_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self._track_list.setFrameShape(QFrame.NoFrame)
-        self._track_list.setSelectionMode(QListView.NoSelection)
-        self._track_list.setMouseTracking(True)
-        self._track_list.setStyleSheet("""
-            QListView { background: transparent; border: none; outline: none; }
-            QListView::item:hover { background: transparent; }
-            QScrollBar:vertical {
-                width: 6px; background: transparent;
-            }
-            QScrollBar::handle:vertical {
-                background: rgba(0, 220, 255, 60);
-                border-radius: 3px; min-height: 30px;
-            }
-            QScrollBar::add-line:vertical,
-            QScrollBar::sub-line:vertical { height: 0px; }
-        """)
+        # === ВОЗВРАЩАЕМ QScrollArea ===
+        self._scroll_area = QScrollArea()
+        self._scroll_area.setObjectName("settingsScroll") # Используем уже готовый скроллбар
+        self._scroll_area.setWidgetResizable(True)
+        self._scroll_area.setFrameShape(QFrame.NoFrame)
+        self._scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
-        from models import TrackListModel
-        from ui.delegates.TrackDelegate import TrackDelegate
+        self._tracks_container = QWidget()
+        self._tracks_container.setObjectName("_sc")
+        self._tracks_layout = QVBoxLayout(self._tracks_container)
+        self._tracks_layout.setContentsMargins(0, 0, 0, 0)
+        self._tracks_layout.setSpacing(8)
+        self._tracks_layout.addStretch()
 
-        self.track_model = TrackListModel()
-        self.track_delegate = TrackDelegate(self._track_list)
-
-        self.track_delegate.signals.play_requested.connect(self._play_track)
-        self.track_delegate.signals.download_requested.connect(self._download_track)
-        self.track_delegate.signals.context_menu_requested.connect(
-            self._on_context_menu
-        )
-
-        self._track_list.setModel(self.track_model)
-        self._track_list.setItemDelegate(self.track_delegate)
+        self._scroll_area.setWidget(self._tracks_container)
 
         results_inner.addWidget(self._status)
-        results_inner.addWidget(self._track_list)
-        self._track_list.hide()
+        results_inner.addWidget(self._scroll_area)
+        self._scroll_area.hide()
 
         self.main_layout.addWidget(self._results_panel, stretch=1)
 
@@ -186,40 +155,52 @@ class SearchPage(QWidget):
     async def _do_search(self, query: str) -> None:
         self._status.setText("Поиск треков запущен...")
         self._status.show()
-        self._track_list.hide()
+        self._scroll_area.hide()
 
         tracks = await self._finder.get_tracks(query, value=5)
 
         if not tracks:
             self._status.setText("Ничего не найдено")
             self._status.show()
-            self._track_list.hide()
             return
 
         self._status.hide()
-        self._track_list.show()
+        self._scroll_area.show()
 
-        self.track_model.set_tracks(tracks)
+        # 1. Очищаем старые результаты
+        for i in reversed(range(self._tracks_layout.count())):
+            item = self._tracks_layout.itemAt(i)
+            if item.widget():
+                item.widget().deleteLater()
+            elif item.spacerItem():
+                self._tracks_layout.removeItem(item)
 
-        # We don't need to manually trigger track cover loads here anymore,
-        # the TrackDelegate handles synchronous drawing if the file exists.
-        # However, to start downloading missing covers we can iterate over tracks:
-        import asyncio
-        import os
+        # 2. Добавляем новые карточки (Старый QWidget подход)
+        for index, track in enumerate(tracks):
+            card = TrackCard(track=track, index=index+1)
+            
+            # Подключаем сигналы твоего QWidget TrackCard
+            # Если у тебя сигналы лежат внутри .signals (как было в делегате), добавь .signals
+            card.play_requested.connect(self._play_track)
+            card.download_requested.connect(self._download_track)
+            
+            # Если в твоем TrackCard есть сигнал вызова контекстного меню
+            if hasattr(card, 'context_menu_requested'):
+                card.context_menu_requested.connect(self._on_context_menu)
 
-        from providers import PathProvider
+            self._tracks_layout.addWidget(card)
 
-        path_provider = PathProvider()
-        for track in tracks:
-            path = path_provider.get_cover_path(track)
+        self._tracks_layout.addStretch()
+
+        # 3. Синхронно подгружаем обложки
+        cards = self._tracks_container.findChildren(TrackCard)
+        for card, track in zip(cards, tracks):
+            path = self._path_provider.get_cover_path(track)
             if not os.path.isfile(path):
                 try:
                     await self._downloader.download_cover(track)
-                    # Tell model data changed to repaint
-                    idx = tracks.index(track)
-                    self.track_model.dataChanged.emit(
-                        self.track_model.index(idx), self.track_model.index(idx)
-                    )
+                    # Обновляем конкретную карточку
+                    card.set_track(track, card._index if hasattr(card, '_index') else 0)
                 except Exception:
                     pass
             await asyncio.sleep(0)
@@ -227,7 +208,7 @@ class SearchPage(QWidget):
     @asyncSlot(object)
     async def _play_track(self, track) -> None:
         await self._player.play_track(track)
-        self.track_model.set_playing_track(track)
+        # Убрал обращение к track_model, так как мы вернулись к Layout
 
     @asyncSlot(object)
     async def _download_track(self, track) -> None:
@@ -254,59 +235,6 @@ class SearchPage(QWidget):
     async def _add_track_to_playlist(self, track) -> None:
         names = list_user_playlist_names()
 
-        # Общий стиль для всех всплывающих окон в духе твоего интерфейса
-        dialog_style = """
-            QDialog, QMessageBox {
-                background-color: #121212;
-                border: 2px solid rgba(0, 220, 255, 80);
-                border-radius: 14px;
-            }
-            QLabel {
-                color: rgba(255, 255, 255, 220);
-                font-size: 14px;
-            }
-            QPushButton {
-                background-color: rgba(0, 220, 255, 20);
-                border: 1px solid rgba(0, 220, 255, 100);
-                border-radius: 8px;
-                color: white;
-                padding: 6px 16px;
-                min-width: 80px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: rgba(0, 220, 255, 60);
-                border: 1px solid rgba(0, 220, 255, 255);
-            }
-            QPushButton:pressed {
-                background-color: rgba(0, 220, 255, 100);
-            }
-            /* Стилизация выпадающего списка в QInputDialog */
-            QComboBox {
-                background-color: rgba(0, 0, 0, 60);
-                border: 1px solid rgba(0, 220, 255, 80);
-                border-radius: 8px;
-                color: white;
-                padding: 6px 12px;
-                font-size: 14px;
-            }
-            QComboBox::drop-down {
-                border: none;
-            }
-            QComboBox QAbstractItemView {
-                background-color: #1a1a1a;
-                color: white;
-                border: 1px solid rgba(0, 220, 255, 80);
-                selection-background-color: rgba(0, 220, 255, 80);
-                selection-color: white;
-                outline: none;
-            }
-            /* Убираем рамку фокуса у кнопок */
-            QPushButton:focus {
-                outline: none;
-            }
-        """
-
         if not names:
             msg = QMessageBox(self)
             msg.setWindowTitle("Нет плейлистов")
@@ -314,7 +242,6 @@ class SearchPage(QWidget):
                 "Сначала создайте пользовательский плейлист на главной странице."
             )
             msg.setIcon(QMessageBox.Information)
-            msg.setStyleSheet(dialog_style)
             msg.setWindowFlags(Qt.Dialog | Qt.FramelessWindowHint)
             msg.exec()
             return
@@ -325,8 +252,7 @@ class SearchPage(QWidget):
         dialog.setComboBoxItems(names)
         dialog.setOption(
             QInputDialog.UseListViewForComboBoxItems
-        )  # Важно для красивого выпадающего списка
-        dialog.setStyleSheet(dialog_style)
+        )
 
         ok = dialog.exec()
         selected = dialog.textValue()
@@ -346,13 +272,10 @@ class SearchPage(QWidget):
             msg.setWindowTitle("Ошибка")
             msg.setText("Не удалось добавить трек в плейлист.")
             msg.setIcon(QMessageBox.Warning)
-            msg.setStyleSheet(dialog_style)
             msg.exec()
             return
 
-        # Финальное окно успеха
         success_msg = QMessageBox(self)
-        success_msg.setStyleSheet(dialog_style)
         if added:
             success_msg.setWindowTitle("Готово")
             success_msg.setText(f"Трек добавлен в '{selected}'.")

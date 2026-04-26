@@ -198,9 +198,7 @@ class _InfoSection(QFrame):
         lay.addWidget(title)
 
         info = QLabel(
-            "Пока это заглушка.\n"
-            "Планируется хранение и управление токенами, API-ключами,\n"
-            "а также базовыми настройками аккаунта."
+            "ТОКЕНЫ!!!"
         )
         info.setStyleSheet("color: rgba(255,255,255,180); font-size: 13px;")
         info.setWordWrap(True)

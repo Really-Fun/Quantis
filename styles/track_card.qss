@@ -1,0 +1,66 @@
+
+/* --- Индекс трека (цифра или иконка play) --- */
+#trackIndex {
+    color: rgba(255,255,255,80); 
+    font-size: 13px; 
+    background: transparent;
+}
+#trackIndex[state="playing"] {
+    color: rgb(0,220,255); 
+    font-weight: 700;
+}
+
+/* --- Обложка и тексты --- */
+#trackCover {
+    background: #1a1a1a; 
+    border-radius: 12px;
+}
+#trackTitle {
+    color: white; 
+    font-size: 14px; 
+    font-weight: 600; 
+    background: transparent;
+}
+#trackAuthor {
+    color: rgba(255,255,255,120); 
+    font-size: 12px; 
+    background: transparent;
+}
+
+/* --- Бейдж источника (цвета перенесены в QSS) --- */
+#trackSourceBadge {
+    color: white; 
+    font-size: 11px; 
+    font-weight: 600;
+    border-radius: 6px; 
+    padding: 2px 8px;
+}
+#trackSourceBadge[source="yandex"] {
+    background: rgba(0, 220, 255, 140);
+}
+#trackSourceBadge[source="youtube"] {
+    background: rgba(255, 60, 60, 140);
+}
+#trackSourceBadge[source="default"] {
+    background: rgba(160, 160, 160, 140);
+}
+
+/* --- Оверлей кнопки Play на обложке --- */
+#playOverlayBtn {
+    background: rgba(0, 0, 0, 140);
+    border: none;
+    border-radius: 12px;
+}
+#playOverlayBtn:hover {
+    background: rgba(0, 0, 0, 190);
+}
+
+/* --- Кнопка скачивания (справа) --- */
+#downloadBtn {
+    background: rgba(255, 255, 255, 15);
+    border: none;
+    border-radius: 14px;
+}
+#downloadBtn:hover {
+    background: rgba(0, 220, 255, 50);
+}

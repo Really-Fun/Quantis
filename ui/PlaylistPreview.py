@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
 )
 
 from providers import PathProvider
+from ui.ThemeManager import ThemeManager
 from utils import get_ru_words_for_number
 
 _CARD_W = 170
@@ -30,27 +31,7 @@ _COVER_SIZE = 140
 _COVER_RADIUS = 12
 _CARD_RADIUS = 14
 _ANIM_MS = 180
-_HOVER_LIFT = 6  # px shadow offset change
-
-# ── Единый блок стилей карточки ──
-# Используем f-строку, чтобы подтянуть константу _COVER_RADIUS
-_PREVIEW_QSS = """
-    #coverLabel {
-        border-radius: 14px; 
-        background: transparent;
-    }
-    #playlistTitle {
-        color: #fff; 
-        font-size: 13px; 
-        font-weight: 600; 
-        background: transparent;
-    }
-    #playlistCount {
-        color: rgba(255,255,255,90); 
-        font-size: 11px; 
-        background: transparent;
-    }
-"""
+_HOVER_LIFT = 6 
 
 
 class PlaylistPreview(QWidget):
@@ -62,10 +43,7 @@ class PlaylistPreview(QWidget):
 
     def __init__(self, playlist, parent=None):
         super().__init__(parent)
-        
-        # Применяем стили ко всей карточке
-        with open("styles/playlist_preview.qss") as file:
-            self.setStyleSheet(file.read())
+    
 
         self._path = PathProvider()
         self._playlist = playlist
@@ -197,10 +175,10 @@ class PlaylistPreview(QWidget):
 
         rect = QRectF(0, 0, self.width(), self.height())
 
-        # card background
+        base_bg = ThemeManager.get_color("card_bg")
         bg_alpha = 18 + int(12 * self._hover_t)
         p.setPen(Qt.NoPen)
-        p.setBrush(QColor(255, 255, 255, bg_alpha))
+        p.setBrush(QColor(base_bg.red(), base_bg.green(), base_bg.blue(), bg_alpha))
         p.drawRoundedRect(rect, _CARD_RADIUS, _CARD_RADIUS)
 
         # cover area
@@ -248,8 +226,9 @@ class PlaylistPreview(QWidget):
 
         # hover border glow
         if self._hover_t > 0.01:
+            glow_base = ThemeManager.get_color("search_line")
             glow_alpha = int(50 * self._hover_t)
-            pen = QPen(QColor(0, 220, 255, glow_alpha), 1.5)
+            pen = QPen(QColor(glow_base.red(), glow_base.green(), glow_base.blue(), glow_alpha), 1.5)
             p.setPen(pen)
             p.setBrush(Qt.NoBrush)
             p.drawRoundedRect(rect.adjusted(1, 1, -1, -1), _CARD_RADIUS, _CARD_RADIUS)

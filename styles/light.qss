@@ -1,0 +1,336 @@
+/* =========================================
+   ГЛОБАЛЬНЫЕ СТИЛИ (База и Окна)
+   ========================================= */
+QWidget {
+    background: transparent;
+    color: #212529;
+}
+
+/* Делаем перекрытие "матовым стеклом" с легким прохладным/молочным оттенком */
+#darkOverlay {
+    background-color: rgba(240, 244, 248, 200); 
+}
+
+QMenu, QMessageBox, QDialog, QToolTip, QInputDialog {
+    background-color: #f8f9fa;
+    color: #212529;
+    border: 2px solid rgba(0, 150, 210, 80);
+    border-radius: 14px;
+}
+
+QMessageBox QLabel, QInputDialog QLabel {
+    color: #495057;
+    font-size: 14px;
+}
+
+QMessageBox QPushButton, QInputDialog QPushButton {
+    background-color: rgba(0, 150, 210, 20);
+    border: 1px solid rgba(0, 150, 210, 100);
+    border-radius: 8px;
+    color: #000;
+    padding: 6px 16px;
+    min-width: 80px;
+    font-weight: bold;
+}
+
+QMessageBox QPushButton:hover, QInputDialog QPushButton:hover {
+    background-color: rgba(0, 150, 210, 60);
+    border: 1px solid rgba(0, 150, 210, 255);
+}
+
+/* Стилизация выпадающего списка в QInputDialog */
+QInputDialog QComboBox {
+    background-color: rgba(0, 0, 0, 10);
+    border: 1px solid rgba(0, 150, 210, 80);
+    border-radius: 8px;
+    color: #212529;
+    padding: 6px 12px;
+    font-size: 14px;
+}
+QInputDialog QComboBox::drop-down {
+    border: none;
+}
+QInputDialog QComboBox QAbstractItemView {
+    background-color: #ffffff;
+    color: #212529;
+    border: 1px solid rgba(0, 150, 210, 80);
+    selection-background-color: rgba(0, 150, 210, 80);
+    selection-color: white;
+    outline: none;
+}
+
+/* =========================================
+   ТИПОГРАФИКА И ТЕКСТЫ
+   ========================================= */
+/* Мягкие темные заголовки */
+#headerGreeting, #playlistName, #sectionTitle, #trackTitle, #playlistTitle {
+    color: #2b2d31; 
+}
+#headerGreeting { font-size: 26px; font-weight: 800; }
+#playlistName { font-size: 28px; font-weight: 800; }
+#sectionTitle { font-size: 17px; font-weight: 700; }
+#trackTitle { font-size: 14px; font-weight: 600; }
+#playlistTitle { font-size: 13px; font-weight: 600; }
+
+/* Полупрозрачные подписи (мягкий серый) */
+#headerSub, #emptyLabel { color: #6c757d; font-size: 13px; }
+#headerSub { font-weight: 500; }
+#emptyLabel { padding: 20px; }
+
+#colHeaderNum, #colHeaderTitle, #colHeaderSource { color: #868e96; }
+#colHeaderNum { font-size: 12px; }
+#colHeaderTitle, #colHeaderSource { font-size: 11px; font-weight: 600; }
+
+#playlistTag { color: #868e96; font-size: 11px; font-weight: 700; letter-spacing: 2px; }
+
+#timeLabel, #playlistCount, #trackIndex { color: #495057; }
+#timeLabel { font-size: 11px; }
+#playlistCount, #trackIndex { font-size: 13px; }
+#trackIndex[state="playing"] { color: rgb(0, 150, 210); font-weight: 700; } /* Чуть приглушенный голубой */
+
+#trackArtist, #trackAuthor { color: #6c757d; }
+#trackArtist { font-size: 11px; }
+#trackAuthor { font-size: 12px; }
+
+#volIcon { color: #212529; font-size: 14px; }
+
+/* =========================================
+   КНОПКИ УПРАВЛЕНИЯ
+   ========================================= */
+#controlButton, #repeatButton, QToolButton#roundButton {
+    border: none;
+    outline: none;
+}
+#controlButton:hover, #repeatButton:hover {
+    background: rgba(0, 0, 0, 8); /* Очень легкое затемнение при наведении */
+}
+
+/* Динамические кнопки */
+#repeatButton[state="active"] { background: rgba(0, 150, 210, 25); }
+#repeatButton[state="active"]:hover { background: rgba(0, 150, 210, 40); }
+
+/* Кнопки действий (Играть / Перемешать) */
+#actionButton[accent="true"], #actionButton[accent="false"] {
+    font-size: 13px;
+    border: none;
+    border-radius: 16px;
+    padding: 8px 20px;
+}
+#actionButton[accent="true"] { color: #fff; font-weight: 700; background: rgb(0, 150, 210); }
+#actionButton[accent="true"]:hover { background: rgb(0, 170, 230); }
+#actionButton[accent="false"] { color: #212529; font-weight: 600; background: rgba(0, 0, 0, 8); }
+#actionButton[accent="false"]:hover { background: rgba(0, 0, 0, 15); }
+
+/* Остальные кнопки */
+#createPlaylistBtn { color: #212529; font-size: 14px; font-weight: 700; border: none; border-radius: 11px; background: rgba(0, 0, 0, 8); }
+#createPlaylistBtn:hover { background: rgba(0, 150, 210, 40); color: #000; }
+
+#backButton { color: #212529; font-size: 18px; font-weight: 700; background: rgba(255, 255, 255, 200); border-radius: 18px; border: none; }
+#backButton:hover { background: rgba(0, 150, 210, 50); }
+
+#playOverlayBtn { background: rgba(255, 255, 255, 220); border: none; border-radius: 12px; }
+#playOverlayBtn:hover { background: #ffffff; }
+
+#downloadBtn { background: rgba(0, 0, 0, 5); border: none; border-radius: 14px; }
+#downloadBtn:hover { background: rgba(0, 150, 210, 30); }
+
+/* =========================================
+   ПОЛЗУНКИ (Слайдеры громкости и времени)
+   ========================================= */
+#seekSlider::groove:horizontal, #volSlider::groove:horizontal {
+    height: 4px;
+    background: rgba(0, 0, 0, 15);
+    border-radius: 2px;
+}
+#seekSlider::handle:horizontal, #volSlider::handle:horizontal {
+    background: #495057; /* Темно-серый ползунок */
+}
+#seekSlider::handle:horizontal { width: 12px; height: 12px; margin: -4px 0; border-radius: 6px; }
+#volSlider::handle:horizontal { width: 10px; height: 10px; margin: -3px 0; border-radius: 5px; }
+
+#seekSlider::handle:horizontal:hover { background: rgb(0, 150, 210); }
+
+#seekSlider::sub-page:horizontal { background: #adb5bd; border-radius: 2px; }
+#volSlider::sub-page:horizontal { background: rgba(0, 0, 0, 30); border-radius: 2px; }
+#seekSlider::sub-page:horizontal:hover { background: rgb(0, 150, 210); }
+
+/* =========================================
+   СКРОЛЛБАРЫ И СПИСКИ
+   ========================================= */
+QScrollArea, #trackListView { border: none; outline: none; }
+#trackListView::item:hover { background: transparent; }
+
+QScrollBar:vertical { width: 5px; }
+QScrollBar::handle:vertical { background: rgba(0, 0, 0, 20); border-radius: 2px; min-height: 30px; }
+#trackListView QScrollBar::handle:vertical { background: rgba(0, 0, 0, 15); }
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+
+/* Панель списка треков (молочное стекло) */
+#TrackListPanel { background: rgba(255, 255, 255, 160); border-radius: 16px; }
+#listDivider { background: rgba(0, 0, 0, 8); }
+
+/* =========================================
+   ПАНЕЛЬ НАВИГАЦИИ (ЛЕВАЯ)
+   ========================================= */
+QFrame#navPanel {
+    background: rgba(255, 255, 255, 160);
+    border-right: 1px solid rgba(0, 150, 210, 40);
+}
+
+/* =========================================
+   НИЖНЯЯ ПАНЕЛЬ ПЛЕЕРА
+   ========================================= */
+#PlayMenu {
+    background-color: rgba(255, 255, 255, 220);
+    border-radius: 18px;
+}
+QPushButton#navButton { color: #495057; font-size: 16px; border-radius: 10px; }
+QPushButton#navButton:hover { background: rgba(0, 150, 210, 20); color: #212529; }
+QPushButton#navButton:pressed { background: rgba(0, 150, 210, 40); }
+QPushButton#navButton:checked { background: rgba(0, 150, 210, 140); color: white; }
+
+/* =========================================
+   БЕЙДЖИ И ОБЛОЖКИ
+   ========================================= */
+#systemBadge { color: rgb(0, 110, 160); font-size: 10px; font-weight: 700; letter-spacing: 1px; background: rgba(0, 150, 210, 20); border-radius: 6px; padding: 2px 8px; }
+
+#trackSourceBadge { color: white; font-size: 11px; font-weight: 600; border-radius: 6px; padding: 2px 8px; }
+#trackSourceBadge[source="yandex"] { background: rgba(0, 150, 210, 180); }
+#trackSourceBadge[source="youtube"] { background: rgba(220, 53, 69, 180); }
+#trackSourceBadge[source="default"] { background: rgba(108, 117, 125, 180); }
+
+#coverLabel { border-radius: 14px; background: rgba(0, 0, 0, 5); }
+#trackCover { background: #e9ecef; border-radius: 12px; }
+
+/* =========================================
+   КАРТОЧКА ТРЕКА
+   ========================================= */
+#TrackCard { background-color: rgba(0, 0, 0, 8); border-radius: 10px; }
+#TrackCard:hover { background-color: rgba(0, 150, 210, 15); }
+#TrackCard[playing="true"] { background-color: rgba(0, 150, 210, 25); }
+
+/* =========================================
+   ГЛАВНАЯ СТРАНИЦА
+   ========================================= */
+#HeaderPanel {
+    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
+        stop: 0 rgba(240, 244, 248, 220),
+        stop: 0.5 rgba(255, 255, 255, 220),
+        stop: 1 rgba(240, 244, 248, 220));
+    border-radius: 16px;
+    border-bottom: 1px solid rgba(0, 150, 210, 40);
+}
+
+#PlaylistSection {
+    background-color: rgba(255, 255, 255, 160);
+    border-radius: 16px;
+}
+#PlaylistSection[accent="true"] {
+    border-top: 1px solid rgba(0, 150, 210, 25);
+}
+
+/* =========================================
+   СТРАНИЦА НАСТРОЕК
+   ========================================= */
+#SettingsHeader {
+    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 0,
+        stop: 0 rgba(240, 244, 248, 220),
+        stop: 0.5 rgba(255, 255, 255, 220),
+        stop: 1 rgba(240, 244, 248, 220));
+    border-radius: 16px;
+    border-bottom: 1px solid rgba(0, 150, 210, 40);
+}
+
+#SettingsSection {
+    background-color: rgba(255, 255, 255, 160);
+    border-radius: 16px;
+}
+
+/* =========================================
+   СТРАНИЦА ПЛЕЙЛИСТА
+   ========================================= */
+#PlaylistHeader {
+    background: qlineargradient(x1: 0, y1: 0, x2: 1, y2: 1,
+        stop: 0 rgba(240, 244, 248, 200),
+        stop: 0.4 rgba(255, 255, 255, 200),
+        stop: 1 rgba(240, 244, 248, 200));
+    border-radius: 16px;
+    border-bottom: 1px solid rgba(0, 150, 210, 40);
+}
+
+/* =========================================
+   ВЫПАДАЮЩИЕ СПИСКИ НАСТРОЕК (Светлая тема)
+   ========================================= */
+#settingsCombo {
+    color: #1a1a1a; /* Тёмный текст */
+    background: rgba(0, 0, 0, 8); /* Слегка затемнённый фон вместо белого */
+    border: 1px solid rgba(0, 0, 0, 15); /* Полупрозрачная тёмная граница */
+    border-radius: 8px;
+    padding: 6px 12px; 
+    font-size: 13px; 
+    min-width: 120px;
+}
+#settingsCombo:hover {
+    background: rgba(0, 0, 0, 15);
+}
+#settingsCombo::drop-down {
+    subcontrol-origin: padding;
+    subcontrol-position: right center;
+    width: 20px; 
+    border: none;
+}
+#settingsCombo QAbstractItemView {
+    color: #1a1a1a; 
+    background: #ffffff; /* Белый фон выпадающего списка */
+    selection-background-color: rgba(0, 220, 255, 60); /* Оставляем фирменное голубое выделение */
+    selection-color: #000000;
+    border: 1px solid rgba(0, 0, 0, 15);
+    outline: none;
+}
+
+/* =========================================
+   ЗОНА ПРОКРУТКИ (Светлая тема)
+   ========================================= */
+#settingsScroll {
+    background: transparent; 
+    border: none;
+}
+#_sc {
+    background: transparent;
+}
+/* Переопределяем цвет ползунка: в светлой теме он должен быть тёмным */
+#settingsScroll QScrollBar::handle:vertical {
+    background: rgba(0, 0, 0, 30);
+    border-radius: 2px;
+}
+#settingsScroll QScrollBar::handle:vertical:hover {
+    background: rgba(0, 0, 0, 50);
+}
+
+/* =========================================
+   СТРАНИЦА ПОИСКА (Светлая тема)
+   ========================================= */
+#searchInput {
+    padding: 14px 18px;
+    font-size: 16px;
+    color: #1a1a1a;
+    background: rgba(0, 0, 0, 8);
+    border: none;
+    border-radius: 14px;
+    selection-background-color: rgba(0, 220, 255, 60);
+}
+#searchInput::placeholder {
+    color: rgba(0, 0, 0, 100);
+}
+
+#ResultsPanel {
+    background: rgba(0, 0, 0, 8);
+    border-radius: 14px;
+}
+
+#searchStatusLabel {
+    color: rgba(0, 0, 0, 140);
+    font-size: 14px;
+    padding: 24px;
+    background: transparent;
+}

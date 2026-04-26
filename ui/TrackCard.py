@@ -38,22 +38,6 @@ from utils import asset_path
 _COVER_SIZE = 48
 _CARD_HEIGHT = 60
 _BORDER_RADIUS = 10
-_SOURCE_COLORS = {
-    "yandex": QColor(0, 220, 255, 140),
-    "youtube": QColor(255, 60, 60, 140),
-}
-_DEFAULT_SOURCE_COLOR = QColor(160, 160, 160, 140)
-
-_BTN_STYLE = """
-    QToolButton {{
-        background: rgba({bg});
-        border: none;
-        border-radius: {radius}px;
-    }}
-    QToolButton:hover {{
-        background: rgba({bg_hover});
-    }}
-"""
 
 
 class _PlayOverlay(QToolButton):
@@ -61,17 +45,11 @@ class _PlayOverlay(QToolButton):
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
+        self.setObjectName("playOverlayBtn")
         self.setFixedSize(_COVER_SIZE, _COVER_SIZE)
         self.setIconSize(QSize(22, 22))
         self.setIcon(QIcon(asset_path("assets/icons/play.png")))
         self.setCursor(Qt.PointingHandCursor)
-        self.setStyleSheet(
-            _BTN_STYLE.format(
-                bg="0, 0, 0, 140",
-                bg_hover="0, 0, 0, 190",
-                radius=_COVER_SIZE // 4,
-            )
-        )
         self.hide()
 
 
@@ -80,17 +58,11 @@ class _DownloadButton(QToolButton):
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
+        self.setObjectName("downloadBtn")
         self.setFixedSize(28, 28)
         self.setIconSize(QSize(16, 16))
         self.setIcon(QIcon(asset_path("assets/icons/download.png")))
         self.setCursor(Qt.PointingHandCursor)
-        self.setStyleSheet(
-            _BTN_STYLE.format(
-                bg="255, 255, 255, 15",
-                bg_hover="0, 220, 255, 50",
-                radius=14,
-            )
-        )
         self.hide()
 
 
@@ -116,12 +88,16 @@ class TrackCard(QWidget):
     ) -> None:
         super().__init__(parent)
 
+        # Применяем общий стиль к карточке, который спустится на все дочерние элементы
+        # self.setStyleSheet(_TRACKCARD_QSS)
+
         self._track: Optional[Track] = None
         self._index = index
         self._is_playing = False
         self._hovered = False
         self._allow_remove_from_playlist = allow_remove_from_playlist
         self._path_provider = PathProvider()
+        
         if TrackCard._shared_downloader is None:
             TrackCard._shared_downloader = AsyncDownloader()
         self._downloader = TrackCard._shared_downloader
@@ -137,12 +113,11 @@ class TrackCard(QWidget):
         layout.setSpacing(12)
 
         # --- index number ---
-        self._num_label = QLabel(str(index) if index else "")
+        self._num_label = QLabel()
+        self._num_label.setObjectName("trackIndex")
+        self._num_label.setProperty("state", "normal") # Начальное состояние
         self._num_label.setFixedWidth(22)
         self._num_label.setAlignment(Qt.AlignCenter)
-        self._num_label.setStyleSheet(
-            "color: rgba(255,255,255,80); font-size: 13px; background: transparent;"
-        )
         layout.addWidget(self._num_label)
 
         # --- cover (container for overlay) ---
@@ -150,11 +125,9 @@ class TrackCard(QWidget):
         self._cover_container.setFixedSize(_COVER_SIZE, _COVER_SIZE)
 
         self._cover = QLabel(self._cover_container)
+        self._cover.setObjectName("trackCover")
         self._cover.setFixedSize(_COVER_SIZE, _COVER_SIZE)
         self._cover.setAlignment(Qt.AlignCenter)
-        self._cover.setStyleSheet(
-            f"background: #1a1a1a; border-radius: {_COVER_SIZE // 4}px;"
-        )
 
         self._play_btn = _PlayOverlay(self._cover_container)
         self._play_btn.clicked.connect(self._on_play)
@@ -167,16 +140,12 @@ class TrackCard(QWidget):
         text_layout.setSpacing(2)
 
         self._title = QLabel()
-        self._title.setStyleSheet(
-            "color: white; font-size: 14px; font-weight: 600; background: transparent;"
-        )
+        self._title.setObjectName("trackTitle")
         self._title.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
         self._title.setWordWrap(False)
 
         self._author = QLabel()
-        self._author.setStyleSheet(
-            "color: rgba(255,255,255,120); font-size: 12px; background: transparent;"
-        )
+        self._author.setObjectName("trackAuthor")
 
         text_layout.addWidget(self._title)
         text_layout.addWidget(self._author)
@@ -184,6 +153,7 @@ class TrackCard(QWidget):
 
         # --- source badge ---
         self._source_badge = QLabel()
+        self._source_badge.setObjectName("trackSourceBadge")
         self._source_badge.setFixedHeight(22)
         self._source_badge.setAlignment(Qt.AlignCenter)
         layout.addWidget(self._source_badge)
@@ -195,6 +165,8 @@ class TrackCard(QWidget):
 
         if track is not None:
             self.set_track(track, index)
+        else:
+            self._update_index_label()
 
     # --- public API ---
 
@@ -206,13 +178,13 @@ class TrackCard(QWidget):
         self._title.setText(track.title)
         self._author.setText(self._build_meta_line(track))
 
-        color = _SOURCE_COLORS.get(track.source, _DEFAULT_SOURCE_COLOR)
         self._source_badge.setText(track.source)
-        self._source_badge.setStyleSheet(f"""
-            color: white; font-size: 11px; font-weight: 600;
-            background: rgba({color.red()},{color.green()},{color.blue()},{color.alpha()});
-            border-radius: 6px; padding: 2px 8px;
-        """)
+        
+        # Задаем свойство для цвета бейджа (обрабатывается в QSS)
+        source_prop = track.source if track.source in ["yandex", "youtube"] else "default"
+        self._source_badge.setProperty("source", source_prop)
+        self._source_badge.style().unpolish(self._source_badge)
+        self._source_badge.style().polish(self._source_badge)
         self._source_badge.adjustSize()
 
     @staticmethod
@@ -241,8 +213,18 @@ class TrackCard(QWidget):
     def set_playing(self, is_playing: bool) -> None:
         """Включает или выключает подсветку воспроизводимого трека."""
         self._is_playing = is_playing
+        
+        # Обновляем состояние метки индекса для QSS
+        state = "playing" if is_playing else "normal"
+        self._num_label.setProperty("state", state)
+        self._num_label.style().unpolish(self._num_label)
+        self._num_label.style().polish(self._num_label)
+
+        self.setProperty("playing", "true" if is_playing else "false")
+        self.style().unpolish(self)
+        self.style().polish(self)
+
         self._update_index_label()
-        self.update()
 
     @asyncSlot()
     async def load_cover(self) -> None:
@@ -268,14 +250,8 @@ class TrackCard(QWidget):
     def _update_index_label(self) -> None:
         if self._is_playing:
             self._num_label.setText("▶")
-            self._num_label.setStyleSheet(
-                "color: rgb(0,220,255); font-size: 13px; font-weight: 700; background: transparent;"
-            )
-            return
-        self._num_label.setText(str(self._index) if self._index else "")
-        self._num_label.setStyleSheet(
-            "color: rgba(255,255,255,80); font-size: 13px; background: transparent;"
-        )
+        else:
+            self._num_label.setText(str(self._index) if self._index else "")
 
     # --- slots ---
 
@@ -293,14 +269,12 @@ class TrackCard(QWidget):
         self._hovered = True
         self._play_btn.show()
         self._dl_btn.show()
-        self.update()
         super().enterEvent(event)
 
     def leaveEvent(self, event) -> None:
         self._hovered = False
         self._play_btn.hide()
         self._dl_btn.hide()
-        self.update()
         super().leaveEvent(event)
 
     def mousePressEvent(self, event) -> None:
@@ -333,20 +307,3 @@ class TrackCard(QWidget):
             self.remove_from_playlist_requested.emit(self._track)
         elif chosen == download_action:
             self._on_download()
-
-    def paintEvent(self, event) -> None:
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing, True)
-
-        if self._is_playing:
-            painter.setBrush(QColor(0, 220, 255, 35))
-        elif self._hovered:
-            painter.setBrush(QColor(0, 220, 255, 20))
-        else:
-            painter.setBrush(QColor(255, 255, 255, 6))
-
-        painter.setPen(Qt.NoPen)
-        painter.drawRoundedRect(self.rect(), _BORDER_RADIUS, _BORDER_RADIUS)
-        painter.end()
-
-        super().paintEvent(event)

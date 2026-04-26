@@ -88,10 +88,6 @@ class MenuTabs(QWidget):
 
         self._nav_buttons = [self.btn_home, self.btn_search, self.btn_library]
 
-        # ================= СТИЛИ =================
-        with open("styles/nav_panel.qss", "r") as file:
-            self.setStyleSheet(file.read())
-
     # --- переключение ---
 
     def _switch(self, index: int) -> None:

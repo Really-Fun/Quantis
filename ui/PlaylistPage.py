@@ -31,6 +31,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QHBoxLayout,
     QWidget,
+    QListView,
 )
 from qasync import asyncSlot
 
@@ -38,9 +39,7 @@ from models import UserPlaylist
 from player import Player
 from providers import PlaylistManager, PathProvider
 from services import AsyncDownloader
-from PySide6.QtWidgets import QListView
-from utils import get_ru_words_for_number
-from utils import remove_track_from_user_playlist
+from utils import get_ru_words_for_number, remove_track_from_user_playlist
 
 COVER_SIZE = 160
 COVER_RADIUS = 16
@@ -57,6 +56,7 @@ class PlaylistPage(QWidget):
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
+
         self.player = Player()
         self.pm = PlaylistManager()
         self.path = PathProvider()
@@ -83,14 +83,6 @@ class PlaylistPage(QWidget):
         # ═══════ TRACK LIST ═══════
         self.list_panel = QFrame()
         self.list_panel.setObjectName("TrackListPanel")
-        self.list_panel.setStyleSheet(
-            """
-            QFrame#TrackListPanel {
-                background: rgba(12, 14, 20, 160);
-                border-radius: 16px;
-            }
-        """
-        )
 
         list_lay = QVBoxLayout(self.list_panel)
         list_lay.setContentsMargins(12, 10, 12, 10)
@@ -101,22 +93,16 @@ class PlaylistPage(QWidget):
         col_hdr.setContentsMargins(10, 0, 10, 8)
 
         num_h = QLabel("#")
+        num_h.setObjectName("colHeaderNum")
         num_h.setFixedWidth(22)
         num_h.setAlignment(Qt.AlignCenter)
-        num_h.setStyleSheet(
-            "color: rgba(255,255,255,50); font-size: 12px; background: transparent;"
-        )
 
         title_h = QLabel("НАЗВАНИЕ")
-        title_h.setStyleSheet(
-            "color: rgba(255,255,255,50); font-size: 11px; font-weight: 600; background: transparent;"
-        )
+        title_h.setObjectName("colHeaderTitle")
 
         source_h = QLabel("ИСТОЧНИК")
+        source_h.setObjectName("colHeaderSource")
         source_h.setAlignment(Qt.AlignRight)
-        source_h.setStyleSheet(
-            "color: rgba(255,255,255,50); font-size: 11px; font-weight: 600; background: transparent;"
-        )
 
         col_hdr.addWidget(num_h)
         col_hdr.addSpacing(60)  # cover width gap
@@ -128,31 +114,18 @@ class PlaylistPage(QWidget):
 
         # divider
         div = QFrame()
+        div.setObjectName("listDivider")
         div.setFixedHeight(1)
-        div.setStyleSheet("background: rgba(255,255,255,12);")
         list_lay.addWidget(div)
         list_lay.addSpacing(4)
 
         # scroll
         self.track_list = QListView()
-        self.track_list.setObjectName("tlc")
+        self.track_list.setObjectName("trackListView")
         self.track_list.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.track_list.setFrameShape(QFrame.NoFrame)
         self.track_list.setSelectionMode(QListView.NoSelection)
         self.track_list.setMouseTracking(True)  # Required for hover events in delegate
-        self.track_list.setStyleSheet(
-            """
-            QListView { background: transparent; border: none; outline: none; }
-            QListView::item:hover { background: transparent; }
-            QScrollBar:vertical {
-                width: 5px; background: transparent;
-            }
-            QScrollBar::handle:vertical {
-                background: rgba(255,255,255,30); border-radius: 2px; min-height: 30px;
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
-        """
-        )
 
         from models import TrackListModel
         from ui.delegates.TrackDelegate import TrackDelegate
@@ -175,17 +148,13 @@ class PlaylistPage(QWidget):
 
     @asyncSlot()
     async def load_playlist(self, playlist) -> None:
-        """Загружает и отображает плейлист."""
         self.playlist = playlist
         self.pm.set_playlist(playlist)
         tracks = list(playlist.tracks.values)
         self._allow_remove = isinstance(playlist, UserPlaylist)
         new_key = self.build_playlist_cache_key(playlist)
 
-        # Если открыт тот же плейлист без изменений — не пересоздаем карточки.
-        if self.playlist_cache_key == new_key and self.track_model.rowCount() == len(
-            tracks
-        ):
+        if self.playlist_cache_key == new_key and self.track_model.rowCount() == len(tracks):
             self.header.set_info(
                 name=playlist.name,
                 count=len(tracks),
@@ -195,7 +164,6 @@ class PlaylistPage(QWidget):
             self.load_covers_bg()
             return
 
-        # header — show instantly with whatever cover is on disk
         self.header.set_info(
             name=playlist.name,
             count=len(tracks),
@@ -206,14 +174,10 @@ class PlaylistPage(QWidget):
         self.playlist_cache_key = new_key
 
         self.sync_playing_state()
-
-        # covers load lazily in background after the list is visible
         self.load_covers_bg()
 
     @asyncSlot()
     async def load_covers_bg(self) -> None:
-        """Подгружает обложки в фоне, по одной, без блокировки UI."""
-        # header cover (download if missing)
         if self.playlist:
             cover_pm = await self.resolve_cover(self.playlist)
             if cover_pm:
@@ -223,19 +187,12 @@ class PlaylistPage(QWidget):
                     pixmap=cover_pm,
                 )
 
-        # We don't need to manually trigger track cover loads here anymore,
-        # the TrackDelegate handles synchronous drawing if the file exists.
-        # However, to start downloading missing covers we can iterate over tracks:
-        # Note: In a real app we'd dispatch this to a separate worker thread queue
-        # so it truly runs in the background. Here we just loop with asyncio.sleep(0)
         tracks = self.track_model._tracks
-        # Download in background
         for track in tracks:
             path = self.path.get_cover_path(track)
             if not os.path.isfile(path):
                 try:
                     await self.dl.download_cover(track)
-                    # Tell model data changed to repaint
                     idx = tracks.index(track)
                     self.track_model.dataChanged.emit(
                         self.track_model.index(idx), self.track_model.index(idx)
@@ -248,12 +205,10 @@ class PlaylistPage(QWidget):
 
     @staticmethod
     def build_playlist_cache_key(playlist) -> tuple[str, ...]:
-        """Возвращает ключ версии плейлиста для кэша рендера."""
         tracks = playlist.tracks.values
         return (playlist.name,) + tuple(f"{t.source}:{t.track_id}" for t in tracks)
 
     def try_cover_sync(self, playlist) -> QPixmap | None:
-        """Пытается загрузить обложку с диска без скачивания."""
         tracks = playlist.tracks.values
         if not tracks:
             return None
@@ -299,7 +254,6 @@ class PlaylistPage(QWidget):
 
     @asyncSlot(object)
     async def on_remove_from_playlist(self, track) -> None:
-        """Удаляет трек из открытого пользовательского плейлиста и сохраняет JSON."""
         if not isinstance(self.playlist, UserPlaylist):
             return
         try:
@@ -328,7 +282,6 @@ class PlaylistPage(QWidget):
             await self.player.play_track(first)
 
     def sync_playing_state(self, current_track=None) -> None:
-        """Подсвечивает текущий воспроизводимый трек, если он в этом плейлисте."""
         track = (
             current_track if current_track is not None else self.player.current_track
         )
@@ -336,7 +289,6 @@ class PlaylistPage(QWidget):
 
     @asyncSlot(object, object)
     async def on_context_menu(self, track, global_pos):
-        """Контекстное меню для трека."""
         from PySide6.QtWidgets import QMenu
 
         menu = QMenu(self)
@@ -351,16 +303,11 @@ class PlaylistPage(QWidget):
         if chosen == play_action:
             await self.on_play(track)
         elif chosen == add_action:
-            # We don't have this signal on PlaylistPage, but let's implement the logic or
-            # mock. Actually, we don't have add_to_playlist_requested on PlaylistPage.
-            # We can just ignore it for now or implement direct adding like in SearchPage.
             pass
         elif remove_action is not None and chosen == remove_action:
             await self.on_remove_from_playlist(track)
         elif chosen == download_action:
             await self.on_download(track)
-
-    # ── paint ──
 
     def paintEvent(self, event) -> None:
         super().paintEvent(event)
@@ -375,6 +322,8 @@ class PlaylistHeader(QWidget):
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
+        self.setObjectName("PlaylistHeader")
+        self.setAttribute(Qt.WA_StyledBackground, True)
         self.setFixedHeight(HEADER_HEIGHT)
         self.cover_pm: QPixmap | None = None
         self.name = ""
@@ -384,20 +333,12 @@ class PlaylistHeader(QWidget):
         root.setContentsMargins(16, 16, 16, 16)
         root.setSpacing(20)
 
-        # back button (top-left inside cover area)
+        # back button
         self.back_btn = QToolButton()
+        self.back_btn.setObjectName("backButton")
         self.back_btn.setText("←")
         self.back_btn.setFixedSize(36, 36)
         self.back_btn.setCursor(Qt.PointingHandCursor)
-        self.back_btn.setStyleSheet(
-            """
-            QToolButton {
-                color: white; font-size: 18px; font-weight: 700;
-                background: rgba(0,0,0,100); border-radius: 18px; border: none;
-            }
-            QToolButton:hover { background: rgba(0,220,255,60); }
-        """
-        )
         self.back_btn.clicked.connect(self.back_clicked.emit)
 
         # cover placeholder
@@ -405,7 +346,6 @@ class PlaylistHeader(QWidget):
         self.cover_label.setFixedSize(COVER_SIZE, COVER_SIZE)
         self.cover_label.setAlignment(Qt.AlignCenter)
 
-        # left: back + cover stacked
         left = QVBoxLayout()
         left.setSpacing(6)
         left.addWidget(self.back_btn, alignment=Qt.AlignLeft)
@@ -413,34 +353,25 @@ class PlaylistHeader(QWidget):
         left.addStretch()
         root.addLayout(left)
 
-        # right: text + buttons
         right = QVBoxLayout()
         right.setSpacing(6)
         right.addStretch()
 
         tag = QLabel("ПЛЕЙЛИСТ")
-        tag.setStyleSheet(
-            "color: rgba(255,255,255,60); font-size: 11px; font-weight: 700;"
-            " letter-spacing: 2px; background: transparent;"
-        )
+        tag.setObjectName("playlistTag")
         right.addWidget(tag)
 
         self.name_label = QLabel("—")
-        self.name_label.setStyleSheet(
-            "color: #fff; font-size: 28px; font-weight: 800; background: transparent;"
-        )
+        self.name_label.setObjectName("playlistName")
         self.name_label.setWordWrap(True)
         right.addWidget(self.name_label)
 
         self.count_label = QLabel("")
-        self.count_label.setStyleSheet(
-            "color: rgba(255,255,255,80); font-size: 13px; background: transparent;"
-        )
+        self.count_label.setObjectName("playlistCount")
         right.addWidget(self.count_label)
 
         right.addSpacing(10)
 
-        # action buttons
         btn_row = QHBoxLayout()
         btn_row.setSpacing(10)
 
@@ -459,7 +390,6 @@ class PlaylistHeader(QWidget):
         root.addLayout(right, stretch=1)
 
     def set_info(self, name: str, count: int, pixmap: QPixmap | None) -> None:
-        """Обновляет название, количество треков и обложку в шапке."""
         self.name = name
         self.count = count
         self.cover_pm = pixmap
@@ -476,14 +406,7 @@ class PlaylistHeader(QWidget):
         clip.addRoundedRect(rect, PANEL_RADIUS, PANEL_RADIUS)
         p.setClipPath(clip)
 
-        # gradient bg
-        grad = QLinearGradient(0, 0, self.width(), self.height())
-        grad.setColorAt(0.0, QColor(12, 18, 30, 200))
-        grad.setColorAt(0.4, QColor(8, 20, 40, 200))
-        grad.setColorAt(1.0, QColor(12, 14, 24, 200))
-        p.setPen(Qt.NoPen)
-        p.setBrush(QBrush(grad))
-        p.drawRect(rect)
+
 
         # draw cover with rounded corners
         cx, cy = 16, 52  # offset for back btn
@@ -502,7 +425,6 @@ class PlaylistHeader(QWidget):
             )
             p.drawPixmap(int(cx), int(cy), scaled)
         else:
-            # placeholder
             pg = QLinearGradient(cr.topLeft(), cr.bottomRight())
             pg.setColorAt(0.0, QColor(30, 40, 60))
             pg.setColorAt(1.0, QColor(20, 30, 50))
@@ -518,16 +440,7 @@ class PlaylistHeader(QWidget):
         p.setBrush(Qt.NoBrush)
         p.drawRoundedRect(cr, COVER_RADIUS, COVER_RADIUS)
 
-        # accent line at bottom
-        line_grad = QLinearGradient(0, 0, self.width(), 0)
-        line_grad.setColorAt(0.0, QColor(0, 220, 255, 0))
-        line_grad.setColorAt(0.3, QColor(0, 220, 255, 30))
-        line_grad.setColorAt(0.7, QColor(0, 220, 255, 30))
-        line_grad.setColorAt(1.0, QColor(0, 220, 255, 0))
-        p.setPen(QPen(QBrush(line_grad), 1.0))
-        p.drawLine(
-            16, int(rect.bottom() - 1), int(rect.right() - 16), int(rect.bottom() - 1)
-        )
+
 
         p.end()
         super().paintEvent(event)
@@ -535,30 +448,10 @@ class PlaylistHeader(QWidget):
     @staticmethod
     def action_btn(text: str, accent: bool = False) -> QToolButton:
         b = QToolButton()
+        b.setObjectName("actionButton")
+        b.setProperty("accent", "true" if accent else "false")
         b.setText(text)
         b.setCursor(Qt.PointingHandCursor)
         b.setToolButtonStyle(Qt.ToolButtonTextOnly)
         b.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
-        if accent:
-            b.setStyleSheet(
-                """
-                QToolButton {
-                    color: #000; font-size: 13px; font-weight: 700;
-                    background: rgb(0,220,255); border: none; border-radius: 16px;
-                    padding: 8px 20px;
-                }
-                QToolButton:hover { background: rgb(0,240,255); }
-            """
-            )
-        else:
-            b.setStyleSheet(
-                """
-                QToolButton {
-                    color: #fff; font-size: 13px; font-weight: 600;
-                    background: rgba(255,255,255,12); border: none; border-radius: 16px;
-                    padding: 8px 20px;
-                }
-                QToolButton:hover { background: rgba(255,255,255,22); }
-            """
-            )
         return b

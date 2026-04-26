@@ -53,10 +53,6 @@ class HomePage(QWidget):
         self.history_service = TrackHistoryService()
         self.setObjectName("HomePage")
 
-        with open("styles/home.qss") as file:
-            self.setStyleSheet(file.read())
-
-
         root = QVBoxLayout(self)
         root.setContentsMargins(10, 10, 10, 10)
         root.setSpacing(0)
@@ -270,9 +266,6 @@ class HomePage(QWidget):
 
         self.reload_user_playlists()
 
-    def paintEvent(self, event) -> None:
-        super().paintEvent(event)
-
     def add_recommendation_section(self, playlist):
         self.recommend_section.clear_cards()
         self.add_card(self.recommend_section, playlist)
@@ -298,6 +291,10 @@ class PlaylistSection(QWidget):
         super().__init__(parent)
         self.cards: list[PlaylistPreview] = []
         self.accent = accent
+
+        self.setObjectName("PlaylistSection")
+        self.setAttribute(Qt.WA_StyledBackground, True)
+        self.setProperty("accent", "true" if accent else "false")
 
         lay = QVBoxLayout(self)
         lay.setContentsMargins(0, 0, 0, 0)
@@ -381,37 +378,14 @@ class PlaylistSection(QWidget):
         self.empty.setText(text)
         self.empty.show()
 
-    def paintEvent(self, event) -> None:
-        p = QPainter(self)
-        p.setRenderHint(QPainter.Antialiasing, True)
-        rect = QRectF(0, 0, self.width(), self.height())
-        p.setPen(Qt.NoPen)
-
-        if self.accent:
-            p.setBrush(QColor(0, 0, 0, 130))
-        else:
-            p.setBrush(QColor(0, 0, 0, 130))
-
-        p.drawRoundedRect(rect, PANEL_RADIUS, PANEL_RADIUS)
-
-        if self.accent:
-            line_grad = QLinearGradient(0, 0, self.width(), 0)
-            line_grad.setColorAt(0.0, QColor(0, 220, 255, 0))
-            line_grad.setColorAt(0.3, QColor(0, 220, 255, 25))
-            line_grad.setColorAt(0.7, QColor(0, 220, 255, 25))
-            line_grad.setColorAt(1.0, QColor(0, 220, 255, 0))
-            p.setPen(QPen(QBrush(line_grad), 1.0))
-            p.drawLine(16, 0, int(rect.right() - 16), 0)
-
-        p.end()
-        super().paintEvent(event)
-
 
 class HeaderPanel(QWidget):
     """Верхняя шапка с приветствием и градиентным фоном."""
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setObjectName("HeaderPanel")
+        self.setAttribute(Qt.WA_StyledBackground, True)
         self.setFixedHeight(80)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
@@ -426,37 +400,3 @@ class HeaderPanel(QWidget):
         sub = QLabel("Quantis")
         sub.setObjectName("headerSub")
         lay.addWidget(sub)
-
-    def paintEvent(self, event) -> None:
-        p = QPainter(self)
-        p.setRenderHint(QPainter.Antialiasing, True)
-
-        rect = QRectF(0, 0, self.width(), self.height())
-        clip = QPainterPath()
-        clip.addRoundedRect(rect, PANEL_RADIUS, PANEL_RADIUS)
-        p.setClipPath(clip)
-
-        grad = QLinearGradient(0, 0, self.width(), 0)
-        grad.setColorAt(0.0, QColor(10, 14, 22, 220))
-        grad.setColorAt(0.5, QColor(6, 16, 30, 220))
-        grad.setColorAt(1.0, QColor(10, 14, 22, 220))
-        p.setPen(Qt.NoPen)
-        p.setBrush(QBrush(grad))
-        p.drawRect(rect)
-
-        line_grad = QLinearGradient(0, 0, self.width(), 0)
-        line_grad.setColorAt(0.0, QColor(0, 220, 255, 0))
-        line_grad.setColorAt(0.3, QColor(0, 220, 255, 40))
-        line_grad.setColorAt(0.7, QColor(0, 220, 255, 40))
-        line_grad.setColorAt(1.0, QColor(0, 220, 255, 0))
-        pen = QPen(QBrush(line_grad), 1.0)
-        p.setPen(pen)
-        p.drawLine(
-            int(rect.left() + 16),
-            int(rect.bottom() - 1),
-            int(rect.right() - 16),
-            int(rect.bottom() - 1),
-        )
-
-        p.end()
-        super().paintEvent(event)

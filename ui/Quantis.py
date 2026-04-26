@@ -20,6 +20,7 @@ from ui.AudioVisualizer import AudioVisualizer
 from ui.MenuPlayWidget import PlayMenu
 from ui.MenuTabsWidget import MenuTabs
 from ui.Stack import Stack
+from ui.ThemeManager import ThemeManager
 from utils import asset_path
 from providers import PathProvider
 
@@ -29,6 +30,10 @@ class Quantis(QMainWindow):
 
     def __init__(self) -> None:
         super().__init__()
+        
+        ThemeManager.apply_theme_to_app(self)
+
+
         self._settings = QSettings("ReallyFun", "Quantis")
         viz_delay = int(self._settings.value("visualizer/delay_ms", 25))
         viz_mode = str(self._settings.value("visualizer/mode", "smooth"))
@@ -66,11 +71,7 @@ class Quantis(QMainWindow):
 
         # ================== ТЕМНОЕ ПЕРЕКРЫТИЕ ==================
         self.dark_overlay = QFrame(central)
-        self.dark_overlay.setStyleSheet("""
-            QFrame {
-                background-color: rgba(0, 0, 0, 150);
-            }
-        """)
+        self.dark_overlay.setObjectName("darkOverlay")
 
         # ================== ВИЗУАЛИЗАТОР (под контентом) ==================
         self.visualizer = AudioVisualizer(
@@ -147,16 +148,6 @@ class Quantis(QMainWindow):
         self.stack.settings_page.cover_wallpaper_toggled.connect(self._change_dynamic_wallpaper)
         self.play_menu.player.track_changed.connect(self._change_bg_from_track)
 
-        # ================== ОБЩИЙ СТИЛЬ ==================
-        self.setStyleSheet("""
-            QWidget#central {
-                background: transparent;
-            }
-            QWidget {
-                background: transparent;
-            }
-        """)
-
         self.play_menu.playlist_generated.connect(self.display_radio_on_home)
 
     # ================== ОТКРЫТИЕ ПЛЕЙЛИСТА ==================
@@ -229,12 +220,9 @@ class Quantis(QMainWindow):
         self._settings.setValue("background/cover_toggle", flag)
         self.cover_wallpaper_toggle = flag
 
-
     def display_radio_on_home(self, playlist):
         self.stack.home_page.add_recommendation_section(playlist)
-
         self.stack.setCurrentWidget(self.stack.home_page)
-
         self.menu_tabs.set_active_tab(0)
 
 

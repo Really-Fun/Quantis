@@ -1,0 +1,103 @@
+/* --- Панели и разделители --- */
+#TrackListPanel {
+    background: rgba(12, 14, 20, 160);
+    border-radius: 16px;
+}
+#listDivider {
+    background: rgba(255,255,255,12);
+}
+
+/* --- Шапка таблицы треков --- */
+#colHeaderNum {
+    color: rgba(255,255,255,50); 
+    font-size: 12px; 
+    background: transparent;
+}
+#colHeaderTitle, #colHeaderSource {
+    color: rgba(255,255,255,50); 
+    font-size: 11px; 
+    font-weight: 600; 
+    background: transparent;
+}
+
+/* --- Список треков и скроллбар --- */
+#trackListView { 
+    background: transparent; 
+    border: none; 
+    outline: none; 
+}
+#trackListView::item:hover { 
+    background: transparent; 
+}
+#trackListView QScrollBar:vertical {
+    width: 5px; 
+    background: transparent;
+}
+#trackListView QScrollBar::handle:vertical {
+    background: rgba(255,255,255,30); 
+    border-radius: 2px; 
+    min-height: 30px;
+}
+#trackListView QScrollBar::add-line:vertical, 
+#trackListView QScrollBar::sub-line:vertical { 
+    height: 0; 
+}
+
+/* --- Элементы шапки плейлиста --- */
+#backButton {
+    color: white; 
+    font-size: 18px; 
+    font-weight: 700;
+    background: rgba(0,0,0,100); 
+    border-radius: 18px; 
+    border: none;
+}
+#backButton:hover { 
+    background: rgba(0,220,255,60); 
+}
+
+#playlistTag {
+    color: rgba(255,255,255,60); 
+    font-size: 11px; 
+    font-weight: 700;
+    letter-spacing: 2px; 
+    background: transparent;
+}
+#playlistName {
+    color: #fff; 
+    font-size: 28px; 
+    font-weight: 800; 
+    background: transparent;
+}
+#playlistCount {
+    color: rgba(255,255,255,80); 
+    font-size: 13px; 
+    background: transparent;
+}
+
+/* --- Кнопки действий (Играть / Перемешать) --- */
+#actionButton[accent="true"] {
+    color: #000; 
+    font-size: 13px; 
+    font-weight: 700;
+    background: rgb(0,220,255); 
+    border: none; 
+    border-radius: 16px;
+    padding: 8px 20px;
+}
+#actionButton[accent="true"]:hover { 
+    background: rgb(0,240,255); 
+}
+
+#actionButton[accent="false"] {
+    color: #fff; 
+    font-size: 13px; 
+    font-weight: 600;
+    background: rgba(255,255,255,12); 
+    border: none; 
+    border-radius: 16px;
+    padding: 8px 20px;
+}
+#actionButton[accent="false"]:hover { 
+    background: rgba(255,255,255,22); 
+}

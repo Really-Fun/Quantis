@@ -1,0 +1,22 @@
+/* --- Центральный виджет и базовый фон --- */
+QWidget#central {
+    background: transparent;
+}
+
+/* Делаем виджеты прозрачными, чтобы был виден красивый фон... */
+QWidget {
+    background: transparent;
+}
+
+/* ...НО ЖЕСТКО ЗАПРЕЩАЕМ прозрачность для системных окон, меню и ошибок! */
+QMenu, QMessageBox, QDialog, QToolTip {
+    background-color: #161a22; /* Темно-синий/серый цвет для меню */
+    color: white;
+    border: 1px solid rgba(255, 255, 255, 30);
+    border-radius: 8px;
+}
+
+/* --- Темное перекрытие (Overlay) поверх фона --- */
+#darkOverlay {
+    background-color: rgba(0, 0, 0, 150);
+}

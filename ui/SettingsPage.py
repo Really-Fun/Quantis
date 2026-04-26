@@ -1,8 +1,3 @@
-"""Страница настроек.
-
-Аудио, внешний вид, визуализатор, о приложении.
-"""
-
 import os
 import re
 
@@ -30,6 +25,7 @@ from ui.theme import (
     REFRESH_MS_MIN,
     scroll_qss,
 )
+from ui.ThemeManager import ThemeManager
 from utils import asset_path
 
 
@@ -38,11 +34,11 @@ class SettingsPage(QWidget):
 
     go_back = Signal()
     background_changed = Signal(str)
-    visualizer_toggled = Signal(bool)  # True = вкл, False = выкл
+    visualizer_toggled = Signal(bool)  
     cover_wallpaper_toggled = Signal(bool)
     visualizer_delay_changed = Signal(int)
-    visualizer_color_changed = Signal(tuple)  # (r, g, b)
-    visualizer_mode_changed = Signal(str)  # smooth/sharp/choppy
+    visualizer_color_changed = Signal(tuple)  
+    visualizer_mode_changed = Signal(str)  
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -59,12 +55,12 @@ class SettingsPage(QWidget):
         root.addWidget(header)
         root.addSpacing(12)
 
-        # ═══════ SCROLL ═══════change_
+        # ═══════ SCROLL ═══════
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setFrameShape(QFrame.NoFrame)
-        scroll.setStyleSheet(scroll_qss("_sc"))
+        scroll.setObjectName("settingsScroll")
 
         content = QWidget()
         content.setObjectName("_sc")
@@ -74,6 +70,7 @@ class SettingsPage(QWidget):
 
         self._build_audio_section()
         self._build_appearance_section()
+        self._build_theme_setting()
         self._build_visualizer_section()
         self._build_dynamic_change_wallpaper()
         self._build_about_section()
@@ -83,21 +80,19 @@ class SettingsPage(QWidget):
         root.addWidget(scroll, stretch=1)
 
     # ── Audio ──
-
     def _build_audio_section(self) -> None:
         sec = _Section("Аудио")
 
         row_q = _SettingRow("Качество стрима")
         self._quality_combo = QComboBox()
         self._quality_combo.addItems(["Авто", "Высокое", "Среднее", "Низкое"])
-        self._quality_combo.setStyleSheet(COMBO_QSS)
+        self._quality_combo.setObjectName("settingsCombo")
         row_q.add_right(self._quality_combo)
         sec.add_row(row_q)
 
         self._lay.addWidget(sec)
 
     # ── Appearance ──
-
     def _build_appearance_section(self) -> None:
         sec = _Section("Внешний вид")
 
@@ -113,7 +108,7 @@ class SettingsPage(QWidget):
         else:
             bg_files = []
         self._bg_combo.addItems(bg_files)
-        self._bg_combo.setStyleSheet(COMBO_QSS)
+        self._bg_combo.setObjectName("settingsCombo")
         self._bg_combo.activated.connect(self._on_bg_selected)
         row_bg.add_right(self._bg_combo)
         sec.add_row(row_bg)
@@ -121,7 +116,6 @@ class SettingsPage(QWidget):
         self._lay.addWidget(sec)
 
     # ── Visualizer ──
-
     def _build_visualizer_section(self) -> None:
         sec = _Section("Визуализатор", icon="〰")
 
@@ -143,10 +137,10 @@ class SettingsPage(QWidget):
         self._viz_delay.setValue(25)
         self._viz_delay.setFixedWidth(140)
         self._viz_delay.valueChanged.connect(self._on_delay_changed)
+        
         self._viz_delay_label = QLabel("25")
-        self._viz_delay_label.setStyleSheet(
-            "color: rgba(255,255,255,180); font-size: 12px; background: transparent;"
-        )
+        self._viz_delay_label.setObjectName("settingValueLabel")
+        
         delay_lay.addWidget(self._viz_delay)
         delay_lay.addWidget(self._viz_delay_label)
         row_delay.add_right(delay_wrap)
@@ -155,12 +149,9 @@ class SettingsPage(QWidget):
         # цвет
         row_color = _SettingRow("Цвет (R G B)")
         self._viz_color = QLineEdit("0 220 255")
+        self._viz_color.setObjectName("settingLineEdit")
         self._viz_color.setFixedWidth(140)
         self._viz_color.setPlaceholderText("255 255 255")
-        self._viz_color.setStyleSheet(
-            "color: white; background: rgba(255,255,255,10);"
-            "border: 1px solid rgba(255,255,255,20); border-radius: 8px; padding: 6px;"
-        )
         self._viz_color.editingFinished.connect(self._on_color_edited)
         row_color.add_right(self._viz_color)
         sec.add_row(row_color)
@@ -171,7 +162,7 @@ class SettingsPage(QWidget):
         self._viz_mode.addItem("Плавный", "smooth")
         self._viz_mode.addItem("Резкий", "sharp")
         self._viz_mode.addItem("Разрывистый", "choppy")
-        self._viz_mode.setStyleSheet(COMBO_QSS)
+        self._viz_mode.setObjectName("settingsCombo")
         self._viz_mode.currentIndexChanged.connect(self._on_mode_changed)
         row_mode.add_right(self._viz_mode)
         sec.add_row(row_mode)
@@ -188,34 +179,45 @@ class SettingsPage(QWidget):
         
         self._lay.addWidget(sec)
 
-    # ── About ──
+    def _build_theme_setting(self) -> None:
+        sec = _Section("Тема", icon="〰")
+        row_bg = _SettingRow("Тема")
+        self._theme_combo = QComboBox()
+        bg_files = ["light", "dark"]
+        self._theme_combo.addItems(bg_files)
+        self._theme_combo.activated.connect(self._on_theme_selected)
+        self._theme_combo.setObjectName("settingsCombo")
+        row_bg.add_right(self._theme_combo)
+        sec.add_row(row_bg)
 
+        self._lay.addWidget(sec)
+
+    # ── About ──
     def _build_about_section(self) -> None:
         sec = _Section("О приложении")
 
         info = _SettingRow("Quantis")
         ver = QLabel("Beta 0.1.1")
-        ver.setStyleSheet(
-            "color: rgba(255,255,255,50); font-size: 12px; background: transparent;"
-        )
+        ver.setObjectName("settingSubLabel")
         info.add_right(ver)
         sec.add_row(info)
 
         dev = _SettingRow("Разработчик")
         dev_name = QLabel("reallyfun")
-        dev_name.setStyleSheet(
-            "color: rgba(0,220,255,160); font-size: 13px; background: transparent;"
-        )
+        dev_name.setObjectName("settingAccentLabel")
         dev.add_right(dev_name)
         sec.add_row(dev)
 
         self._lay.addWidget(sec)
 
     # ── callbacks ──
-
     def _on_bg_selected(self, index: int) -> None:
         name = self._bg_combo.itemText(index)
         self.background_changed.emit(asset_path(f"assets/background/{name}"))
+
+    def _on_theme_selected(self, index: int) -> None:
+        theme = self._theme_combo.itemText(index)
+        ThemeManager.set_theme(theme)
 
     def _on_delay_changed(self, value: int) -> None:
         self._viz_delay_label.setText(str(value))
@@ -224,7 +226,6 @@ class SettingsPage(QWidget):
     def _on_color_edited(self) -> None:
         rgb = self._parse_rgb_text(self._viz_color.text())
         if rgb is None:
-            # Возвращаем к последнему корректному значению.
             self._viz_color.setText(
                 f"{self._last_valid_rgb[0]} {self._last_valid_rgb[1]} {self._last_valid_rgb[2]}"
             )
@@ -241,7 +242,6 @@ class SettingsPage(QWidget):
     def set_visualizer_settings(
         self, delay_ms: int, color_rgb: tuple[int, int, int], mode: str
     ) -> None:
-        """Восстанавливает сохранённые настройки визуализатора."""
         self._viz_delay.blockSignals(True)
         self._viz_delay.setValue(
             max(REFRESH_MS_MIN, min(REFRESH_MS_MAX, int(delay_ms)))
@@ -266,7 +266,6 @@ class SettingsPage(QWidget):
 
     @staticmethod
     def _parse_rgb_text(text: str) -> tuple[int, int, int] | None:
-        """Разбирает строку вида '255 255 255' или '255,255,255'."""
         chunks = [c for c in re.split(r"[,\s]+", text.strip()) if c]
         if len(chunks) != 3:
             return None
@@ -285,7 +284,6 @@ class SettingsPage(QWidget):
 # ═══════════════════════════════════════
 #  Внутренние виджеты
 # ═══════════════════════════════════════
-
 
 class _ToggleButton(QWidget):
     """Переключатель вкл/выкл."""
@@ -306,11 +304,10 @@ class _ToggleButton(QWidget):
         super().mousePressEvent(event)
 
     def setChecked(self, checked: bool) -> None:
-        """Устанавливает конкретное состояние (вкл/выкл)."""
         if self._on != checked:
             self._on = checked
             self.toggled_changed.emit(self._on)
-            self.update() # Обновляем графику (перерисовываем)
+            self.update() 
 
     def paintEvent(self, event) -> None:
         p = QPainter(self)
@@ -319,24 +316,22 @@ class _ToggleButton(QWidget):
         w, h = self.width(), self.height()
         r = h / 2
 
-        # track
         if self._on:
-            track_color = QColor(0, 200, 240, 180)
+            track_color = ThemeManager.get_color("toggle_on")
         else:
-            track_color = QColor(60, 60, 70, 200)
+            track_color = ThemeManager.get_color("toggle_off_track")
         p.setPen(Qt.NoPen)
         p.setBrush(track_color)
         p.drawRoundedRect(QRectF(0, 0, w, h), r, r)
 
-        # thumb
         margin = 3
         thumb_r = h - margin * 2
         if self._on:
             tx = w - thumb_r - margin
-            thumb_color = QColor(255, 255, 255)
+            thumb_color = ThemeManager.get_color("toggle_on_thumb")
         else:
             tx = margin
-            thumb_color = QColor(160, 160, 170)
+            thumb_color = ThemeManager.get_color("toggle_off_thumb")
         p.setBrush(thumb_color)
         p.drawEllipse(QRectF(tx, margin, thumb_r, thumb_r))
 
@@ -350,6 +345,8 @@ class _SettingsHeader(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setObjectName("SettingsHeader")
+        self.setAttribute(Qt.WA_StyledBackground, True)
         self.setFixedHeight(70)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
@@ -358,54 +355,17 @@ class _SettingsHeader(QWidget):
 
         self._back = QToolButton()
         self._back.setText("←")
+        self._back.setObjectName("backButton")
         self._back.setFixedSize(36, 36)
         self._back.setCursor(Qt.PointingHandCursor)
-        self._back.setStyleSheet("""
-            QToolButton {
-                color: white; font-size: 18px; font-weight: 700;
-                background: rgba(0,0,0,100); border-radius: 18px; border: none;
-            }
-            QToolButton:hover { background: rgba(0,220,255,60); }
-        """)
         self._back.clicked.connect(self.back_clicked.emit)
         lay.addWidget(self._back)
         lay.addSpacing(12)
 
         title = QLabel("Настройки")
-        title.setStyleSheet(
-            "color: #fff; font-size: 24px; font-weight: 800; background: transparent;"
-        )
+        title.setObjectName("headerGreeting") # Используем уже готовый стиль из QSS
         lay.addWidget(title)
         lay.addStretch()
-
-    def paintEvent(self, event) -> None:
-        p = QPainter(self)
-        p.setRenderHint(QPainter.Antialiasing, True)
-        rect = QRectF(0, 0, self.width(), self.height())
-        clip = QPainterPath()
-        clip.addRoundedRect(rect, PANEL_RADIUS, PANEL_RADIUS)
-        p.setClipPath(clip)
-
-        grad = QLinearGradient(0, 0, self.width(), 0)
-        grad.setColorAt(0.0, QColor(10, 14, 22, 220))
-        grad.setColorAt(0.5, QColor(6, 16, 30, 220))
-        grad.setColorAt(1.0, QColor(10, 14, 22, 220))
-        p.setPen(Qt.NoPen)
-        p.setBrush(QBrush(grad))
-        p.drawRect(rect)
-
-        line_grad = QLinearGradient(0, 0, self.width(), 0)
-        line_grad.setColorAt(0.0, QColor(0, 220, 255, 0))
-        line_grad.setColorAt(0.3, QColor(0, 220, 255, 40))
-        line_grad.setColorAt(0.7, QColor(0, 220, 255, 40))
-        line_grad.setColorAt(1.0, QColor(0, 220, 255, 0))
-        p.setPen(QPen(QBrush(line_grad), 1.0))
-        p.drawLine(
-            16, int(rect.bottom() - 1), int(rect.right() - 16), int(rect.bottom() - 1)
-        )
-
-        p.end()
-        super().paintEvent(event)
 
 
 class _Section(QWidget):
@@ -413,6 +373,8 @@ class _Section(QWidget):
 
     def __init__(self, title: str, icon: str = "", parent=None):
         super().__init__(parent)
+        self.setObjectName("SettingsSection")
+        self.setAttribute(Qt.WA_StyledBackground, True)
         self._lay = QVBoxLayout(self)
         self._lay.setContentsMargins(16, 14, 16, 14)
         self._lay.setSpacing(4)
@@ -423,13 +385,11 @@ class _Section(QWidget):
 
         if icon:
             ic = QLabel(icon)
-            ic.setStyleSheet("font-size: 18px; background: transparent;")
+            ic.setObjectName("sectionIcon")
             hdr.addWidget(ic)
 
         lbl = QLabel(title)
-        lbl.setStyleSheet(
-            "color: #fff; font-size: 16px; font-weight: 700; background: transparent;"
-        )
+        lbl.setObjectName("sectionTitle")
         hdr.addWidget(lbl)
         hdr.addStretch()
 
@@ -438,16 +398,6 @@ class _Section(QWidget):
 
     def add_row(self, row: QWidget) -> None:
         self._lay.addWidget(row)
-
-    def paintEvent(self, event) -> None:
-        p = QPainter(self)
-        p.setRenderHint(QPainter.Antialiasing, True)
-        rect = QRectF(0, 0, self.width(), self.height())
-        p.setPen(Qt.NoPen)
-        p.setBrush(PANEL_DARK)
-        p.drawRoundedRect(rect, PANEL_RADIUS, PANEL_RADIUS)
-        p.end()
-        super().paintEvent(event)
 
 
 class _SettingRow(QWidget):
@@ -462,9 +412,7 @@ class _SettingRow(QWidget):
         self._lay.setSpacing(12)
 
         lbl = QLabel(label)
-        lbl.setStyleSheet(
-            "color: rgba(255,255,255,180); font-size: 14px; background: transparent;"
-        )
+        lbl.setObjectName("settingLabel")
         self._lay.addWidget(lbl)
         self._lay.addStretch()
 

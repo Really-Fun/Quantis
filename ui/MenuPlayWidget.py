@@ -6,7 +6,7 @@
 import os
 
 from PySide6.QtCore import QRectF, QSize, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap, QKeySequence, QShortcut
+from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap, QKeySequence, QShortcut, QPalette
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -35,10 +35,8 @@ class PlayMenu(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        
-        # Применяем стили ко всему виджету панели
-        with open("styles/play_menu.qss") as file:
-            self.setStyleSheet(file.read())
+        self.setObjectName("PlayMenu")
+        self.setAttribute(Qt.WA_StyledBackground, True)
 
         self.playlist_manager = PlaylistManager()
         self.player = Player()
@@ -211,16 +209,7 @@ class PlayMenu(QWidget):
 
         self.player.track_changed.connect(self._on_track_changed)
 
-    def paintEvent(self, event) -> None:
-        p = QPainter(self)
-        p.setRenderHint(QPainter.Antialiasing, True)
-        p.setPen(Qt.NoPen)
-        p.setBrush(_BG_COLOR)
-        p.drawRoundedRect(
-            QRectF(0, 0, self.width(), self.height()), _BG_RADIUS, _BG_RADIUS
-        )
-        p.end()
-        super().paintEvent(event)
+
 
     @asyncSlot(object)
     async def _on_track_changed(self, track) -> None:
@@ -326,7 +315,6 @@ class PlayMenu(QWidget):
         else:
             self.btn_repeat.setProperty("state", "active")
         
-        # Заставляем Qt пересчитать стили виджета с учетом нового свойства
         self.btn_repeat.style().unpolish(self.btn_repeat)
         self.btn_repeat.style().polish(self.btn_repeat)
 
@@ -367,10 +355,25 @@ class PlayMenu(QWidget):
         b.setFixedSize(size, size)
         b.setCursor(Qt.PointingHandCursor)
         
-        # Динамически задаем радиус скругления через инлайн-стиль, 
-        # так как он зависит от аргумента `size`, но базовый стиль берется из QSS.
         b.setStyleSheet(f"border-radius: {size // 2}px;")
         return b
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setPen(Qt.NoPen)
+        
+        # 1. Достаем цвет фона (Window) из текущей системной темы
+        theme_color = self.palette().color(QPalette.ColorRole.Window)
+        
+        # 2. Если вы хотите сохранить эффект полупрозрачности (как было в _BG_COLOR), 
+        # добавляем альфа-канал (от 0 до 255)
+        theme_color.setAlpha(200) 
+        
+        # 3. Рисуем
+        painter.setBrush(theme_color) 
+        rect = QRectF(self.rect())
+        painter.drawRoundedRect(rect, _BG_RADIUS, _BG_RADIUS)
 
 
 def _fmt(ms: int) -> str:
