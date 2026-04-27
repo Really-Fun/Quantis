@@ -30,12 +30,12 @@ class _ThemeManager(QObject):
         }
 
     def get_color(self, name: str) -> QColor:
-        """Get a QColor for the current theme by name."""
+        """Получаем цвет подходящий текущей теме"""
         theme_colors = self._colors.get(self.current_theme, self._colors["dark"])
         return theme_colors.get(name, QColor(0, 220, 255))
 
     def set_theme(self, theme_name: str, app=None):
-        """Set the active theme and apply stylesheet if app is provided."""
+        """Установить переданную тему."""
         if theme_name not in ["dark", "light"]:
             theme_name = "dark"
         self.current_theme = theme_name
@@ -49,7 +49,7 @@ class _ThemeManager(QObject):
         self.theme_changed.emit(theme_name)
 
     def apply_theme_to_app(self, app):
-        """Apply the current theme stylesheet to the given app or widget."""
+        """Применяем тему к приложению"""
         qss_path = f"styles/{self.current_theme}.qss"
         if os.path.exists(qss_path):
             with open(qss_path, "r", encoding="utf-8") as f:
