@@ -183,7 +183,15 @@ class SettingsPage(QWidget):
         sec = _Section("Тема", icon="〰")
         row_bg = _SettingRow("Тема")
         self._theme_combo = QComboBox()
-        bg_files = ["light", "dark"]
+        styles_dir = asset_path("styles")
+        if os.path.isdir(styles_dir):
+            bg_files = sorted(
+                f[:-4]
+                for f in os.listdir(styles_dir)
+                if f.lower().endswith((".qss"))
+            )
+        else:
+            bg_files = ["light", "dark", "cyberpunk"]
         self._theme_combo.addItems(bg_files)
         self._theme_combo.activated.connect(self._on_theme_selected)
         self._theme_combo.setObjectName("settingsCombo")

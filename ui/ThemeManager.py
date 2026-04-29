@@ -36,7 +36,7 @@ class _ThemeManager(QObject):
 
     def set_theme(self, theme_name: str, app=None):
         """Установить переданную тему."""
-        if theme_name not in ["dark", "light"]:
+        if theme_name not in ["dark", "light", "cyberpunk"]:
             theme_name = "dark"
         self.current_theme = theme_name
         self._settings.setValue("theme/current", theme_name)
