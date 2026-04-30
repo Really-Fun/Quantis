@@ -1,8 +1,11 @@
-"""Скачивание треков"""
+"""Асинхронное скачивание (треков, обложек)
+Наследуется абстрактный класс
+Yandex
+Youtube"""
 
 from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor
-from asyncio import get_running_loop
+from asyncio import get_running_loop, Semaphore
 from typing import Callable, TypeVar, Any
 from pathlib import Path
 import functools
@@ -14,7 +17,7 @@ from providers import PathProvider
 
 from yt_dlp import YoutubeDL
 import aiohttp
-
+import aiofiles
 
 F = TypeVar("F", bound=Callable[..., Any])
 logger = logging.getLogger(__name__)
@@ -108,6 +111,13 @@ class AsyncYoutubeDownloader(AsyncDownloaderInterface):
         }
         self.path_provider = PathProvider()
         self._executor = ThreadPoolExecutor(max_workers=10)
+        self._session = None
+        self._semaphore = Semaphore(value=8)
+
+    async def get_session(self) -> aiohttp.ClientSession:
+        if self._session is None:
+            self._session = aiohttp.ClientSession()
+        return self._session
 
     async def download_track(self, track: YoutubeTrack) -> None:
         """Асинхронная функция для скачивания трека с ютуба.
@@ -133,15 +143,20 @@ class AsyncYoutubeDownloader(AsyncDownloaderInterface):
         cover_url = f"https://img.youtube.com/vi/{track.track_id}/hqdefault.jpg"
         track.cover_path = self.path_provider.get_cover_path(track)
 
-        async with aiohttp.ClientSession() as session:
-            async with session.get(cover_url) as response:
-                if response.status != 200:
-                    return
-                data = await response.read()
+        session = await self.get_session()
 
-                Path(track.cover_path).parent.mkdir(parents=True, exist_ok=True)
-                with open(track.cover_path, "wb") as file:
-                    file.write(data)
+        async with self._semaphore:
+            try:
+                async with session.get(cover_url) as response:
+                    if response.status != 200:
+                        return
+                    data = await response.read()
+
+                    Path(track.cover_path).parent.mkdir(parents=True, exist_ok=True)
+                    async with aiofiles.open(track.cover_path, "wb") as file:
+                        await file.write(data)
+            except aiohttp.ClientError as e:
+                print(f"Ошибка при скачивании обложки для {track.track_id}: {e}")
 
     @staticmethod
     def sync_download(opts: dict, track_id: str) -> None:

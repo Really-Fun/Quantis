@@ -112,12 +112,12 @@ class SearchPage(QWidget):
         self.main_layout.setContentsMargins(8, 8, 8, 8)
         self.main_layout.setSpacing(12)
 
-        # ========== SEARCH BAR ==========
+        # Поиск сверху
         self._search_bar = SearchBar()
         self._search_bar.search_requested.connect(self._do_search)
         self.main_layout.addWidget(self._search_bar)
 
-        # ========== RESULTS PANEL ==========
+        # Результирующая панель
         self._results_panel = QFrame()
         self._results_panel.setObjectName("ResultsPanel")
 
@@ -131,7 +131,7 @@ class SearchPage(QWidget):
 
         # === ВОЗВРАЩАЕМ QScrollArea ===
         self._scroll_area = QScrollArea()
-        self._scroll_area.setObjectName("settingsScroll") # Используем уже готовый скроллбар
+        self._scroll_area.setObjectName("settingsScroll")
         self._scroll_area.setWidgetResizable(True)
         self._scroll_area.setFrameShape(QFrame.NoFrame)
         self._scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -153,21 +153,10 @@ class SearchPage(QWidget):
 
     @asyncSlot(str)
     async def _do_search(self, query: str) -> None:
-        self._status.setText("Поиск треков запущен...")
+        self._status.setText("Поиск...")
         self._status.show()
         self._scroll_area.hide()
 
-        tracks = await self._finder.get_tracks(query, value=5)
-
-        if not tracks:
-            self._status.setText("Ничего не найдено")
-            self._status.show()
-            return
-
-        self._status.hide()
-        self._scroll_area.show()
-
-        # 1. Очищаем старые результаты
         for i in reversed(range(self._tracks_layout.count())):
             item = self._tracks_layout.itemAt(i)
             if item.widget():
@@ -175,40 +164,50 @@ class SearchPage(QWidget):
             elif item.spacerItem():
                 self._tracks_layout.removeItem(item)
 
-        # 2. Добавляем новые карточки (Старый QWidget подход)
-        for index, track in enumerate(tracks):
-            card = TrackCard(track=track, index=index+1)
-            
-            # Подключаем сигналы твоего QWidget TrackCard
-            # Если у тебя сигналы лежат внутри .signals (как было в делегате), добавь .signals
-            card.play_requested.connect(self._play_track)
-            card.download_requested.connect(self._download_track)
-            
-            # Если в твоем TrackCard есть сигнал вызова контекстного меню
-            if hasattr(card, 'context_menu_requested'):
-                card.context_menu_requested.connect(self._on_context_menu)
+        index = 0
+        tasks = []
+        for finder in self._finder.get_all_finders():
+            tracks = await finder.get_tracks(query, 20)
+            for track in tracks:
+                card = TrackCard(track=track, index=index+1)
+                index += 1
+                
+                card.play_requested.connect(self._play_track)
+                card.download_requested.connect(self._download_track)
+                
+                if hasattr(card, 'context_menu_requested'):
+                    card.context_menu_requested.connect(self._on_context_menu)
 
-            self._tracks_layout.addWidget(card)
+                self._tracks_layout.addWidget(card)
+                tasks.append(asyncio.create_task(self._load_and_set_cover(card, track)))
 
         self._tracks_layout.addStretch()
+        
+        self._status.hide()
+        self._scroll_area.show()
+        await asyncio.gather(*tasks)
 
-        # 3. Синхронно подгружаем обложки
-        cards = self._tracks_container.findChildren(TrackCard)
-        for card, track in zip(cards, tracks):
-            path = self._path_provider.get_cover_path(track)
-            if not os.path.isfile(path):
-                try:
-                    await self._downloader.download_cover(track)
-                    # Обновляем конкретную карточку
-                    card.set_track(track, card._index if hasattr(card, '_index') else 0)
-                except Exception:
-                    pass
-            await asyncio.sleep(0)
+    async def _load_and_set_cover(self, card: TrackCard, track: YoutubeTrack) -> None:
+        """Вспомогательная корутина для фонового скачивания и обновления UI"""
+        path = self._path_provider.get_cover_path(track)
+        
+        if not os.path.isfile(path):
+            try:
+                print(1)
+                await self._downloader.download_cover(track)
+            except Exception as e:
+                print(f"Ошибка загрузки обложки: {e}")
+                return
+
+        try:
+            card_index = getattr(card, '_index', 0)
+            card.load_cover()
+        except RuntimeError:
+            pass
 
     @asyncSlot(object)
     async def _play_track(self, track) -> None:
         await self._player.play_track(track)
-        # Убрал обращение к track_model, так как мы вернулись к Layout
 
     @asyncSlot(object)
     async def _download_track(self, track) -> None:

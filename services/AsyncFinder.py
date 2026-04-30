@@ -143,3 +143,6 @@ class AsyncFinder(AsyncFinderInterface):
         if yandex_track is not None:
             return yandex_track
         return await self._youtube_finder.get_track(id)
+    
+    def get_all_finders(self):
+        return self._yandex_finder, self._youtube_finder
