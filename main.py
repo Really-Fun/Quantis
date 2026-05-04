@@ -1,6 +1,7 @@
 import sys
 import os
 import asyncio
+import logging
 
 from qasync import QEventLoop
 from PySide6.QtWidgets import QApplication
@@ -13,6 +14,20 @@ from adapter import CleanAdapter
 
 
 if __name__ == "__main__":
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
+        handlers=[
+            logging.StreamHandler(sys.stdout)
+            # logging.FileHandler("app.log") 
+        ]
+    )
+    logger = logging.getLogger(__name__)
+    logger.info("""
+    --------------
+    Quantis v0.1.1
+    --------------""")
+
     app = QApplication(sys.argv)
     loop = QEventLoop(app)
     asyncio.set_event_loop(loop)

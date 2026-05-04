@@ -174,6 +174,7 @@ class SearchPage(QWidget):
                 
                 card.play_requested.connect(self._play_track)
                 card.download_requested.connect(self._download_track)
+                card.add_to_playlist_requested.connect(self._add_track_to_playlist)
                 
                 if hasattr(card, 'context_menu_requested'):
                     card.context_menu_requested.connect(self._on_context_menu)
