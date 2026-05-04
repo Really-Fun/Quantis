@@ -34,9 +34,9 @@ class UpgradeCycle:
         Returns:
             Optional[Any]: следующее значение
         """
-        temp = self.values[self._index]
+        # temp = self.values[self._index]
         self._index = (self._index + 1) % len(self.values)
-        return temp
+        return self.values[self._index]
 
     def __len__(self) -> int:
         """Возвращаем длину цикла

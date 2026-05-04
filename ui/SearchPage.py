@@ -181,10 +181,10 @@ class SearchPage(QWidget):
                 self._tracks_layout.addWidget(card)
                 tasks.append(asyncio.create_task(self._load_and_set_cover(card, track)))
 
-        self._tracks_layout.addStretch()
+            self._tracks_layout.addStretch()
         
-        self._status.hide()
-        self._scroll_area.show()
+            self._status.hide()
+            self._scroll_area.show()
         await asyncio.gather(*tasks)
 
     async def _load_and_set_cover(self, card: TrackCard, track: YoutubeTrack) -> None:
@@ -193,7 +193,6 @@ class SearchPage(QWidget):
         
         if not os.path.isfile(path):
             try:
-                print(1)
                 await self._downloader.download_cover(track)
             except Exception as e:
                 print(f"Ошибка загрузки обложки: {e}")
