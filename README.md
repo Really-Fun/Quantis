@@ -9,7 +9,7 @@
   [![Status](https://img.shields.io/badge/status-Active-success?style=for-the-badge)](https://github.com/Really-Fun/Quantis)
   [![Release](https://img.shields.io/github/v/release/Really-Fun/Quantis?style=for-the-badge)](https://github.com/Really-Fun/Quantis/releases)
 
-[![Platform](https://img.shields.io/badge/platform-Anroid-brightred?style=for-the-badge)](https://github.com/Really-Fun/Quantis/releases)
+[![Platform](https://img.shields.io/badge/soon-Anroid-brightred?style=for-the-badge)](https://github.com/Really-Fun/Quantis/releases)
 </div>
 
 <br>
