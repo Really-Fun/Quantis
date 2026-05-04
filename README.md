@@ -8,6 +8,8 @@
   [![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-brightgreen?style=for-the-badge)](https://github.com/Really-Fun/Quantis)
   [![Status](https://img.shields.io/badge/status-Active-success?style=for-the-badge)](https://github.com/Really-Fun/Quantis)
   [![Release](https://img.shields.io/github/v/release/Really-Fun/Quantis?style=for-the-badge)](https://github.com/Really-Fun/Quantis/releases)
+
+[![Platform](https://img.shields.io/badge/platform-Anroid-brightred?style=for-the-badge)]
 </div>
 
 <br>
