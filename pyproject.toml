@@ -45,6 +45,9 @@ dev = [
 vlc = [
     "python-vlc (>=3.0.21203,<4.0.0)",
 ]
+dj = [
+    "edge-tts (>=7.0.0,<8.0.0)",
+]
 
 [tool.pytest.ini_options]
 markers = [

@@ -9,6 +9,9 @@
     set VLC_HOME=C:\\Program Files\\VideoLAN\\VLC
     poetry run python scripts/build_exe.py vlc
 
+Linux с MPRIS (кладёт mpris_server в бандл, Windows-сборка его вырезает):
+    poetry run python scripts/build_exe.py qt --mpris
+
 Или напрямую:
     set QUANTIS_MEDIA_BACKEND=qt
     poetry run pyinstaller main.spec --noconfirm
@@ -39,6 +42,12 @@ PACKAGING = ROOT / "packaging"
 BACKEND = os.environ.get("QUANTIS_MEDIA_BACKEND", "qt").strip().lower()
 if BACKEND not in ("qt", "vlc"):
     BACKEND = "qt"
+
+BUNDLE_MPRIS = os.environ.get("QUANTIS_BUNDLE_MPRIS", "").strip().lower() in (
+    "1",
+    "true",
+    "yes",
+)
 
 APP_NAME = "Quantis" if BACKEND == "qt" else "Quantis-VLC"
 
@@ -162,8 +171,36 @@ excludes = [
     "IPython",
     "notebook",
     "pytest",
-    "mpris_server",
 ]
+
+if BUNDLE_MPRIS:
+    print("[Quantis] bundling MPRIS (mpris_server)")
+    hiddenimports += [
+        "quantis.adapter.mpris_adapter",
+        "mpris_server",
+        "mpris_server.server",
+        "mpris_server.adapters",
+        "mpris_server.events",
+        "mpris_server.base",
+        "mpris_server.mpris",
+        "mpris_server.mpris.metadata",
+        "pydbus",
+        "pydbus.generic",
+        "gi",
+        "gi.repository.GLib",
+        "gi.repository.Gio",
+        "gi.repository.GObject",
+    ]
+    for pkg in ("mpris_server", "pydbus"):
+        try:
+            pkg_datas, pkg_binaries, pkg_hidden = collect_all(pkg)
+            datas += pkg_datas
+            binaries += pkg_binaries
+            hiddenimports += pkg_hidden
+        except Exception:
+            pass
+else:
+    excludes.append("mpris_server")
 
 if BACKEND == "vlc":
     hiddenimports += ["vlc", "quantis.player.vlc_engine"]

@@ -193,6 +193,42 @@ def test_http_preview_still_finishes() -> None:
     assert finished == [1]
 
 
+def test_end_of_media_at_start_recovers_instead_of_skipping() -> None:
+    engine = StubEngine()
+    player = Player(engine=engine)
+    player.current_track = YandexTrack(
+        track_id="1", title="T", author="A", duration_ms=180_000
+    )
+    errors: list[str] = []
+    finished: list[int] = []
+    player.on_stream_error(errors.append)
+    player.on_track_finished(lambda: finished.append(1))
+    _start(player, engine, "https://cdn.example/full.mp3")
+    engine._position = 400
+
+    for callback in list(engine._ended_cbs):
+        callback()
+
+    assert errors == ["ended-early"]
+    assert finished == []
+
+
+def test_end_of_media_before_playing_is_ignored() -> None:
+    engine = StubEngine()
+    player = Player(engine=engine)
+    errors: list[str] = []
+    finished: list[int] = []
+    player.on_stream_error(errors.append)
+    player.on_track_finished(lambda: finished.append(1))
+    player.play("https://cdn.example/full.mp3")
+
+    for callback in list(engine._ended_cbs):
+        callback()
+
+    assert errors == []
+    assert finished == []
+
+
 def test_end_of_media_with_reset_position_finishes() -> None:
     engine = StubEngine()
     player = Player(engine=engine)

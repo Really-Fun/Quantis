@@ -71,7 +71,8 @@ class VlcMediaEngine:
         self._player = self._instance.media_player_new()
         self._bridge = _VlcBridge()
         self._volume = 80
-        self._player.audio_set_volume(self._volume)
+        self._duck_gain = 1.0
+        self._apply_output_volume()
 
         self._playing_cbs: list[Callable[[], None]] = []
         self._paused_cbs: list[Callable[[], None]] = []
@@ -145,7 +146,7 @@ class VlcMediaEngine:
             path = str(Path(source).resolve())
         media = self._instance.media_new(path)
         self._player.set_media(media)
-        self._player.audio_set_volume(self._volume)
+        self._apply_output_volume()
         if self._player.play() == -1:
             self._bridge.errored.emit(f"VLC не смог открыть: {source}")
 
@@ -200,14 +201,23 @@ class VlcMediaEngine:
         return max(0, int(value)) if value is not None and value >= 0 else 0
 
     def get_volume(self) -> int:
-        vol = self._player.audio_get_volume()
-        if vol is None or vol < 0:
-            return self._volume
-        return max(0, min(100, int(vol)))
+        return self._volume
 
     def set_volume(self, value: int) -> None:
         self._volume = max(0, min(100, int(value)))
-        self._player.audio_set_volume(self._volume)
+        self._apply_output_volume()
+
+    def get_duck_gain(self) -> float:
+        return self._duck_gain
+
+    def set_duck_gain(self, gain: float) -> None:
+        self._duck_gain = max(0.0, min(1.0, float(gain)))
+        self._apply_output_volume()
+
+    def _apply_output_volume(self) -> None:
+        self._player.audio_set_volume(
+            max(0, min(100, int(round(self._volume * self._duck_gain))))
+        )
 
     def on_playing(self, callback: Callable[[], None]) -> None:
         self._playing_cbs.append(callback)

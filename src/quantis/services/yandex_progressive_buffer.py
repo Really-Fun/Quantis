@@ -42,8 +42,10 @@ _URL_TTL_SEC = 45.0
 _SEGMENT_BYTES = 1024 * 1024
 _CHUNK_BYTES = 32 * 1024
 _MAX_SEGMENT_RETRIES = 5
-# ID3 + несколько кадров MP3. Раньше старт ждал целый мегабайтный сегмент.
-_MIN_START_BYTES = 96 * 1024
+# ~6с CBR 320kbps. 96КБ хватало на «пчик» и ложный EndOfMedia по нулевому хвосту.
+_MIN_START_BYTES = 256 * 1024
+_RECOVERY_EXTRA_BYTES = 256 * 1024
+_RECOVERY_WAIT_SEC = 8.0
 _AHEAD_BYTES = 2 * 1024 * 1024
 _ECO_AHEAD_BYTES = 4 * 1024 * 1024
 _START_TIMEOUT_SEC = 25.0
@@ -210,6 +212,29 @@ class ProgressiveStreamBuffer:
         ahead = _ECO_AHEAD_BYTES if self._eco else _AHEAD_BYTES
         if self._contiguous_end(offset) - offset < ahead // 2:
             self._wake.set()
+
+    async def wait_for_more_prefix(
+        self,
+        track: Track,
+        *,
+        extra_bytes: int = _RECOVERY_EXTRA_BYTES,
+        timeout: float = _RECOVERY_WAIT_SEC,
+    ) -> bool:
+        """Ждёт ещё префикс после раннего EOF, не переигрывая те же 2 секунды."""
+        if self._track_key != _track_key(track):
+            return True
+        target = self._prefix_bytes() + max(0, int(extra_bytes))
+        if self._total:
+            target = min(target, self._total)
+        self._wake.set()
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if self._failed:
+                return False
+            if self._prefix_bytes() >= target:
+                return True
+            await asyncio.sleep(_SEEK_POLL_SEC)
+        return self._prefix_bytes() >= target
 
     async def seek_to_ms(self, track: Track, position_ms: int) -> bool:
         """Уводит голову загрузки к точке перемотки и ждёт первые байты.

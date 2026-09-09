@@ -10,14 +10,17 @@ from PySide6.QtGui import (
     QColor,
     QFont,
     QIcon,
+    QImage,
     QImageReader,
     QLinearGradient,
     QPainter,
+    QPainterPath,
     QPixmap,
 )
 
 from quantis.models.track import Track
 from quantis.providers.path_provider import PathProvider
+from quantis.services.cover_validate import cover_file_ok
 from quantis.ui.design_tokens import BADGE_SOUNDCLOUD, BADGE_YANDEX, BADGE_YOUTUBE
 
 _GRAD_YT = (QColor(BADGE_YOUTUBE), QColor(140, 30, 30))
@@ -94,8 +97,39 @@ def _cache_put(key: str, value: QPixmap | None) -> QPixmap | None:
     return value
 
 
+def _crop_letterbox(image: QImage) -> QImage:
+    """YouTube hq/sd default — 4:3 рамка с 16:9 картинкой и чёрными полями."""
+    width, height = image.width(), image.height()
+    if width < 16 or height < 16:
+        return image
+    ratio = width / height
+    if not 1.28 <= ratio <= 1.40:
+        return image
+    bar = max(1, round(height * 45 / 360))
+    inner = height - 2 * bar
+    if inner <= height * 0.5:
+        return image
+    return image.copy(0, bar, width, inner)
+
+
+def _square_pixmap(pixmap: QPixmap, size: int) -> QPixmap:
+    if pixmap.width() == size and pixmap.height() == size:
+        return pixmap
+    pixmap = pixmap.scaled(
+        size,
+        size,
+        Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+        Qt.TransformationMode.SmoothTransformation,
+    )
+    if pixmap.width() > size or pixmap.height() > size:
+        x = max(0, (pixmap.width() - size) // 2)
+        y = max(0, (pixmap.height() - size) // 2)
+        pixmap = pixmap.copy(x, y, size, size)
+    return pixmap
+
+
 def load_cover_pixmap(path: str | Path | None, size: int) -> QPixmap | None:
-    """Декодирует обложку сразу в нужный размер (без полного jpg в ОЗУ)."""
+    """Декодирует обложку целиком, затем режет в квадрат по центру."""
     if not path:
         return None
     file_path = Path(path)
@@ -106,6 +140,8 @@ def load_cover_pixmap(path: str | Path | None, size: int) -> QPixmap | None:
 
     if not file_path.is_file():
         return _cache_put(cache_key, None)
+    if file_path.suffix.lower() != ".svg" and not cover_file_ok(file_path):
+        return _cache_put(cache_key, None)
 
     if file_path.suffix.lower() == ".svg":
         pixmap = QIcon(str(file_path)).pixmap(QSize(size, size))
@@ -113,32 +149,14 @@ def load_cover_pixmap(path: str | Path | None, size: int) -> QPixmap | None:
 
     reader = QImageReader(str(file_path))
     reader.setAutoTransform(True)
-    original = reader.size()
-    if original.isValid() and (original.width() > size or original.height() > size):
-        # KeepAspectRatioByExpanding ≈ scale so shorter side == size
-        w, h = original.width(), original.height()
-        if w < h:
-            target = QSize(size, max(1, int(h * size / w)))
-        else:
-            target = QSize(max(1, int(w * size / h)), size)
-        reader.setScaledSize(target)
-
+    # setScaledSize на JPEG в Qt часто работает как clip с (0,0) — в UI
+    # остаётся только верхняя полоса обложки. Файлы обложек маленькие.
     image = reader.read()
     if image.isNull():
         return _cache_put(cache_key, None)
 
-    pixmap = QPixmap.fromImage(image)
-    if pixmap.width() != size or pixmap.height() != size:
-        pixmap = pixmap.scaled(
-            size,
-            size,
-            Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-            Qt.TransformationMode.FastTransformation,
-        )
-        if pixmap.width() > size or pixmap.height() > size:
-            x = max(0, (pixmap.width() - size) // 2)
-            y = max(0, (pixmap.height() - size) // 2)
-            pixmap = pixmap.copy(x, y, size, size)
+    image = _crop_letterbox(image)
+    pixmap = _square_pixmap(QPixmap.fromImage(image), size)
     return _cache_put(cache_key, pixmap)
 
 
@@ -186,7 +204,9 @@ def paint_rounded_cover(
     painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
 
     if pixmap is not None and not pixmap.isNull():
-        painter.setClipRect(rect)
+        path = QPainterPath()
+        path.addRoundedRect(rect, radius, radius)
+        painter.setClipPath(path)
         painter.drawPixmap(rect, pixmap)
         painter.setClipping(False)
     else:

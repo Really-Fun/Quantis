@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch
+from pathlib import Path
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -10,6 +11,7 @@ from quantis.models import YoutubeTrack
 from quantis.services.async_downloader import (
     _AUDIO_FORMAT,
     _VIDEO_FORMAT,
+    AsyncDownloader,
     AsyncYoutubeDownloader,
 )
 
@@ -66,3 +68,32 @@ async def test_download_track_fetches_video_cache_when_wallpaper_on() -> None:
 
     audio_mock.assert_awaited_once()
     video_mock.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_ensure_cover_redownloads_truncated_file(tmp_path: Path) -> None:
+    dest = tmp_path / "vid.jpg"
+    dest.write_bytes(b"\xff\xd8\xff\xe0" + b"\x00" * 5000)
+    downloader = AsyncDownloader()
+    track = YoutubeTrack(track_id="vid", title="T", author="A")
+    good = b"\xff\xd8\xff\xe0" + b"\x22" * 5000 + b"\xff\xd9"
+
+    async def fake_download(_track) -> None:
+        dest.write_bytes(good)
+
+    with (
+        patch.object(
+            downloader._youtube_downloader.path_provider,
+            "get_cover_path",
+            return_value=str(dest),
+        ),
+        patch.object(
+            downloader._yandex_downloader.path_provider,
+            "get_cover_path",
+            return_value=str(dest),
+        ),
+        patch.object(downloader, "download_cover", new=AsyncMock(side_effect=fake_download)),
+    ):
+        assert await downloader.ensure_cover(track) is True
+
+    assert dest.read_bytes() == good

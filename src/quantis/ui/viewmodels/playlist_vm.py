@@ -25,7 +25,7 @@ class PlaylistViewModel(BaseViewModel):
 
     playlist_changed = Signal()
     covers_ready = Signal()
-    PLAYLIST_BATCH_SIZE = 5
+    PLAYLIST_BATCH_SIZE = 80
 
     def __init__(
         self,
@@ -70,7 +70,7 @@ class PlaylistViewModel(BaseViewModel):
                 self._playback.music.downloader,
                 self._bridge,
                 on_done=lambda: self.covers_ready.emit(),
-                limit=60,
+                limit=200,
             )
 
     def clear(self) -> None:

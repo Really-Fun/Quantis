@@ -150,7 +150,8 @@ class Player:
 
     def _on_engine_playing(self) -> None:
         previous = self._was_playing
-        self._loading_source = False
+        # Не снимаем _loading_source здесь: PlayingState приходит до реального
+        # прогресса, а следом часто летит ложный EndReached.
         self.on_pause = False
         self._playback_active = True
         self._was_playing = True
@@ -190,8 +191,8 @@ class Player:
             return
         if self._finish_emitted:
             return
-        # EndReached предыдущего источника при set_media — ещё нет прогресса.
-        if self._loading_source and self._last_known_ms < 1000:
+        # EndReached предыдущего источника при set_media — Playing ещё не было.
+        if self._loading_source and not self._was_playing and self._last_known_ms < 1000:
             return
         duration = self.duration
         position = self.time
@@ -200,17 +201,24 @@ class Player:
         is_http = str(self.current_source).startswith(("http://", "https://"))
         # ~30с preview на прямом HTTP. Локальный growing MP3 на этом окне
         # восстанавливаем, а не считаем трек законченным.
-        truncated = (
-            is_http
-            and duration > 60_000
-            and 15_000 <= position <= 45_000
-        )
-        # VLC после EndReached часто отдаёт time=0 — это конец, не обрыв.
-        reset_after_end = position < 1000
+        truncated = is_http and duration > 60_000 and 15_000 <= position <= 45_000
         near_end = duration > 0 and position >= duration - 2000
+        # Раньше time≈0 после EndReached считали концом. VLC/Qt так сбрасывают
+        # и в начале: трек «пчик» — и плейлист срывается дальше.
+        little_progress = position < 3000 and (
+            duration <= 0 or position < max(3000, int(duration * 0.15))
+        )
+        if little_progress and not near_end and not truncated:
+            logger.warning(
+                "Поток оборвался в начале (%sms из %sms) — восстановление",
+                position,
+                duration,
+            )
+            for callback in self._stream_error_callbacks:
+                callback("ended-early")
+            return
         early = (
             duration > 1000
-            and not reset_after_end
             and not near_end
             and not truncated
             and position < duration - 1000
@@ -275,6 +283,17 @@ class Player:
     @volume.setter
     def volume(self, value: int) -> None:
         self._engine.set_volume(value)
+
+    def duck_gain(self) -> float:
+        getter = getattr(self._engine, "get_duck_gain", None)
+        if callable(getter):
+            return float(getter())
+        return 1.0
+
+    def set_duck_gain(self, gain: float) -> None:
+        setter = getattr(self._engine, "set_duck_gain", None)
+        if callable(setter):
+            setter(gain)
 
     @property
     def time(self) -> int:

@@ -27,6 +27,8 @@ class QtMediaEngine:
         self._error_cbs: list[Callable[[str], None]] = []
 
         self._pending_seek_ms = 0
+        self._volume = int(round(self._audio.volume() * 100))
+        self._duck_gain = 1.0
         self._player.mediaStatusChanged.connect(self._on_media_status)
         self._player.playbackStateChanged.connect(self._on_playback_state)
         self._player.errorOccurred.connect(self._on_error)
@@ -64,9 +66,7 @@ class QtMediaEngine:
         self._player.stop()
 
     def is_playing(self) -> bool:
-        return (
-            self._player.playbackState() == QMediaPlayer.PlaybackState.PlayingState
-        )
+        return self._player.playbackState() == QMediaPlayer.PlaybackState.PlayingState
 
     def get_position_ms(self) -> int:
         return max(0, int(self._player.position()))
@@ -106,10 +106,21 @@ class QtMediaEngine:
         return max(0, int(self._player.duration()))
 
     def get_volume(self) -> int:
-        return int(self._audio.volume() * 100)
+        return self._volume
 
     def set_volume(self, value: int) -> None:
-        self._audio.setVolume(max(0, min(100, int(value))) / 100.0)
+        self._volume = max(0, min(100, int(value)))
+        self._apply_output_volume()
+
+    def get_duck_gain(self) -> float:
+        return self._duck_gain
+
+    def set_duck_gain(self, gain: float) -> None:
+        self._duck_gain = max(0.0, min(1.0, float(gain)))
+        self._apply_output_volume()
+
+    def _apply_output_volume(self) -> None:
+        self._audio.setVolume((self._volume / 100.0) * self._duck_gain)
 
     def on_playing(self, callback: Callable[[], None]) -> None:
         self._playing_cbs.append(callback)

@@ -125,6 +125,9 @@ class AsyncStreamer(AsyncStreamerInterface):
         except Exception:
             logger.debug("Prefetch stream failed for %s", track.track_id, exc_info=True)
 
+    async def wait_for_more_prefix(self, track: Track) -> bool:
+        return await self._stream_buffer.wait_for_more_prefix(track)
+
     async def seek_to_ms(
         self, track: Track, position_ms: int, *, source: str | None = None
     ) -> bool:

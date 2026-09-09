@@ -142,6 +142,8 @@ class PlaybackController:
                 return
 
             resume_at = position_ms
+            if resume_at < 8000:
+                await self._wait_for_more_prefix(track)
             if resume_at > 0:
                 await self._prepare_seek(track, resume_at, new_source)
 
@@ -169,6 +171,18 @@ class PlaybackController:
         self._stall_track_key = None
         self._stall_recoveries = 0
         await self.play_next()
+
+    async def _wait_for_more_prefix(self, track: Track) -> None:
+        """После раннего EOF ждём ещё кусок буфера, а не крутим те же 2 секунды."""
+        wait = getattr(self.music.streamer, "wait_for_more_prefix", None)
+        if wait is None:
+            return
+        try:
+            result = wait(track)
+            if inspect.isawaitable(result):
+                await result
+        except Exception:
+            logger.debug("Ожидание докачки буфера не удалось", exc_info=True)
 
     async def _prepare_seek(
         self, track: Track, position_ms: int, source: str | None

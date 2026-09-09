@@ -39,6 +39,7 @@ async def test_recover_playback_refreshes_source_and_seeks() -> None:
 
     music.streamer.invalidate.assert_called_once_with(track)
     music.streamer.open_playback.assert_awaited_once_with(track)
+    music.streamer.wait_for_more_prefix.assert_not_called()
     bridge.invoke_main.assert_called_once()
     bridge.invoke_main.call_args[0][0]()
     player.play.assert_called_once_with(
@@ -214,6 +215,41 @@ async def test_unbuffered_seek_recovers_instead_of_stalling() -> None:
 
     playback.request_playback_recovery.assert_called_once_with(42_000, reason="seek")
     assert playback.is_seeking is False
+
+
+@pytest.mark.asyncio
+async def test_early_recovery_waits_for_more_buffer() -> None:
+    player = MagicMock()
+    player.time = 800
+    player.current_source = "/tmp/quantis_stream/yandex_1.mp3"
+
+    music = MagicMock()
+    music.streamer.open_playback = AsyncMock(
+        return_value="/tmp/quantis_stream/yandex_1.mp3"
+    )
+    music.streamer.wait_for_more_prefix = AsyncMock(return_value=True)
+    music.streamer.seek_to_ms = AsyncMock(return_value=True)
+    bridge = MagicMock()
+    playback = PlaybackController(
+        player=player,
+        playlist_manager=PlaylistManager(),
+        music_service=music,
+        event_bus=EventBus(),
+        async_bridge=bridge,
+    )
+    track = YandexTrack(track_id="1", title="Song", author="Artist")
+    playback._current_track = track
+
+    await playback.recover_playback(800, reason="ended-early")
+
+    music.streamer.wait_for_more_prefix.assert_awaited_once_with(track)
+    music.streamer.seek_to_ms.assert_awaited_once()
+    bridge.invoke_main.assert_called_once()
+    bridge.invoke_main.call_args[0][0]()
+    player.play.assert_called_once_with(
+        "/tmp/quantis_stream/yandex_1.mp3",
+        start_ms=800,
+    )
 
 
 @pytest.mark.asyncio

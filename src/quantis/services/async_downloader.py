@@ -21,6 +21,7 @@ from quantis.models.track import (
     YoutubeTrack,
 )
 from quantis.providers import PathProvider
+from quantis.services.cover_validate import cover_bytes_ok, cover_file_ok
 from quantis.services.wallpaper_policy import (
     wallpaper_cache_format,
     wallpaper_duration_filter,
@@ -43,10 +44,25 @@ def _is_http_url(url: str) -> bool:
 
 
 async def _read_http_body(response: aiohttp.ClientResponse, limit: int) -> bytes | None:
-    data = await response.content.read(limit + 1)
-    if len(data) > limit:
+    expected = response.content_length
+    data = await response.read()
+    if not data or len(data) > limit:
+        return None
+    if expected is not None and len(data) < expected:
         return None
     return data
+
+
+async def _write_cover_file(path: str, data: bytes) -> bool:
+    if not cover_bytes_ok(data):
+        return False
+    dest = Path(path)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_name(dest.name + ".part")
+    async with aiofiles.open(tmp, "wb") as file:
+        await file.write(data)
+    tmp.replace(dest)
+    return True
 
 
 class AsyncDownloaderInterface(ABC):
@@ -121,9 +137,10 @@ class AsyncYandexDownloader(AsyncDownloaderInterface):
         try:
             PathProvider.ensure_storage_dirs()
             track_info = await self.client.tracks(int(track.track_id))
-            await track_info[0].downloadCoverAsync(
-                self.path_provider.get_cover_path(track), "200x200"
-            )
+            dest = self.path_provider.get_cover_path(track)
+            await track_info[0].downloadCoverAsync(dest, "400x400")
+            if not cover_file_ok(dest):
+                logger.warning("Обложка Яндекса обрезана или пустая: %s", track)
         except Exception:
             logger.exception("Не удалось скачать обложку с Яндекс.Музыки: %s", track)
 
@@ -256,23 +273,22 @@ class AsyncYoutubeDownloader(AsyncDownloaderInterface):
         Args:
             track (YoutubeTrack): Трек с Ютуба
         """
-        cover_url = f"https://img.youtube.com/vi/{track.track_id}/hqdefault.jpg"
         cover_path = self.path_provider.get_cover_path(track)
-
         session = await self.get_session()
+        thumbs = ("maxresdefault.jpg", "sddefault.jpg", "hqdefault.jpg")
 
         async with self._semaphore:
             try:
-                async with session.get(cover_url) as response:
-                    if response.status != 200:
-                        return
-                    data = await _read_http_body(response, _MAX_COVER_BYTES)
-                    if data is None:
-                        return
-
-                    Path(cover_path).parent.mkdir(parents=True, exist_ok=True)
-                    async with aiofiles.open(cover_path, "wb") as file:
-                        await file.write(data)
+                for name in thumbs:
+                    cover_url = f"https://img.youtube.com/vi/{track.track_id}/{name}"
+                    async with session.get(cover_url) as response:
+                        if response.status != 200:
+                            continue
+                        data = await _read_http_body(response, _MAX_COVER_BYTES)
+                        if data is None:
+                            continue
+                        if await _write_cover_file(cover_path, data):
+                            return
             except aiohttp.ClientError:
                 logger.exception("Ошибка при скачивании обложки для %s", track.track_id)
 
@@ -379,9 +395,7 @@ class AsyncSoundCloudDownloader(AsyncDownloaderInterface):
                     data = await _read_http_body(response, _MAX_COVER_BYTES)
                     if data is None:
                         return
-                    Path(cover_path).parent.mkdir(parents=True, exist_ok=True)
-                    async with aiofiles.open(cover_path, "wb") as file:
-                        await file.write(data)
+                    await _write_cover_file(cover_path, data)
             except aiohttp.ClientError:
                 logger.exception(
                     "Ошибка при скачивании обложки SoundCloud для %s",
@@ -448,13 +462,18 @@ class AsyncDownloader(AsyncDownloaderInterface):
                 await self._soundcloud_downloader.download_cover(track)
 
     async def ensure_cover(self, track: Track) -> bool:
-        """Скачивает обложку, если файла ещё нет. True если файл есть/появился."""
+        """Скачивает обложку, если файла нет или он обрезан. True если файл целый."""
         PathProvider.ensure_storage_dirs()
         cover_path = Path(self._yandex_downloader.path_provider.get_cover_path(track))
-        if cover_path.is_file() and cover_path.stat().st_size > 0:
+        if cover_file_ok(cover_path):
             return True
+        if cover_path.is_file():
+            try:
+                cover_path.unlink()
+            except OSError:
+                logger.debug("Не удалось удалить битую обложку %s", cover_path)
         await self.download_cover(track)
-        return cover_path.is_file() and cover_path.stat().st_size > 0
+        return cover_file_ok(cover_path)
 
     async def ensure_covers(self, tracks: list[Track], *, limit: int = 40) -> int:
         """Подгружает обложки для списка треков. Возвращает число скачанных."""
@@ -466,7 +485,7 @@ class AsyncDownloader(AsyncDownloaderInterface):
                 continue
             seen.add(key)
             path = Path(self._yandex_downloader.path_provider.get_cover_path(track))
-            if path.is_file() and path.stat().st_size > 0:
+            if cover_file_ok(path):
                 continue
             ok = await self.ensure_cover(track)
             if ok:

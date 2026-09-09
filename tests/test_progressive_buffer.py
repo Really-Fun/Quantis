@@ -139,6 +139,18 @@ def test_range_map_tracks_gaps() -> None:
     assert buffer._next_offset(0) is None
 
 
+@pytest.mark.asyncio
+async def test_wait_for_more_prefix_reaches_target(stream) -> None:
+    buffer, track, url = stream
+    await buffer.open(track, url=url)
+    start = buffer._prefix_bytes()
+
+    ok = await buffer.wait_for_more_prefix(track, extra_bytes=64 * 1024, timeout=4.0)
+
+    assert ok is True
+    assert buffer._prefix_bytes() >= start + 64 * 1024
+
+
 def test_report_position_moves_playhead_and_wakes() -> None:
     buffer = ProgressiveStreamBuffer(AsyncMock())
     buffer._track_key = "yandex:1"

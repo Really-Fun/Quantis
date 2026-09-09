@@ -9,11 +9,13 @@ poetry version patch    # 0.2.1 → 0.2.2
 ```
 
 Собираются два варианта приложения — они отличаются только медиадвижком.
+На Linux есть третий: тот же Qt/VLC, но с MPRIS в бандле (`--mpris`).
 
 | Сборка | Движок | Артефакт |
 |--------|--------|----------|
 | **qt** | Qt Multimedia (FFmpeg) | `dist\Quantis\Quantis.exe` |
 | **vlc** | libVLC (`python-vlc`) | `dist\Quantis-VLC\Quantis-VLC.exe` |
+| **qt --mpris** | Qt + `mpris_server` | `dist/Quantis/Quantis` |
 
 ## Windows
 
@@ -48,6 +50,19 @@ poetry run python scripts/build_exe.py vlc --vlc-home "C:\Program Files\VideoLAN
 
 В сборку **Quantis-VLC** дополнительно копируются `libvlc.dll` и `plugins/`
 из `VLC_HOME`.
+
+## Linux (MPRIS)
+
+Обычная сборка `qt` / `vlc` **вырезает** `mpris_server` (он нужен только
+на Linux и тянет PyGObject). Вариант с медиа-клавишами:
+
+```bash
+# нужен системный PyGObject, на Arch: pacman -S python-gobject
+poetry install --with dev
+poetry run python scripts/build_exe.py qt --mpris
+```
+
+Результат тот же onedir: `dist/Quantis/Quantis`.
 
 ## Переключение движка без пересборки
 
