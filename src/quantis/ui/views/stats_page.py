@@ -99,8 +99,8 @@ class StatsPage(QWidget):
         content = QWidget()
         content.setObjectName("homeScrollContent")
         root = QVBoxLayout(content)
-        root.setContentsMargins(24, 18, 24, 36)
-        root.setSpacing(22)
+        root.setContentsMargins(28, 20, 28, 40)
+        root.setSpacing(24)
 
         hero = QWidget()
         hero.setObjectName("homeHero")

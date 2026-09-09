@@ -151,7 +151,8 @@ QFrame#featuredPanel {
     border: none;
 }
 
-QPushButton#featuredPlayBtn {
+QPushButton#featuredPlayBtn,
+QToolButton#featuredPlayBtn {
     background: #e63b2e;
     border: none;
     border-radius: 0;
@@ -163,8 +164,10 @@ QPushButton#featuredPlayBtn {
     padding: 12px 22px;
     text-transform: uppercase;
 }
-QPushButton#featuredPlayBtn:hover { background: #f04a3d; }
-QPushButton#featuredPlayBtn:disabled {
+QPushButton#featuredPlayBtn:hover,
+QToolButton#featuredPlayBtn:hover { background: #f04a3d; }
+QPushButton#featuredPlayBtn:disabled,
+QToolButton#featuredPlayBtn:disabled {
     background: rgba(230, 59, 46, 0.25);
     color: rgba(255, 255, 255, 0.35);
 }

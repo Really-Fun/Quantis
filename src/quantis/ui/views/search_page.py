@@ -44,7 +44,7 @@ class SearchPage(QWidget):
         self.setObjectName("searchPage")
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(16, 8, 16, 12)
+        layout.setContentsMargins(24, 16, 24, 16)
         layout.setSpacing(0)
 
         panel = GlassPanel()

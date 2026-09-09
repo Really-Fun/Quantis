@@ -3,7 +3,13 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor, QPainter, QPainterPath, QPen
+from PySide6.QtGui import (
+    QColor,
+    QLinearGradient,
+    QPainter,
+    QPainterPath,
+    QPen,
+)
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -11,13 +17,48 @@ from PySide6.QtWidgets import (
     QSizePolicy,
     QToolButton,
     QVBoxLayout,
+    QWidget,
 )
 
 from quantis.ui.views.widgets.home_pill_badge import HomePillBadge
 
 
+class _WaveMark(QWidget):
+    """Декоративный знак волны слева на карточке."""
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.setFixedSize(56, 56)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, False)
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        rect = self.rect().adjusted(2, 2, -2, -2)
+        path = QPainterPath()
+        path.addEllipse(rect)
+
+        fill = QLinearGradient(rect.topLeft(), rect.bottomRight())
+        fill.setColorAt(0.0, QColor(46, 230, 255, 70))
+        fill.setColorAt(1.0, QColor(108, 92, 231, 50))
+        painter.fillPath(path, fill)
+
+        pen = QPen(QColor(46, 230, 255, 90))
+        pen.setWidthF(1.0)
+        painter.setPen(pen)
+        painter.drawPath(path)
+
+        painter.setPen(QColor(184, 244, 255, 230))
+        font = painter.font()
+        font.setPointSize(18)
+        font.setBold(True)
+        painter.setFont(font)
+        painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, "≈")
+        painter.end()
+
+
 class WavePromoCard(QFrame):
-    """Компактная строка «Моя волна»."""
+    """Карточка «Моя волна» — рядом с hero или отдельной полосой."""
 
     open_requested = Signal()
     play_requested = Signal()
@@ -27,20 +68,23 @@ class WavePromoCard(QFrame):
         self.setObjectName("wavePromoCard")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, False)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setMinimumHeight(68)
-        self.setMaximumHeight(76)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.setMinimumHeight(72)
+        self.setMaximumHeight(168)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         self._available = False
         self._track_count = 0
         self._source_label = "Yandex Music"
+        self._hovered = False
 
         root = QHBoxLayout(self)
-        root.setContentsMargins(14, 10, 12, 10)
-        root.setSpacing(12)
+        root.setContentsMargins(16, 14, 14, 14)
+        root.setSpacing(14)
+
+        root.addWidget(_WaveMark(), 0, Qt.AlignmentFlag.AlignVCenter)
 
         text = QVBoxLayout()
-        text.setSpacing(4)
-        text.setContentsMargins(0, 0, 0, 0)
+        text.setSpacing(5)
+        text.setContentsMargins(0, 2, 0, 2)
 
         title_row = QHBoxLayout()
         title_row.setSpacing(8)
@@ -56,6 +100,7 @@ class WavePromoCard(QFrame):
         self._subtitle.setObjectName("wavePromoSubtitle")
         self._subtitle.setWordWrap(True)
         text.addWidget(self._subtitle)
+        text.addStretch(1)
         root.addLayout(text, stretch=1)
 
         self._play_btn = QToolButton()
@@ -80,6 +125,11 @@ class WavePromoCard(QFrame):
         self._track_count = track_count
         self._source_label = "Yandex Music" if source == "yandex" else source
         self._play_btn.setEnabled(available and track_count > 0 and not loading)
+        self.setCursor(
+            Qt.CursorShape.PointingHandCursor
+            if available
+            else Qt.CursorShape.ArrowCursor
+        )
 
         if loading:
             self._subtitle.setText(f"Загружаем · {self._source_label}…")
@@ -88,9 +138,7 @@ class WavePromoCard(QFrame):
             self._subtitle.setText(error)
             self._count_label.setText("")
         elif available and track_count:
-            self._subtitle.setText(
-                f"{self._source_label} · нажми на карточку, чтобы открыть плейлист"
-            )
+            self._subtitle.setText(f"{self._source_label} · нажми, чтобы открыть поток")
             self._count_label.setText(f"{track_count} в потоке")
         elif available:
             self._subtitle.setText(f"{self._source_label} · пока пусто")
@@ -105,17 +153,34 @@ class WavePromoCard(QFrame):
             self.open_requested.emit()
         super().mouseReleaseEvent(event)
 
+    def enterEvent(self, event) -> None:
+        self._hovered = True
+        self.update()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event) -> None:
+        self._hovered = False
+        self.update()
+        super().leaveEvent(event)
+
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         rect = self.rect().adjusted(1, 1, -1, -1)
         path = QPainterPath()
-        path.addRoundedRect(rect, 14, 14)
+        path.addRoundedRect(rect, 18, 18)
 
-        painter.fillPath(path, QColor(255, 255, 255, 10 if self._available else 6))
+        fill = QLinearGradient(rect.topLeft(), rect.bottomRight())
+        top_alpha = 22 if self._available else 8
+        if self._hovered and self._available:
+            top_alpha = 32
+        fill.setColorAt(0.0, QColor(46, 230, 255, top_alpha))
+        fill.setColorAt(1.0, QColor(255, 255, 255, 8 if self._available else 5))
+        painter.fillPath(path, fill)
 
-        pen = QPen(QColor(46, 230, 255, 55 if self._available else 22))
-        pen.setWidthF(1.0)
+        border_alpha = 28 if not self._available else (95 if self._hovered else 60)
+        pen = QPen(QColor(46, 230, 255, border_alpha))
+        pen.setWidthF(1.15)
         painter.setPen(pen)
         painter.drawPath(path)
         painter.end()

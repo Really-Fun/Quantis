@@ -4,7 +4,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from PySide6.QtCore import QSize, Qt, Signal
-from PySide6.QtGui import QPainter, QPixmap
+from PySide6.QtGui import QColor, QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
@@ -49,8 +49,14 @@ class _PlayerCover(QLabel):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         rect = self.rect()
+        path = QPainterPath()
+        path.addRoundedRect(rect, 12, 12)
+        painter.setClipPath(path)
         if not self._pixmap.isNull():
             painter.drawPixmap(rect, self._pixmap)
+        else:
+            painter.fillPath(path, QColor(255, 255, 255, 16))
+        painter.setClipping(False)
         if self._source:
             paint_source_badge(painter, rect, self._source, size=14)
         painter.end()

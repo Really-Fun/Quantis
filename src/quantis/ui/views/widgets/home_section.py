@@ -58,7 +58,7 @@ class HomeSection(QWidget):
         self._body_layout = QVBoxLayout(self._body)
         self._body_layout.setContentsMargins(0, 0, 0, 0)
         self._body_layout.setSpacing(0)
-        root.addWidget(self._body)
+        root.addWidget(self._body, stretch=1)
 
     def set_subtitle(self, text: str) -> None:
         self._subtitle.setText(text)
@@ -80,11 +80,22 @@ class HomeSection(QWidget):
         if widget is not None:
             self._actions.addWidget(widget, 0, Qt.AlignmentFlag.AlignTop)
 
-    def add_widget_block(self, widget: QWidget) -> None:
+    def add_widget_block(self, widget: QWidget, *, expand: bool = False) -> None:
         while self._body_layout.count():
             item = self._body_layout.takeAt(0)
             old = item.widget()
             if old is not None:
                 old.deleteLater()
-        widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
-        self._body_layout.addWidget(widget)
+        vertical = (
+            QSizePolicy.Policy.Expanding if expand else QSizePolicy.Policy.Maximum
+        )
+        widget.setSizePolicy(QSizePolicy.Policy.Expanding, vertical)
+        if expand:
+            self.setSizePolicy(
+                QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
+            )
+            self._body.setSizePolicy(
+                QSizePolicy.Policy.Expanding,
+                QSizePolicy.Policy.Expanding,
+            )
+        self._body_layout.addWidget(widget, stretch=1 if expand else 0)

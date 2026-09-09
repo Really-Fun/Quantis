@@ -20,6 +20,7 @@ from quantis.ui.views.widgets.cover_art import playlist_cover_path
 from quantis.ui.views.widgets.playlist_card import GradientCover
 from quantis.ui.views.widgets.playlist_track_delegate import PlaylistTrackDelegate
 
+
 class PlaylistTrackTable(QTableView):
     """Таблица треков: QTableView + ленивая подгрузка, без QListView."""
 
@@ -57,6 +58,7 @@ class PlaylistTrackTable(QTableView):
         if self.columnWidth(0) != width:
             self.setColumnWidth(0, width)
 
+
 class PlaylistPage(QWidget):
     back_requested = Signal()
 
@@ -72,7 +74,7 @@ class PlaylistPage(QWidget):
         self.setObjectName("playlistPage")
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(16, 8, 16, 12)
+        root.setContentsMargins(24, 16, 24, 16)
         root.setSpacing(0)
 
         panel = QFrame()
@@ -208,6 +210,7 @@ class PlaylistPage(QWidget):
         super().showEvent(event)
         self._table._sync_column_width()
         self._table.viewport().update()
+
     @staticmethod
     def _tracks_label(count: int) -> str:
         if count % 10 == 1 and count % 100 != 11:

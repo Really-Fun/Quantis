@@ -3,14 +3,21 @@ from __future__ import annotations
 from typing import Callable
 
 from PySide6.QtCore import QEvent, QRect, QSize, Qt
-from PySide6.QtGui import QColor, QFontMetrics, QLinearGradient, QPainter, QPen
-from PySide6.QtWidgets import QStyle, QStyledItemDelegate, QStyleOptionViewItem
+from PySide6.QtGui import (
+    QColor,
+    QFontMetrics,
+    QLinearGradient,
+    QPainter,
+    QPainterPath,
+    QPen,
+)
+from PySide6.QtWidgets import QStyle, QStyledItemDelegate
 
-from quantis.models import Track, TrackSource
+from quantis.models import Track
 from quantis.ui.models import TrackListModel
 from quantis.ui.preferences import UiPreferences
 from quantis.ui.resources import THEME_EDITORIAL
-from quantis.ui.views.widgets.cover_art import load_track_cover
+from quantis.ui.views.widgets.cover_art import load_track_cover, paint_rounded_cover
 from quantis.ui.views.widgets.delegate_paint_kit import (
     C_ACCENT,
     C_TITLE,
@@ -24,7 +31,6 @@ from quantis.ui.views.widgets.delegate_paint_kit import (
     FONT_TITLE,
     SOURCE_LABELS,
 )
-from quantis.ui.views.widgets.source_badge import paint_source_badge
 
 
 class TrackCardDelegate(QStyledItemDelegate):
@@ -36,7 +42,6 @@ class TrackCardDelegate(QStyledItemDelegate):
     _C_BG_PLAYING = QColor(0, 229, 255, 22)
     _C_BG_HOVER = QColor(255, 255, 255, 10)
     _C_BG_IDLE = QColor(255, 255, 255, 4)
-    _C_COVER_TEXT = QColor(255, 255, 255, 230)
     _C_AUTHOR = QColor(248, 250, 252, 120)
     _C_DL_OK_BG = QColor(34, 197, 94, 60)
     _C_DL_OK_PEN = QColor(34, 197, 94, 140)
@@ -48,9 +53,6 @@ class TrackCardDelegate(QStyledItemDelegate):
     _C_EDITORIAL_IDX = QColor(255, 255, 255, 10)
     _C_EDITORIAL_AUTHOR = QColor(242, 240, 235, 100)
     _C_EDITORIAL_TITLE = QColor(242, 240, 235)
-    _GRAD_YT = (QColor(255, 78, 69), QColor(140, 30, 30))
-    _GRAD_YA = (QColor(255, 219, 77), QColor(160, 120, 20))
-    _GRAD_SC = (QColor(255, 119, 0), QColor(140, 70, 0))
 
     def __init__(
         self,
@@ -175,36 +177,19 @@ class TrackCardDelegate(QStyledItemDelegate):
             self.COVER_SIZE,
         )
         cover = load_track_cover(track, self.COVER_SIZE)
-        if cover is not None and not cover.isNull():
-            painter.setPen(Qt.PenStyle.NoPen)
-            painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.setClipRect(cover_rect)
-            painter.drawPixmap(cover_rect, cover)
-            painter.setClipping(False)
-        else:
-            c1, c2 = (
-                self._GRAD_YT
-                if str(track.source).lower() == TrackSource.YOUTUBE
-                else (
-                    self._GRAD_SC
-                    if str(track.source).lower() == TrackSource.SOUNDCLOUD
-                    else self._GRAD_YA
-                )
-            )
-            grad = QLinearGradient(cover_rect.topLeft(), cover_rect.bottomRight())
-            grad.setColorAt(0.0, c1)
-            grad.setColorAt(1.0, c2)
-            painter.setBrush(grad)
-            painter.drawRoundedRect(cover_rect, 8, 8)
-            initial = (track.title or "?")[0].upper()
-            painter.setPen(self._C_COVER_TEXT)
-            painter.setFont(FONT_COVER)
-            painter.drawText(cover_rect, Qt.AlignmentFlag.AlignCenter, initial)
-
-        paint_source_badge(painter, cover_rect, str(track.source))
+        paint_rounded_cover(
+            painter,
+            cover_rect,
+            label=track.title or "?",
+            pixmap=cover,
+            source_key=str(track.source),
+            radius=8,
+        )
 
         if hovered and not is_playing:
-            painter.fillRect(cover_rect, QColor(0, 0, 0, 110))
+            overlay = QPainterPath()
+            overlay.addRoundedRect(cover_rect, 8, 8)
+            painter.fillPath(overlay, QColor(0, 0, 0, 118))
             painter.setPen(QColor(255, 255, 255))
             painter.setFont(FONT_COVER)
             painter.drawText(cover_rect, Qt.AlignmentFlag.AlignCenter, "▶")

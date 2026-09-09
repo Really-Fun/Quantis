@@ -2,17 +2,19 @@
 
 QWidget#homePage,
 QWidget#homeScrollContent,
-QWidget#homeHero {
+QWidget#homeHero,
+QWidget#homeHeroCluster,
+QWidget#libraryPage {
     background: transparent;
 }
 
-QScrollArea#homeScroll,
-QScrollArea#playlistShelfScroll,
-QScrollArea#quickPickShelfScroll {
+QScrollArea#homeScroll {
     background: transparent;
     border: none;
 }
 
+QWidget#playlistShelf,
+QWidget#quickPickShelf,
 QWidget#playlistShelfHost,
 QWidget#quickPickShelfHost {
     background: transparent;
@@ -21,16 +23,16 @@ QWidget#quickPickShelfHost {
 QLabel#homeKicker {
     font-size: 11px;
     font-weight: 700;
-    letter-spacing: 2.2px;
-    color: rgba(46, 230, 255, 0.85);
+    letter-spacing: 2.4px;
+    color: rgba(46, 230, 255, 0.88);
     background: transparent;
     padding: 0;
 }
 
 QLabel#homeGreeting {
-    font-size: 40px;
+    font-size: 42px;
     font-weight: 700;
-    letter-spacing: -1.4px;
+    letter-spacing: -1.6px;
     color: #f8fafc;
     padding: 0;
     background: transparent;
@@ -39,9 +41,9 @@ QLabel#homeGreeting {
 QLabel#homeGreetingSub {
     font-size: 14px;
     font-weight: 400;
-    color: rgba(226, 232, 240, 0.52);
+    color: rgba(226, 232, 240, 0.55);
     letter-spacing: 0.15px;
-    padding: 0 0 4px 0;
+    padding: 0 0 8px 0;
     background: transparent;
 }
 
@@ -50,6 +52,10 @@ QWidget#homeSection {
 }
 
 QWidget#homeSectionBody {
+    background: transparent;
+}
+
+QWidget#homeHeroCluster {
     background: transparent;
 }
 
@@ -127,12 +133,7 @@ QLabel#playlistCardTitle {
     font-weight: 650;
     color: #f8fafc;
     background: transparent;
-}
-
-QLabel#playlistCardMeta {
-    font-size: 11px;
-    color: rgba(226, 232, 240, 0.48);
-    background: transparent;
+    padding: 2px 2px 0 2px;
 }
 
 /* Быстрые плитки — стекло, как «Моя волна» */
@@ -149,17 +150,11 @@ QLabel#quickPickTitle {
     background: transparent;
 }
 
-QLabel#quickPickMeta {
-    font-size: 11px;
-    color: rgba(226, 232, 240, 0.48);
-    background: transparent;
-}
-
 QToolButton#homeSectionAction {
     background: rgba(255, 255, 255, 0.06);
     border: 1px solid rgba(255, 255, 255, 0.14);
     border-radius: 12px;
-    padding: 6px 12px;
+    padding: 7px 14px;
     color: #e2e8f0;
     font-size: 12px;
     font-weight: 600;
@@ -193,119 +188,99 @@ QTableView#homeTrackList QScrollBar:horizontal {
     background: transparent;
 }
 
-QScrollArea#playlistShelfScroll QScrollBar:horizontal,
-QScrollArea#quickPickShelfScroll QScrollBar:horizontal {
-    height: 6px;
-    background: transparent;
-    margin: 0 4px;
-}
-QScrollArea#playlistShelfScroll QScrollBar::handle:horizontal,
-QScrollArea#quickPickShelfScroll QScrollBar::handle:horizontal {
-    background: rgba(46, 230, 255, 0.35);
-    border-radius: 3px;
-    min-width: 40px;
-}
-QScrollArea#playlistShelfScroll QScrollBar::add-line:horizontal,
-QScrollArea#playlistShelfScroll QScrollBar::sub-line:horizontal,
-QScrollArea#quickPickShelfScroll QScrollBar::add-line:horizontal,
-QScrollArea#quickPickShelfScroll QScrollBar::sub-line:horizontal {
-    width: 0;
-}
-
 /* Hero featured */
 QFrame#featuredPanel {
     background: transparent;
     border: none;
-    border-radius: 14px;
-    min-height: 108px;
-    max-height: 120px;
+    border-radius: 18px;
+    min-height: 148px;
+    max-height: 168px;
 }
 
 QLabel#featuredCover {
     background: rgba(255, 255, 255, 0.06);
     border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 12px;
+    border-radius: 16px;
     color: #2ee6ff;
     font-size: 28px;
     font-weight: 700;
 }
 
 QLabel#featuredTitle {
-    font-size: 15px;
-    font-weight: 650;
-    letter-spacing: -0.2px;
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
     color: #f8fafc;
     background: transparent;
 }
 
 QLabel#featuredAuthor {
-    font-size: 12px;
-    color: rgba(226, 232, 240, 0.55);
+    font-size: 13px;
+    color: rgba(226, 232, 240, 0.62);
     background: transparent;
 }
 
 QToolButton#featuredPlayBtn {
-    background: rgba(255, 255, 255, 0.08);
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    border-radius: 18px;
-    color: #f8fafc;
-    font-size: 13px;
+    background: #f8fafc;
+    border: none;
+    border-radius: 22px;
+    color: #0b0d12;
+    font-size: 14px;
     font-weight: 700;
-    min-width: 36px;
-    max-width: 36px;
-    min-height: 36px;
-    max-height: 36px;
+    min-width: 44px;
+    max-width: 44px;
+    min-height: 44px;
+    max-height: 44px;
     padding: 0;
 }
 QToolButton#featuredPlayBtn:hover {
-    background: rgba(255, 92, 122, 0.18);
-    border-color: rgba(255, 92, 122, 0.35);
-    color: #ffe4ec;
+    background: #ffffff;
+    color: #0b0d12;
 }
 QToolButton#featuredPlayBtn:disabled {
-    background: rgba(255, 255, 255, 0.04);
-    border-color: rgba(255, 255, 255, 0.06);
-    color: rgba(248, 250, 252, 0.28);
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(248, 250, 252, 0.32);
 }
 
 /* Моя волна */
 QFrame#wavePromoCard {
     background: transparent;
     border: none;
-    border-radius: 14px;
+    border-radius: 18px;
 }
 
 QLabel#wavePromoSubtitle {
     font-size: 12px;
-    color: rgba(226, 232, 240, 0.52);
+    color: rgba(226, 232, 240, 0.55);
     background: transparent;
 }
 
 QLabel#wavePromoCount {
     font-size: 10px;
-    font-weight: 500;
-    color: rgba(226, 232, 240, 0.45);
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    color: rgba(125, 211, 252, 0.9);
     background: transparent;
     padding: 0;
 }
 
 QToolButton#wavePromoPlayBtn {
-    background: rgba(46, 230, 255, 0.1);
-    border: 1px solid rgba(46, 230, 255, 0.22);
-    border-radius: 18px;
-    color: #b8f4ff;
-    font-size: 12px;
+    background: rgba(46, 230, 255, 0.14);
+    border: 1px solid rgba(46, 230, 255, 0.28);
+    border-radius: 22px;
+    color: #e8fcff;
+    font-size: 13px;
     font-weight: 700;
-    min-width: 36px;
-    max-width: 36px;
-    min-height: 36px;
-    max-height: 36px;
+    min-width: 44px;
+    max-width: 44px;
+    min-height: 44px;
+    max-height: 44px;
     padding: 0;
 }
 QToolButton#wavePromoPlayBtn:hover {
-    background: rgba(46, 230, 255, 0.18);
-    border-color: rgba(46, 230, 255, 0.38);
-    color: #e8fcff;
+    background: rgba(46, 230, 255, 0.28);
+    border-color: rgba(46, 230, 255, 0.5);
+    color: #ffffff;
 }
 QToolButton#wavePromoPlayBtn:disabled {
     background: rgba(255, 255, 255, 0.04);

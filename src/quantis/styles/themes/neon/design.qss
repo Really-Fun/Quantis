@@ -124,7 +124,7 @@ QComboBox#themeCombo QAbstractItemView {
 QFrame#featuredPanel {
     background: transparent;
     border: none;
-    border-radius: 16px;
+    border-radius: 18px;
 }
 
 QFrame#nowPlayingPanel {

@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QColor, QPainter, QPixmap
+from PySide6.QtGui import QColor, QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -54,7 +54,9 @@ class _CoverWithBadge(QLabel):
             )
             x = rect.x() + (rect.width() - scaled.width()) // 2
             y = rect.y() + (rect.height() - scaled.height()) // 2
-            painter.setClipRect(rect)
+            clip = QPainterPath()
+            clip.addRoundedRect(rect, 16, 16)
+            painter.setClipPath(clip)
             painter.drawPixmap(x, y, scaled)
             painter.setClipping(False)
 
