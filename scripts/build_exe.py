@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -55,6 +56,13 @@ def main() -> int:
     if args.mpris:
         work += "-mpris"
 
+    name = "Quantis" if args.backend == "qt" else "Quantis-VLC"
+    # When PyInstaller lives at <repo>/PyInstaller, HOMEPATH is the repo root.
+    # PyInstaller then rewrites --distpath <repo>/dist -> <repo>/<spec>/dist
+    # (building/build_main.py). Nest under dist/_bundle so dirname != HOMEPATH.
+    dist_bundle = ROOT / "dist" / "_bundle"
+    final_dir = ROOT / "dist" / name
+
     cmd = [
         sys.executable,
         "-m",
@@ -62,7 +70,7 @@ def main() -> int:
         str(ROOT / "main.spec"),
         "--noconfirm",
         "--distpath",
-        str(ROOT / "dist"),
+        str(dist_bundle),
         "--workpath",
         str(ROOT / "build" / work),
     ]
@@ -74,12 +82,41 @@ def main() -> int:
         print("    MPRIS=bundled")
     print("   ", " ".join(cmd))
     result = subprocess.run(cmd, cwd=ROOT, env=env, check=False)
-    if result.returncode == 0:
-        name = "Quantis" if args.backend == "qt" else "Quantis-VLC"
-        print(f"==> OK: dist/{name}/{name}.exe")
-        if args.mpris:
-            print("    bundled mpris_server")
-    return result.returncode
+    if result.returncode != 0:
+        return result.returncode
+
+    built = dist_bundle / name
+    if not built.is_dir():
+        # Legacy HOMEPATH rewrite fallback (main/dist/...)
+        alt = ROOT / "main" / "dist" / name
+        if alt.is_dir():
+            built = alt
+        else:
+            print(
+                f"ERROR: expected onedir missing: {dist_bundle / name}",
+                file=sys.stderr,
+            )
+            return 1
+
+    if final_dir.exists():
+        shutil.rmtree(final_dir)
+    shutil.move(str(built), str(final_dir))
+    try:
+        dist_bundle.rmdir()
+    except OSError:
+        pass
+    legacy = ROOT / "main" / "dist"
+    if legacy.is_dir() and not any(legacy.iterdir()):
+        legacy.rmdir()
+        try:
+            (ROOT / "main").rmdir()
+        except OSError:
+            pass
+
+    print(f"==> OK: dist/{name}/{name}.exe")
+    if args.mpris:
+        print("    bundled mpris_server")
+    return 0
 
 
 if __name__ == "__main__":

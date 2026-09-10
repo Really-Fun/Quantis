@@ -68,6 +68,9 @@ hiddenimports: list[str] = []
 runtime_hooks: list[str] = []
 
 # Версия из pyproject.toml — в бандл, чтобы exe не зависел от stale dist-info.
+# VERSIONINFO (Windows Properties → Details) пишется рядом в packaging/.
+_app_version = ""
+_version_file = None
 try:
     import tomllib
 
@@ -79,6 +82,27 @@ try:
     ).strip()
 except Exception:
     _app_version = ""
+
+try:
+    import importlib.util
+
+    _vi_path = PACKAGING / "version_info.py"
+    _vi_spec = importlib.util.spec_from_file_location(
+        "quantis_packaging_version_info", _vi_path
+    )
+    if _vi_spec is None or _vi_spec.loader is None:
+        raise ImportError(f"cannot load {_vi_path}")
+    _vi_mod = importlib.util.module_from_spec(_vi_spec)
+    _vi_spec.loader.exec_module(_vi_mod)
+    _version_file = _vi_mod.write_version_info(
+        ROOT,
+        product_name=APP_NAME,
+        original_filename=f"{APP_NAME}.exe",
+    )
+except Exception as _ver_exc:
+    print(f"[Quantis] WARNING: VERSIONINFO not generated: {_ver_exc}")
+    _version_file = None
+
 if _app_version:
     _stamp_dir = ROOT / "build"
     _stamp_dir.mkdir(parents=True, exist_ok=True)
@@ -86,6 +110,8 @@ if _app_version:
     _stamp.write_text(_app_version + "\n", encoding="utf-8")
     datas.append((str(_stamp), "quantis"))
     print(f"[Quantis] version {_app_version}")
+if _version_file is not None:
+    print(f"[Quantis] VERSIONINFO {_version_file}")
 
 rthook = PACKAGING / f"rthook_backend_{BACKEND}.py"
 if rthook.is_file():
@@ -273,6 +299,9 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     icon=icon,
+    # Windows VERSIONINFO (Properties → Details). PyInstaller API name is
+    # ``version=`` (path to VSVersionInfo text), not version_file=.
+    version=str(_version_file) if _version_file is not None else None,
 )
 
 coll = COLLECT(

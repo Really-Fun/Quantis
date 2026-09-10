@@ -51,6 +51,47 @@ poetry run python scripts/build_exe.py vlc --vlc-home "C:\Program Files\VideoLAN
 В сборку **Quantis-VLC** дополнительно копируются `libvlc.dll` и `plugins/`
 из `VLC_HOME`.
 
+### VERSIONINFO (Windows)
+
+При сборке `main.spec` пишет `packaging/quantis_version_info.txt` из
+`[project]` в `pyproject.toml` (версия, описание, автор → CompanyName) и
+передаёт его в `EXE(..., version=...)`. В проводнике это поля
+Properties → Details у `Quantis.exe`.
+
+### Свой PyInstaller bootloader (меньше AV false positives)
+
+Стоковый `runw.exe` из релиза PyInstaller общий у тысяч неподписанных
+сборок — эвристики часто помечают такой PE как dropper. Локальная
+пересборка stub’а меняет отпечаток.
+
+Нужны: Git, VS Build Tools 2017+ (MSVC C++) **или** MinGW-w64
+(например `C:\msys64\ucrt64\bin`). Скрипт сам выбирает MinGW, если MSVC нет.
+
+```powershell
+# Клонирует pyinstaller/pyinstaller (тег = установленная версия),
+# собирает bootloader через waf и подменяет runw.exe / run.exe
+# в активном PyInstaller (у нас часто это ./PyInstaller/).
+.\scripts\rebuild_pyi_bootloader.ps1
+
+# Явный тег / MinGW / каталог назначения
+.\scripts\rebuild_pyi_bootloader.ps1 -Tag v6.22.2
+.\scripts\rebuild_pyi_bootloader.ps1 -Gcc
+.\scripts\rebuild_pyi_bootloader.ps1 -Dest "C:\projects\Quantis\PyInstaller"
+```
+
+Исходники временно лежат в `build/pyinstaller-src/` (уже в `.gitignore`
+через `build/`). Не коммитьте развёрнутый tree `PyInstaller/` из wheel —
+в нём нет `bootloader/src`, только готовые бинарники.
+
+После подмены пересоберите приложение:
+
+```bat
+poetry run python scripts/build_exe.py qt
+```
+
+На VirusTotal лучше заливать onedir zip или Inno-установщик, а не голый
+`Quantis.exe`. Не переключайтесь на onefile ради AV — для FP он обычно хуже.
+
 ## Linux (MPRIS)
 
 Обычная сборка `qt` / `vlc` **вырезает** `mpris_server` (он нужен только

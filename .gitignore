@@ -10,6 +10,10 @@ htmlcov/
 # PyInstaller
 *.spec.bak
 src/quantis/version.txt
+packaging/quantis_version_info.txt
+# Vendored/wheel-extracted tree without bootloader/src — use
+# scripts/rebuild_pyi_bootloader.ps1 instead of committing this.
+/PyInstaller/
 
 # Secrets
 *.pem
