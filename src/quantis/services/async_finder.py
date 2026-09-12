@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from abc import ABC, abstractmethod
 from collections.abc import AsyncIterator
 from concurrent.futures import ThreadPoolExecutor
@@ -20,12 +21,15 @@ from quantis.config.credentials import yandex_token
 from quantis.models import Track, YoutubeTrack
 from quantis.models.track import clock_to_ms, seconds_to_ms
 from quantis.services.soundcloud_finder import AsyncSoundCloudFinder
+from quantis.services.url_resolver import is_youtube_video_id
 from quantis.services.yandex_finder import (
     yandex_track_from_api,
     yandex_tracks_from_search,
 )
 
 logger = logging.getLogger(__name__)
+
+_TOPIC_SUFFIX = re.compile(r"\s*[-–—]\s*Topic\s*$", re.IGNORECASE)
 
 
 def _youtube_duration_ms(payload: dict | None) -> int:
@@ -43,6 +47,50 @@ def _youtube_duration_ms(payload: dict | None) -> int:
         if ms:
             return ms
     return clock_to_ms(duration)
+
+
+def _clean_youtube_artist_name(name: str) -> str:
+    cleaned = _TOPIC_SUFFIX.sub("", name).strip()
+    return cleaned or name.strip()
+
+
+def youtube_author_from_payload(payload: dict | None) -> str:
+    """Автор из поиска / get_song / yt-dlp.
+
+    У Topic/ATV ``artists`` часто ``None``, а канал — ``Artist - Topic``.
+    ``dict.get("artists", [])`` тогда возвращает ``None``, и ``join`` роняет
+    весь ``get_track``.
+    """
+    if not payload:
+        return "Unknown Artist"
+    names: list[str] = []
+    seen: set[str] = set()
+
+    def add(raw: object) -> None:
+        text = str(raw or "").strip()
+        if not text:
+            return
+        cleaned = _clean_youtube_artist_name(text)
+        key = cleaned.casefold()
+        if not cleaned or key in seen:
+            return
+        seen.add(key)
+        names.append(cleaned)
+
+    artists = payload.get("artists")
+    if isinstance(artists, list):
+        for item in artists:
+            if isinstance(item, dict):
+                add(item.get("name") or item.get("text"))
+            else:
+                add(item)
+    elif isinstance(artists, str):
+        add(artists)
+
+    for key in ("author", "artist", "uploader", "channel", "channelName"):
+        add(payload.get(key))
+
+    return " | ".join(names) if names else "Unknown Artist"
 
 
 class AsyncFinderInterface(ABC):
@@ -164,15 +212,13 @@ class AsyncYoutubeFinder(AsyncFinderInterface):
             if not info:
                 return self._sync_get_track(video_id)
             resolved_id = str(info.get("id") or video_id)
-            title = str(info.get("title") or "")
-            artists = info.get("artist") or info.get("uploader") or ""
-            if not artists:
-                channel = info.get("channel")
-                artists = str(channel) if channel else "Unknown Artist"
+            if not is_youtube_video_id(resolved_id):
+                return self._sync_get_track(video_id)
+            title = str(info.get("title") or "").strip() or resolved_id
             return YoutubeTrack(
                 track_id=resolved_id,
                 title=title,
-                author=str(artists),
+                author=youtube_author_from_payload(info),
                 downloaded=False,
                 duration_ms=_youtube_duration_ms(info),
             )
@@ -197,45 +243,49 @@ class AsyncYoutubeFinder(AsyncFinderInterface):
             return []
 
         tracks = []
-        for track in results:
-            try:
-                authors = " | ".join(
-                    author["name"] for author in track.get("artists", [])
-                )
-            except Exception:
-                authors = "Unknown Artist"
-
+        for item in results:
+            video_id = str(item.get("videoId") or item.get("video_id") or "")
+            if not is_youtube_video_id(video_id):
+                continue
+            track_title = str(item.get("title") or "").strip() or video_id
             tracks.append(
                 YoutubeTrack(
-                    track_id=track.get("videoId"),
-                    title=track.get("title"),
-                    author=authors,
+                    track_id=video_id,
+                    title=track_title,
+                    author=youtube_author_from_payload(item),
                     downloaded=False,
-                    duration_ms=_youtube_duration_ms(track),
+                    duration_ms=_youtube_duration_ms(item),
                 )
             )
         return tracks
 
     def _sync_get_track(self, track_id: str | int) -> Track | None:
+        requested = str(track_id).strip()
         try:
-            results = self.client.get_song(str(track_id))
+            results = self.client.get_song(requested)
             if not results:
                 return None
-            video_details = results.get("videoDetails", {})
-            resolved_id = video_details.get("videoId") or track_id
-            track_title = video_details.get("title", "")
-            authors = " | ".join(
-                author["name"] for author in video_details.get("artists", [])
-            )
+            video_details = results.get("videoDetails") or {}
+            resolved_id = str(video_details.get("videoId") or requested)
+            if not is_youtube_video_id(resolved_id):
+                return None
+            title = str(video_details.get("title") or "").strip() or resolved_id
             return YoutubeTrack(
                 track_id=resolved_id,
-                title=track_title,
-                author=authors,
+                title=title,
+                author=youtube_author_from_payload(video_details),
                 downloaded=False,
                 duration_ms=_youtube_duration_ms(video_details),
             )
         except Exception as e:
             logger.error("Ошибка YTMusic при получении трека %s: %s", track_id, e)
+            if is_youtube_video_id(requested):
+                return YoutubeTrack(
+                    track_id=requested,
+                    title=requested,
+                    author="Unknown Artist",
+                    downloaded=False,
+                )
             return None
 
 
