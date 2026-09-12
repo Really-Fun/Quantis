@@ -52,6 +52,25 @@ def test_picks_audio_only_over_muxed_video() -> None:
     )
 
 
+def test_duration_from_info_seconds() -> None:
+    assert AsyncYoutubeStreamer._duration_ms_from_info({"duration": 201}) == 201_000
+    assert AsyncYoutubeStreamer._duration_ms_from_info({}) == 0
+    assert AsyncYoutubeStreamer._duration_ms_from_info(None) == 0
+
+
+def test_audio_attempts_use_socket_timeout() -> None:
+    streamer = AsyncYoutubeStreamer(None)  # type: ignore[arg-type]
+    attempts = streamer._attempt_opts(video=False)
+    assert attempts
+    assert all(opts.get("socket_timeout") == 8 for opts in attempts)
+    first_clients = (
+        (attempts[0].get("extractor_args") or {})
+        .get("youtube", {})
+        .get("player_client")
+    )
+    assert first_clients == ["android", "web"]
+
+
 def test_wallpaper_video_format_is_360p() -> None:
     streamer = AsyncYoutubeStreamer(None)  # type: ignore[arg-type]
     video_opts = streamer._attempt_opts(video=True)

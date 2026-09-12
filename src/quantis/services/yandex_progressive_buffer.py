@@ -42,11 +42,12 @@ _URL_TTL_SEC = 45.0
 _SEGMENT_BYTES = 1024 * 1024
 _CHUNK_BYTES = 32 * 1024
 _MAX_SEGMENT_RETRIES = 5
-# ~6с CBR 320kbps. 96КБ хватало на «пчик» и ложный EndOfMedia по нулевому хвосту.
-_MIN_START_BYTES = 256 * 1024
+# 256КБ давали старт 3–4с. 128КБ ≈ 3с CBR 320 — хватает Qt probe, без долгого ожидания.
+_MIN_START_BYTES = 128 * 1024
 _RECOVERY_EXTRA_BYTES = 256 * 1024
 _RECOVERY_WAIT_SEC = 8.0
-_AHEAD_BYTES = 2 * 1024 * 1024
+# ~75с запаса при 320kbps: Qt HTTP обрывался каждые ~35с, локальный файл не должен.
+_AHEAD_BYTES = 3 * 1024 * 1024
 _ECO_AHEAD_BYTES = 4 * 1024 * 1024
 _START_TIMEOUT_SEC = 25.0
 _BYTES_PER_SEC_EST = 40_000

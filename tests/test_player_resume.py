@@ -145,6 +145,42 @@ def test_duration_prefers_longer_engine() -> None:
     assert player.duration == 200_000
 
 
+def test_duration_ignores_inflated_engine() -> None:
+    engine = StubEngine()
+    engine._duration = 3_600_000
+    player = Player(engine=engine)
+    player.current_track = YandexTrack(
+        track_id="1", title="T", author="A", duration_ms=180_000
+    )
+    assert player.duration == 180_000
+
+
+def test_duration_ignores_inflated_catalog_when_engine_is_ready() -> None:
+    engine = StubEngine()
+    engine._duration = 180_000
+    player = Player(engine=engine)
+    player.current_track = YandexTrack(
+        track_id="1", title="T", author="A", duration_ms=3_600_000
+    )
+    assert player.duration == 180_000
+
+
+def test_is_buffering_without_engine_api() -> None:
+    engine = StubEngine()
+    player = Player(engine=engine)
+    assert player.is_buffering() is False
+
+
+class BufferingStubEngine(StubEngine):
+    def is_buffering(self) -> bool:
+        return True
+
+
+def test_is_buffering_uses_engine() -> None:
+    player = Player(engine=BufferingStubEngine())
+    assert player.is_buffering() is True
+
+
 def _start(player: Player, engine: StubEngine, source: str) -> None:
     player.play(source)
     for callback in list(engine._playing_cbs):

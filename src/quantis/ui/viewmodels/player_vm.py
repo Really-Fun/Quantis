@@ -37,6 +37,8 @@ class PlayerViewModel(BaseViewModel):
         self._stall_last_pos = -1
         self._stall_last_move = 0.0
         self._end_ticks = 0
+        self._stall_grace_sec = 8.0
+        self._stall_buffering_grace_sec = 18.0
         self._tick = QTimer(self)
         self._tick.setInterval(250)
         self._tick.timeout.connect(self._update_timeline)
@@ -143,7 +145,9 @@ class PlayerViewModel(BaseViewModel):
             return
         if duration < 5000 or position < 3000 or position >= duration - 2000:
             return
-        if now - self._stall_last_move < 5.0:
+        buffering = bool(getattr(self._player, "is_buffering", lambda: False)())
+        grace = self._stall_buffering_grace_sec if buffering else self._stall_grace_sec
+        if now - self._stall_last_move < grace:
             return
         self._stall_last_move = now
         self._playback.request_playback_recovery(position)
@@ -153,9 +157,10 @@ class PlayerViewModel(BaseViewModel):
             return
         if duration == self._last_duration:
             return
-        # Growing temp MP3 часто врёт в меньшую сторону — длину не ужимаем.
+        # Мелкий откат — шум растущего файла. Крупный — движок поправил враньё.
         if 0 < duration < self._last_duration:
-            return
+            if duration >= int(self._last_duration * 0.9) - 1000:
+                return
         self._last_duration = duration
         self.duration_changed.emit(duration)
 
@@ -166,7 +171,7 @@ class PlayerViewModel(BaseViewModel):
         self._end_ticks = 0
         self.track_changed.emit(track)
         catalog = max(0, int(getattr(track, "duration_ms", 0) or 0))
-        self._publish_duration(max(catalog, self._player.duration))
+        self._publish_duration(max(0, self._player.duration) or catalog)
         self.start_updates()
 
     def _on_paused(self) -> None:

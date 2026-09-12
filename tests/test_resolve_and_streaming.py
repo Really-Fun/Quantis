@@ -12,6 +12,7 @@ from quantis.services.async_streamer import (
     AsyncStreamer,
     is_hls_url,
     should_buffer_stream,
+    should_proxy_stream,
 )
 
 _BACKEND = "quantis.services.async_streamer.resolve_media_backend"
@@ -31,11 +32,13 @@ def test_should_buffer_stream_by_backend() -> None:
     hls = "https://cf-hls-media.sndcdn.com/playlist.m3u8"
     mp3 = "https://cf-media.sndcdn.com/track.mp3"
 
-    assert should_buffer_stream(yandex, backend="qt")
+    assert not should_buffer_stream(yandex, backend="qt")
     assert not should_buffer_stream(yandex, backend="vlc")
-    assert should_buffer_stream(sc, backend="qt", url=mp3)
-    assert not should_buffer_stream(sc, backend="qt", url=hls)
-    assert not should_buffer_stream(youtube, backend="qt")
+    assert should_proxy_stream(yandex, backend="qt")
+    assert not should_proxy_stream(yandex, backend="vlc")
+    assert should_proxy_stream(sc, backend="qt", url=mp3)
+    assert not should_proxy_stream(sc, backend="qt", url=hls)
+    assert not should_proxy_stream(youtube, backend="qt")
 
 
 @pytest.mark.asyncio
@@ -129,18 +132,23 @@ async def test_resolve_tracks_by_id_soundcloud() -> None:
 
 
 @pytest.mark.asyncio
-async def test_open_playback_yandex_uses_progressive_buffer() -> None:
+async def test_open_playback_yandex_uses_local_proxy() -> None:
     streamer = AsyncStreamer()
     track = YandexTrack(track_id="1", title="T", author="A")
+    local = "http://127.0.0.1:9/yandex/1"
 
     with (
+        patch.object(
+            streamer._http_proxy,
+            "mount",
+            new_callable=AsyncMock,
+            return_value=local,
+        ) as proxy_mock,
         patch.object(
             streamer._stream_buffer,
             "open",
             new_callable=AsyncMock,
-            return_value="/tmp/quantis_stream/yandex_1.mp3",
         ) as buffer_mock,
-        patch.object(streamer._stream_buffer, "cleanup_old_files"),
         patch.object(
             streamer,
             "get_stream_url",
@@ -150,11 +158,11 @@ async def test_open_playback_yandex_uses_progressive_buffer() -> None:
     ):
         result = await streamer.open_playback(track)
 
-    assert result == "/tmp/quantis_stream/yandex_1.mp3"
-    # Прогретая ссылка передаётся в буфер, чтобы он не ходил в API повторно.
-    buffer_mock.assert_awaited_once_with(
-        track, url="https://storage.mds.yandex.net/get-mp3/track.mp3"
+    assert result == local
+    proxy_mock.assert_awaited_once_with(
+        track, "https://storage.mds.yandex.net/get-mp3/track.mp3"
     )
+    buffer_mock.assert_not_awaited()
     url_mock.assert_awaited_once_with(track)
     streamer.shutdown()
 
@@ -242,19 +250,24 @@ async def test_open_playback_soundcloud_uses_direct_url() -> None:
 
 
 @pytest.mark.asyncio
-async def test_open_playback_qt_yandex_uses_buffer() -> None:
+async def test_open_playback_qt_yandex_uses_proxy() -> None:
     streamer = AsyncStreamer()
     track = YandexTrack(track_id="1", title="T", author="A")
+    local = "http://127.0.0.1:9/yandex/1"
 
     with (
         patch(_BACKEND, return_value="qt"),
         patch.object(
+            streamer._http_proxy,
+            "mount",
+            new_callable=AsyncMock,
+            return_value=local,
+        ) as proxy_mock,
+        patch.object(
             streamer._stream_buffer,
             "open",
             new_callable=AsyncMock,
-            return_value="/tmp/quantis_stream/yandex_1.mp3",
         ) as buffer_mock,
-        patch.object(streamer._stream_buffer, "cleanup_old_files"),
         patch.object(
             streamer,
             "get_stream_url",
@@ -264,28 +277,32 @@ async def test_open_playback_qt_yandex_uses_buffer() -> None:
     ):
         result = await streamer.open_playback(track)
 
-    assert result == "/tmp/quantis_stream/yandex_1.mp3"
-    buffer_mock.assert_awaited_once_with(
-        track, url="https://storage.mds.yandex.net/get-mp3/track.mp3"
-    )
+    assert result == local
+    proxy_mock.assert_awaited_once()
+    buffer_mock.assert_not_awaited()
     url_mock.assert_awaited_once_with(track)
     streamer.shutdown()
 
 
 @pytest.mark.asyncio
-async def test_open_playback_qt_soundcloud_uses_buffer() -> None:
+async def test_open_playback_qt_soundcloud_uses_proxy() -> None:
     streamer = AsyncStreamer()
     track = SoundCloudTrack(track_id="123", title="T", author="A")
+    local = "http://127.0.0.1:9/soundcloud/123"
 
     with (
         patch(_BACKEND, return_value="qt"),
         patch.object(
+            streamer._http_proxy,
+            "mount",
+            new_callable=AsyncMock,
+            return_value=local,
+        ) as proxy_mock,
+        patch.object(
             streamer._stream_buffer,
             "open",
             new_callable=AsyncMock,
-            return_value="/tmp/quantis_stream/soundcloud_123.mp3",
         ) as buffer_mock,
-        patch.object(streamer._stream_buffer, "cleanup_old_files"),
         patch.object(
             streamer,
             "get_stream_url",
@@ -295,10 +312,9 @@ async def test_open_playback_qt_soundcloud_uses_buffer() -> None:
     ):
         result = await streamer.open_playback(track)
 
-    assert result == "/tmp/quantis_stream/soundcloud_123.mp3"
-    buffer_mock.assert_awaited_once_with(
-        track, url="https://cf-media.sndcdn.com/track.mp3"
-    )
+    assert result == local
+    proxy_mock.assert_awaited_once()
+    buffer_mock.assert_not_awaited()
     url_mock.assert_awaited_once_with(track)
     streamer.shutdown()
 

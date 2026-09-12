@@ -13,6 +13,29 @@ from quantis.player.factory import create_media_engine
 logger = logging.getLogger(__name__)
 
 
+def resolve_playback_duration(engine_ms: int, catalog_ms: int) -> int:
+    """Длина для UI: каталог — истина, движок только слегка уточняет.
+
+    Qt на HTTP часто врёт: то 6 с на недокачанном файле, то 24 ч на googlevideo.
+    max(engine, catalog) залипал завышенную оценку в ползунке.
+    """
+    engine_ms = max(0, int(engine_ms))
+    catalog_ms = max(0, int(catalog_ms))
+    if catalog_ms <= 0:
+        return engine_ms
+    if engine_ms <= 0:
+        return catalog_ms
+    slack = max(2000, int(catalog_ms * 0.15))
+    if catalog_ms <= engine_ms <= catalog_ms + slack:
+        return engine_ms
+    if engine_ms < catalog_ms:
+        wild_catalog = catalog_ms >= max(
+            engine_ms * 2, engine_ms + 30 * 60 * 1000
+        ) and engine_ms >= 30_000
+        return engine_ms if wild_catalog else catalog_ms
+    return catalog_ms
+
+
 class Player:
     """Плеер. Работает со строками (локальные файлы / URL потока)."""
 
@@ -147,6 +170,12 @@ class Player:
 
     def is_playing(self) -> bool:
         return self._engine.is_playing()
+
+    def is_buffering(self) -> bool:
+        check = getattr(self._engine, "is_buffering", None)
+        if callable(check):
+            return bool(check())
+        return False
 
     def _on_engine_playing(self) -> None:
         previous = self._was_playing
@@ -319,4 +348,4 @@ class Player:
         track = self.current_track
         if track is not None:
             catalog_ms = max(0, int(getattr(track, "duration_ms", 0) or 0))
-        return max(engine_ms, catalog_ms)
+        return resolve_playback_duration(engine_ms, catalog_ms)

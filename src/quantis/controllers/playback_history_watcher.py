@@ -53,15 +53,13 @@ class PlaybackHistoryWatcher(QObject):
         return max(self._timer.interval() + 2_500, 8_000)
 
     def _resolved_duration(self, track: Track | None) -> int:
-        player_ms = max(0, int(self._player.duration))
-        catalog_ms = 0
-        if track is not None:
-            catalog_ms = max(0, int(getattr(track, "duration_ms", 0) or 0))
-        known = self._last_dur if track is self._current else 0
-        duration = max(player_ms, catalog_ms, known)
+        duration = max(0, int(self._player.duration))
+        if duration <= 0:
+            duration = self._last_dur if track is self._current else 0
         if track is not None and duration > 0:
-            previous = int(getattr(track, "duration_ms", 0) or 0)
-            track.duration_ms = max(previous, duration)
+            catalog = max(0, int(getattr(track, "duration_ms", 0) or 0))
+            if catalog <= 0:
+                track.duration_ms = duration
         return duration
 
     def _capture(self) -> tuple[int, int]:

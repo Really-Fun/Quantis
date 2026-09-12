@@ -6,7 +6,6 @@ import logging
 from asyncio import get_running_loop
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
-from pathlib import Path
 from typing import Any
 
 from quantis.config.media_backend import resolve_media_backend
@@ -19,7 +18,7 @@ from quantis.services.youtube_streamer import AsyncYoutubeStreamer
 
 logger = logging.getLogger(__name__)
 
-_BUFFER_SOURCES = frozenset({TrackSource.YANDEX, TrackSource.SOUNDCLOUD})
+_PROXY_SOURCES = frozenset({TrackSource.YANDEX, TrackSource.SOUNDCLOUD})
 
 
 def is_hls_url(url: str | None) -> bool:
@@ -36,11 +35,22 @@ def should_buffer_stream(
     backend: str | None = None,
     url: str | None = None,
 ) -> bool:
-    """Qt + progressive MP3 (Yandex/SoundCloud). VLC и HLS — прямой URL."""
+    """Temp-файл отключён: Qt играет URL через локальный HTTP-прокси."""
+    _ = (track, backend, url)
+    return False
+
+
+def should_proxy_stream(
+    track: Track,
+    *,
+    backend: str | None = None,
+    url: str | None = None,
+) -> bool:
+    """Qt + Yandex/SoundCloud MP3 — через 127.0.0.1, Range-reconnect к CDN."""
     chosen = backend or resolve_media_backend()
     if chosen == "vlc":
         return False
-    if str(track.source).lower() not in _BUFFER_SOURCES:
+    if str(track.source).lower() not in _PROXY_SOURCES:
         return False
     return not is_hls_url(url)
 
@@ -53,6 +63,7 @@ class AsyncStreamer(AsyncStreamerInterface):
 
     def __init__(self, executor: ThreadPoolExecutor | None = None) -> None:
         from quantis.core.worker_pool import get_worker_pool
+        from quantis.services.http_stream_proxy import LocalHttpStreamProxy
         from quantis.services.yandex_progressive_buffer import ProgressiveStreamBuffer
 
         self._owns_executor = False
@@ -61,6 +72,7 @@ class AsyncStreamer(AsyncStreamerInterface):
         self._youtube = AsyncYoutubeStreamer(self._executor)
         self._soundcloud = AsyncSoundCloudStreamer(self._executor)
         self._stream_buffer = ProgressiveStreamBuffer(self._fetch_fresh_stream_url)
+        self._http_proxy = LocalHttpStreamProxy(self._fetch_fresh_stream_url)
         self._buffer_loop: Any = None
         self._cache: OrderedDict[str, tuple[str, float]] = OrderedDict()
 
@@ -87,37 +99,23 @@ class AsyncStreamer(AsyncStreamerInterface):
         raise ValueError(f"Неизвестный источник платформы у трека: {track.source!r}")
 
     async def open_playback(self, track: Track) -> str | None:
-        """VLC — прямой URL. Qt: Yandex/SoundCloud MP3 в temp, YouTube/HLS — URL."""
-        source_type = str(track.source).lower()
-        url: str | None = None
-        if source_type == TrackSource.SOUNDCLOUD:
-            url = await self.get_stream_url(track)
-            if not url:
-                return None
-            if is_hls_url(url) and resolve_media_backend() != "vlc":
-                logger.warning(
-                    "SoundCloud HLS «%s» — Qt Multimedia может не открыть поток",
-                    track.title,
-                )
-
-        if should_buffer_stream(track, url=url):
-            self._buffer_loop = get_running_loop()
-            # Прогретая prefetch-ом ссылка экономит буферу поход в API.
-            if url is None:
-                url = await self.get_stream_url(track)
-            path = await self._stream_buffer.open(track, url=url)
-            if path:
-                self._stream_buffer.cleanup_old_files(keep=Path(path))
-                return path
+        """Прямой URL. Qt Yandex/SoundCloud MP3 — через localhost-прокси."""
+        url = await self.get_stream_url(track)
+        if not url:
+            return None
+        if (
+            str(track.source).lower() == TrackSource.SOUNDCLOUD
+            and is_hls_url(url)
+            and resolve_media_backend() != "vlc"
+        ):
             logger.warning(
-                "Stream buffer не открылся для «%s» — прямой URL",
+                "SoundCloud HLS «%s» — Qt Multimedia может не открыть поток",
                 track.title,
             )
-            return url or await self.get_stream_url(track)
-
-        if url:
-            return url
-        return await self.get_stream_url(track)
+        if should_proxy_stream(track, url=url):
+            self._buffer_loop = get_running_loop()
+            return await self._http_proxy.mount(track, url)
+        return url
 
     async def prefetch_stream(self, track: Track) -> None:
         try:
@@ -185,23 +183,35 @@ class AsyncStreamer(AsyncStreamerInterface):
         key = f"{track.source}:{track.track_id}"
         self._cache.pop(key, None)
         self._stream_buffer.invalidate_track(track)
+        self._http_proxy.invalidate_track(track)
 
     def set_eco(self, enabled: bool) -> None:
         self._stream_buffer.set_eco(enabled)
 
     def shutdown(self) -> None:
         if self._buffer_loop is not None:
+            import asyncio
             from concurrent.futures import TimeoutError as FuturesTimeoutError
 
-            future = __import__("asyncio").run_coroutine_threadsafe(
-                self._stream_buffer.close(),
-                self._buffer_loop,
-            )
+            async def _close() -> None:
+                await self._stream_buffer.close()
+                await self._http_proxy.close()
+
+            loop = self._buffer_loop
+            self._buffer_loop = None
             try:
-                future.result(timeout=3)
-            except FuturesTimeoutError:
-                logger.debug("Таймаут остановки Yandex buffer")
-            except Exception:
-                logger.debug("Ошибка остановки Yandex buffer", exc_info=True)
+                running = asyncio.get_running_loop()
+            except RuntimeError:
+                running = None
+            if running is loop:
+                loop.create_task(_close())
+            else:
+                future = asyncio.run_coroutine_threadsafe(_close(), loop)
+                try:
+                    future.result(timeout=3)
+                except FuturesTimeoutError:
+                    logger.debug("Таймаут остановки stream proxy")
+                except Exception:
+                    logger.debug("Ошибка остановки stream proxy", exc_info=True)
         if self._owns_executor:
             self._executor.shutdown(wait=False)

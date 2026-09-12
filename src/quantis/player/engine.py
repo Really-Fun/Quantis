@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Callable
 
 from PySide6.QtCore import QUrl
-from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
+from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer, QPlaybackOptions
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +19,7 @@ class QtMediaEngine:
         self._player = QMediaPlayer()
         self._audio = QAudioOutput()
         self._player.setAudioOutput(self._audio)
+        self._apply_playback_options()
 
         self._playing_cbs: list[Callable[[], None]] = []
         self._paused_cbs: list[Callable[[], None]] = []
@@ -49,6 +50,20 @@ class QtMediaEngine:
             return QUrl(source)
         return QUrl.fromLocalFile(str(Path(source).resolve()))
 
+    @staticmethod
+    def _apply_playback_options_to(player: QMediaPlayer) -> None:
+        options = QPlaybackOptions()
+        options.setPlaybackIntent(QPlaybackOptions.PlaybackIntent.Playback)
+        # Пока прокси переподключается к CDN, localhost-сокет Qt не должен отвалиться.
+        options.setNetworkTimeout(60_000)
+        player.setPlaybackOptions(options)
+
+    def _apply_playback_options(self) -> None:
+        try:
+            self._apply_playback_options_to(self._player)
+        except Exception:
+            logger.debug("QPlaybackOptions недоступны", exc_info=True)
+
     def play_media(self, source: str) -> None:
         self._pending_seek_ms = 0
         self._player.setSource(self._to_url(source))
@@ -67,6 +82,14 @@ class QtMediaEngine:
 
     def is_playing(self) -> bool:
         return self._player.playbackState() == QMediaPlayer.PlaybackState.PlayingState
+
+    def is_buffering(self) -> bool:
+        status = self._player.mediaStatus()
+        return status in (
+            QMediaPlayer.MediaStatus.LoadingMedia,
+            QMediaPlayer.MediaStatus.BufferingMedia,
+            QMediaPlayer.MediaStatus.StalledMedia,
+        )
 
     def get_position_ms(self) -> int:
         return max(0, int(self._player.position()))
