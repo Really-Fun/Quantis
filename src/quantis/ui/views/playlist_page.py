@@ -1,12 +1,15 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal, QEvent
+from PySide6.QtCore import QEvent, Qt, Signal
+from PySide6.QtGui import QAction, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QFrame,
     QHBoxLayout,
     QHeaderView,
     QLabel,
+    QMenu,
+    QMessageBox,
     QPushButton,
     QTableView,
     QVBoxLayout,
@@ -15,6 +18,7 @@ from PySide6.QtWidgets import (
 
 from quantis.core.async_bridge import AsyncBridge
 from quantis.ui.async_ui import schedule
+from quantis.ui.playlist_actions import show_add_to_playlist_menu
 from quantis.ui.viewmodels.playlist_vm import PlaylistViewModel
 from quantis.ui.views.widgets.cover_art import playlist_cover_path
 from quantis.ui.views.widgets.playlist_card import GradientCover
@@ -189,6 +193,11 @@ class PlaylistPage(QWidget):
         table.setModel(self._vm.model)
         table.setItemDelegate(PlaylistTrackDelegate(table))
         table.doubleClicked.connect(self._on_play_row)
+        table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        table.customContextMenuRequested.connect(self._on_context_menu)
+        delete = QShortcut(QKeySequence.StandardKey.Delete, table)
+        delete.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
+        delete.activated.connect(self._on_delete_selected)
         self._table = table
         return table
 
@@ -232,6 +241,59 @@ class PlaylistPage(QWidget):
     def _on_play_row(self, index) -> None:
         if self._bridge is not None:
             schedule(self._vm.play_at(index.row()), self._bridge)
+
+    def _on_context_menu(self, pos) -> None:
+        if self._bridge is None:
+            return
+        index = self._table.indexAt(pos)
+        if not index.isValid():
+            return
+        track = self._vm.model.get_track(index.row())
+        if track is None:
+            return
+        menu = QMenu(self)
+        menu.setObjectName("playlistPickMenu")
+        add_action = QAction("Добавить в плейлист…", menu)
+        add_action.triggered.connect(
+            lambda: show_add_to_playlist_menu(
+                track, bridge=self._bridge, parent=self
+            )
+        )
+        menu.addAction(add_action)
+        if self._vm.can_remove_tracks:
+            menu.addSeparator()
+            remove_action = QAction(self._vm.remove_action_label, menu)
+            remove_action.triggered.connect(
+                lambda: self._confirm_remove(index.row(), track)
+            )
+            menu.addAction(remove_action)
+        menu.exec(self._table.viewport().mapToGlobal(pos))
+
+    def _on_delete_selected(self) -> None:
+        if not self._vm.can_remove_tracks:
+            return
+        index = self._table.currentIndex()
+        if not index.isValid():
+            return
+        track = self._vm.model.get_track(index.row())
+        if track is None:
+            return
+        self._confirm_remove(index.row(), track)
+
+    def _confirm_remove(self, row: int, track) -> None:
+        if self._bridge is None:
+            return
+        title, text = self._vm.remove_confirm_text(track)
+        answer = QMessageBox.question(
+            self,
+            title,
+            text,
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        schedule(self._vm.remove_track_at(row), self._bridge)
 
     def set_playing_track(self, track) -> None:
         self._vm.set_playing_track(track)

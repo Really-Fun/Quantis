@@ -254,6 +254,7 @@ class QuantisMainWindow(QMainWindow):
         self._search_vm.download_finished.connect(
             lambda: self._home_vm.refresh_downloaded(self._bridge)
         )
+        self._playlist_vm.tracks_mutated.connect(self._on_playlist_tracks_mutated)
         self._ui_prefs.changed.connect(self._on_prefs_changed)
         self._dynamic_wallpaper = DynamicWallpaperController(
             self._body_shell.backdrop,
@@ -592,6 +593,18 @@ class QuantisMainWindow(QMainWindow):
 
             if isinstance(pl, UserPlaylist):
                 schedule(self._reload_open_user_playlist(pl.name), self._bridge)
+
+    def _on_playlist_tracks_mutated(self) -> None:
+        playlist = self._playlist_vm.playlist
+        if playlist is not None:
+            self._header.set_page(playlist.name, f"{len(playlist)} треков")
+        from quantis.models import DownloadPlaylist, UserPlaylist
+        from quantis.ui.async_ui import schedule
+
+        if isinstance(playlist, DownloadPlaylist):
+            self._home_vm.refresh_downloaded(self._bridge)
+        elif isinstance(playlist, UserPlaylist):
+            schedule(self._home_vm.refresh_user_playlists(self._bridge), self._bridge)
 
     async def _reload_open_user_playlist(self, name: str) -> None:
         from quantis.services.user_playlists import UserPlaylistsService

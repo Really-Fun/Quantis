@@ -431,6 +431,29 @@ class HomeViewModel(BaseViewModel):
     async def play_recommendation_at(self, index: int) -> None:
         await self._play_from_model(self._recommendation_model, index)
 
+    async def play_downloaded_at(self, index: int) -> None:
+        playlist = DownloadPlaylist(tracks=self._downloaded_model.all_tracks())
+        await self.play_playlist(playlist, start_index=index)
+
+    async def remove_downloaded_at(self, index: int) -> bool:
+        track = self._downloaded_model.get_track(index)
+        if track is None:
+            return False
+        try:
+            victim = DownloadPlaylist(tracks=[track])
+            await asyncio.to_thread(victim.delete_track, track)
+        except Exception as exc:
+            self.emit_error(str(exc))
+            return False
+        self._downloaded_model.remove_track(index)
+        current = self._playback.playlist_manager.current_playlist
+        if isinstance(current, DownloadPlaylist):
+            current.tracks.remove(track)
+        self.downloaded_changed.emit()
+        if self._bridge is not None:
+            self.refresh(self._bridge)
+        return True
+
     async def play_playlist(self, playlist: Playlist, start_index: int = 0) -> None:
         playlist = self.resolve_playlist(playlist)
         tracks = list(playlist.tracks.values)

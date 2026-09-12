@@ -193,6 +193,11 @@ class DownloadPlaylist(Playlist):
             except OSError:
                 pass
         super().delete_track(track)
+        try:
+            Path(provider.get_cover_path(track)).unlink(missing_ok=True)
+        except OSError:
+            pass
+        track.downloaded = False
         return True
 
     @classmethod

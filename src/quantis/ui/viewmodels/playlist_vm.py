@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import random
 
 from PySide6.QtCore import QObject, Signal
@@ -25,6 +26,7 @@ class PlaylistViewModel(BaseViewModel):
 
     playlist_changed = Signal()
     covers_ready = Signal()
+    tracks_mutated = Signal()
     PLAYLIST_BATCH_SIZE = 80
 
     def __init__(
@@ -52,6 +54,29 @@ class PlaylistViewModel(BaseViewModel):
         if self._playlist is None:
             return 0
         return len(self._playlist)
+
+    @property
+    def can_remove_tracks(self) -> bool:
+        return isinstance(self._playlist, (UserPlaylist, DownloadPlaylist))
+
+    @property
+    def remove_action_label(self) -> str:
+        if isinstance(self._playlist, DownloadPlaylist):
+            return "Удалить скачанный файл"
+        return "Убрать из плейлиста"
+
+    def remove_confirm_text(self, track: Track) -> tuple[str, str]:
+        playlist = self._playlist
+        name = playlist.name if playlist is not None else "плейлиста"
+        if isinstance(playlist, DownloadPlaylist):
+            return (
+                "Удалить файл",
+                f"Удалить «{track.title}» с диска? Файл нельзя будет слушать офлайн.",
+            )
+        return (
+            "Убрать из плейлиста",
+            f"Убрать «{track.title}» из «{name}»?",
+        )
 
     def set_bridge(self, bridge: AsyncBridge) -> None:
         self._bridge = bridge
@@ -113,6 +138,41 @@ class PlaylistViewModel(BaseViewModel):
             return
         row = max(0, min(index, len(tracks) - 1))
         await self._start_playlist(playlist, start_index=row)
+
+    async def remove_track_at(self, index: int) -> bool:
+        playlist = self._playlist
+        track = self._model.get_track(index)
+        if playlist is None or track is None or not self.can_remove_tracks:
+            return False
+        try:
+            if isinstance(playlist, UserPlaylist):
+                from quantis.services.user_playlists import UserPlaylistsService
+
+                await UserPlaylistsService().remove_track(playlist.name, track)
+                playlist.delete_track(track)
+            elif isinstance(playlist, DownloadPlaylist):
+                await asyncio.to_thread(playlist.delete_track, track)
+            else:
+                return False
+        except Exception as exc:
+            self.emit_error(str(exc))
+            return False
+        self._model.remove_track(index)
+        self._drop_from_playing_queue(track)
+        self.playlist_changed.emit()
+        self.tracks_mutated.emit()
+        return True
+
+    def _drop_from_playing_queue(self, track: Track) -> None:
+        current = self._playback.playlist_manager.current_playlist
+        source = self._playlist
+        if current is None or source is None or current is source:
+            return
+        if type(current) is not type(source):
+            return
+        if getattr(current, "name", None) != getattr(source, "name", None):
+            return
+        current.tracks.remove(track)
 
     async def _start_playlist(self, playlist: Playlist, *, start_index: int) -> None:
         tracks = list(playlist.tracks.values)
