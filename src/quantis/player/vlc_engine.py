@@ -8,6 +8,8 @@ from typing import Callable
 
 from PySide6.QtCore import QObject, QTimer, Signal
 
+from quantis.player.volume import output_percent
+
 logger = logging.getLogger(__name__)
 
 
@@ -231,9 +233,7 @@ class VlcMediaEngine:
         self._apply_output_volume()
 
     def _apply_output_volume(self) -> None:
-        self._player.audio_set_volume(
-            max(0, min(100, int(round(self._volume * self._duck_gain))))
-        )
+        self._player.audio_set_volume(output_percent(self._volume, self._duck_gain))
 
     def on_playing(self, callback: Callable[[], None]) -> None:
         self._playing_cbs.append(callback)

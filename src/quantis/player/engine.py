@@ -9,6 +9,8 @@ from typing import Callable
 from PySide6.QtCore import QUrl
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer, QPlaybackOptions
 
+from quantis.player.volume import output_gain
+
 logger = logging.getLogger(__name__)
 
 
@@ -143,7 +145,7 @@ class QtMediaEngine:
         self._apply_output_volume()
 
     def _apply_output_volume(self) -> None:
-        self._audio.setVolume((self._volume / 100.0) * self._duck_gain)
+        self._audio.setVolume(output_gain(self._volume, self._duck_gain))
 
     def on_playing(self, callback: Callable[[], None]) -> None:
         self._playing_cbs.append(callback)

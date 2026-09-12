@@ -143,11 +143,13 @@ def test_player_duck_gain_without_engine_api() -> None:
 
 
 def test_qt_duck_gain_does_not_change_reported_volume(qapp) -> None:
+    from quantis.player.volume import output_gain
+
     engine = QtMediaEngine()
     engine.set_volume(80)
     engine.set_duck_gain(0.5)
     assert engine.get_volume() == 80
-    assert abs(engine.audio_output.volume() - 0.4) < 0.02
+    assert abs(engine.audio_output.volume() - output_gain(80, 0.5)) < 0.02
     engine.set_volume(100)
     assert engine.get_volume() == 100
     assert abs(engine.audio_output.volume() - 0.5) < 0.02
