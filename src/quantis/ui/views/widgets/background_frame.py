@@ -33,6 +33,7 @@ class BackgroundFrame(QFrame):
         self._content.setStyleSheet("background: transparent;")
 
         self._eco = False
+        self._cinematic = False
         self._timer = QTimer(self)
         self._timer.setInterval(40)
         self._timer.timeout.connect(self._tick)
@@ -40,7 +41,7 @@ class BackgroundFrame(QFrame):
         QTimer.singleShot(400, self._start_pulse_if_needed)
 
     def _start_pulse_if_needed(self) -> None:
-        if self._eco:
+        if self._eco or self._cinematic:
             return
         if self._variant in ("neon", "glass", "yellow_dark", "classic"):
             if not self._timer.isActive():
@@ -57,14 +58,33 @@ class BackgroundFrame(QFrame):
         if enabled:
             self._timer.stop()
             self.update()
-        elif self._variant in ("neon", "glass", "yellow_dark", "classic"):
+        elif not self._cinematic and self._variant in (
+            "neon",
+            "glass",
+            "yellow_dark",
+            "classic",
+        ):
             if not self._timer.isActive():
                 self._timer.start()
+
+    def set_cinematic(self, enabled: bool) -> None:
+        if self._cinematic == enabled:
+            return
+        self._cinematic = enabled
+        if enabled:
+            self._timer.stop()
+        else:
+            self._start_pulse_if_needed()
+        self.update()
 
     def set_variant(self, variant: str) -> None:
         if self._variant != variant:
             self._variant = variant
-            if not self._eco and variant in ("neon", "glass", "yellow_dark", "classic"):
+            if (
+                not self._eco
+                and not self._cinematic
+                and variant in ("neon", "glass", "yellow_dark", "classic")
+            ):
                 if not self._timer.isActive():
                     self._timer.start()
             elif variant not in ("neon", "glass", "yellow_dark", "classic"):
@@ -77,7 +97,7 @@ class BackgroundFrame(QFrame):
             self.update()
 
     def _tick(self) -> None:
-        if self._eco:
+        if self._eco or self._cinematic:
             return
         if self._variant not in ("neon", "glass", "yellow_dark", "classic"):
             return
@@ -92,6 +112,10 @@ class BackgroundFrame(QFrame):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         rect = self.rect()
+        if self._cinematic:
+            painter.fillRect(rect, QColor(0, 0, 0))
+            painter.end()
+            return
         w, h = rect.width(), rect.height()
 
         bases = {

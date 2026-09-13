@@ -34,6 +34,7 @@ class _VideoSurface(QWidget):
         self._source = QImage()
         self._scaled = QImage()
         self._opacity = 0.28
+        self._cinematic = False
         self._last_frame_at = 0.0
         self._min_interval = 1.0 / WALLPAPER_DEFAULT_FPS
         self._max_side = wallpaper_decode_max_side(360)
@@ -52,6 +53,13 @@ class _VideoSurface(QWidget):
 
     def set_opacity(self, value: float) -> None:
         self._opacity = max(0.05, min(1.0, value))
+        self.update()
+
+    def set_cinematic(self, enabled: bool) -> None:
+        if self._cinematic == enabled:
+            return
+        self._cinematic = enabled
+        self._opacity = 1.0 if enabled else 0.28
         self.update()
 
     def clear(self) -> None:
@@ -122,18 +130,21 @@ class _VideoSurface(QWidget):
 
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
-        painter.setOpacity(self._opacity)
         rect = self.rect()
+        if self._cinematic:
+            painter.fillRect(rect, QColor(0, 0, 0))
+        painter.setOpacity(self._opacity)
         x = (rect.width() - self._scaled.width()) // 2
         y = (rect.height() - self._scaled.height()) // 2
         painter.drawImage(x, y, self._scaled)
         painter.setOpacity(1.0)
 
-        radius = max(rect.width(), rect.height()) * 0.7
-        vignette = QRadialGradient(rect.center(), radius)
-        vignette.setColorAt(0.4, QColor(0, 0, 0, 0))
-        vignette.setColorAt(1.0, QColor(0, 0, 0, 140))
-        painter.fillRect(rect, vignette)
+        if not self._cinematic:
+            radius = max(rect.width(), rect.height()) * 0.7
+            vignette = QRadialGradient(rect.center(), radius)
+            vignette.setColorAt(0.4, QColor(0, 0, 0, 0))
+            vignette.setColorAt(1.0, QColor(0, 0, 0, 140))
+            painter.fillRect(rect, vignette)
         painter.end()
 
 
@@ -213,6 +224,10 @@ class WallpaperBackdrop(QWidget):
 
     def set_video_limits(self, *, fps: int, max_side: int) -> None:
         self._video_surface.set_limits(fps=fps, max_side=max_side)
+
+    def set_cinematic(self, enabled: bool) -> None:
+        self._video_surface.set_cinematic(enabled)
+        self.update()
 
     def set_position_provider(self, provider: Callable[[], int] | None) -> None:
         """Источник актуальной позиции аудио для старта видео «в ноль»."""
@@ -503,6 +518,12 @@ class BodyWithWallpaper(QWidget):
 
     def set_wallpaper(self, path: str | Path | None) -> None:
         self._backdrop.set_wallpaper(path)
+
+    def set_theater_mode(self, enabled: bool) -> None:
+        """Прячет nav/страницы/плеер и показывает видео на всю зону."""
+        self._foreground.setVisible(not enabled)
+        self._layer_host.setVisible(not enabled)
+        self._backdrop.set_cinematic(enabled)
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)

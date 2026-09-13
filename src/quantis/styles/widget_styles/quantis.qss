@@ -67,6 +67,7 @@ QLabel#headerBrandWordmark {
     background: transparent;
 }
 
+QToolButton#windowHideUiBtn,
 QToolButton#windowMinBtn,
 QToolButton#windowMaxBtn,
 QToolButton#windowCloseBtn {
@@ -77,6 +78,7 @@ QToolButton#windowCloseBtn {
     margin: 0;
 }
 
+QToolButton#windowHideUiBtn:hover,
 QToolButton#windowMinBtn:hover,
 QToolButton#windowMaxBtn:hover {
     background: rgba(255, 255, 255, 0.1);

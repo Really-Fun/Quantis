@@ -47,12 +47,27 @@ class WindowResizeGrips:
     def __init__(self, window: QWidget, margin: int = 7) -> None:
         self._window = window
         self._margin = margin
+        self._enabled = True
         self._grips = [
             _ResizeGrip(window, edges, cursor) for edges, cursor in self._SPECS
         ]
 
+    def set_enabled(self, enabled: bool) -> None:
+        if self._enabled == enabled:
+            return
+        self._enabled = enabled
+        if enabled:
+            self.update_geometry()
+            return
+        for grip in self._grips:
+            grip.hide()
+
     def update_geometry(self) -> None:
-        if self._window.isMaximized() or self._window.isFullScreen():
+        if (
+            not self._enabled
+            or self._window.isMaximized()
+            or self._window.isFullScreen()
+        ):
             for grip in self._grips:
                 grip.hide()
             return

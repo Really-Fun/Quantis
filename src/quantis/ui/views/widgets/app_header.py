@@ -18,6 +18,7 @@ from quantis.ui.views.widgets.brand_mark import BrandMark
 class AppHeader(QFrame):
     """Шапка: бренд QUANTIS + заголовок страницы + chrome окна."""
 
+    hide_ui_requested = Signal()
     minimize_requested = Signal()
     maximize_requested = Signal()
     close_requested = Signal()
@@ -58,6 +59,12 @@ class AppHeader(QFrame):
         controls.setSpacing(0)
         controls.setContentsMargins(0, 0, 0, 0)
 
+        self._hide_ui_btn = self._make_control(
+            "windowHideUiBtn",
+            resources.icon_path("hide-ui.svg"),
+            "Скрыть интерфейс (S)",
+            self.hide_ui_requested.emit,
+        )
         self._min_btn = self._make_control(
             "windowMinBtn",
             resources.icon_path("minimize.svg"),
@@ -77,6 +84,7 @@ class AppHeader(QFrame):
             self.close_requested.emit,
         )
 
+        controls.addWidget(self._hide_ui_btn)
         controls.addWidget(self._min_btn)
         controls.addWidget(self._max_btn)
         controls.addWidget(self._close_btn)

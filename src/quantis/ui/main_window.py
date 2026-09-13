@@ -5,11 +5,16 @@ from pathlib import Path
 from PySide6.QtCore import QEvent, QPropertyAnimation, QRect, Qt, QUrl
 from PySide6.QtGui import QColor, QDesktopServices, QFont, QGuiApplication
 from PySide6.QtWidgets import (
+    QAbstractSpinBox,
     QApplication,
+    QComboBox,
     QGraphicsOpacityEffect,
     QHBoxLayout,
+    QLineEdit,
     QMainWindow,
+    QPlainTextEdit,
     QStackedWidget,
+    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -43,6 +48,20 @@ from quantis.ui.views.widgets.resize_grips import WindowResizeGrips
 from quantis.ui.views.widgets.side_nav import SideNavRail
 from quantis.ui.views.widgets.update_banner import UpdateBanner
 from quantis.ui.views.widgets.wallpaper_backdrop import BodyWithWallpaper
+
+
+def is_typing_target(widget: QWidget | None) -> bool:
+    """S не должен прятать UI, пока курсор в поле ввода."""
+    current = widget
+    while current is not None:
+        if isinstance(
+            current, (QLineEdit, QPlainTextEdit, QTextEdit, QAbstractSpinBox)
+        ):
+            return True
+        if isinstance(current, QComboBox):
+            return True
+        current = current.parentWidget()
+    return False
 
 
 class QuantisMainWindow(QMainWindow):
@@ -142,10 +161,12 @@ class QuantisMainWindow(QMainWindow):
         root.setContentsMargins(0, 0, 0, 0)
         root.setSpacing(0)
 
+        self._chrome_hidden = False
         self._header = AppHeader()
         self._header.minimize_requested.connect(self.showMinimized)
         self._header.maximize_requested.connect(self._toggle_maximize)
         self._header.close_requested.connect(self.close)
+        self._header.hide_ui_requested.connect(self._toggle_chrome_hidden)
         root.addWidget(self._header)
 
         self._update_banner = UpdateBanner()
@@ -234,6 +255,7 @@ class QuantisMainWindow(QMainWindow):
             ),
         )
         self._player_bar.now_playing_toggle_requested.connect(self._toggle_now_playing)
+        self._player_bar.hide_ui_requested.connect(self._toggle_chrome_hidden)
         columns.addWidget(self._player_bar)
 
         body.addWidget(columns_host, stretch=1)
@@ -269,6 +291,7 @@ class QuantisMainWindow(QMainWindow):
         app = QApplication.instance()
         if app is not None:
             app.applicationStateChanged.connect(self._on_app_state_changed)
+            app.installEventFilter(self)
         self._refresh_eco_state()
         self._apply_ui_theme(self._ui_prefs.ui_theme)
         self._sync_now_playing_visibility()
@@ -311,6 +334,66 @@ class QuantisMainWindow(QMainWindow):
         self._ui_prefs.set_show_now_playing_panel(
             not self._ui_prefs.show_now_playing_panel
         )
+
+    def _toggle_chrome_hidden(self) -> None:
+        self._set_chrome_hidden(not self._chrome_hidden)
+
+    def _set_chrome_hidden(self, hidden: bool) -> None:
+        if self._chrome_hidden == hidden:
+            return
+        self._chrome_hidden = hidden
+        self._header.setVisible(not hidden)
+        if hidden:
+            self._update_banner.hide()
+            if self._np_fullscreen.isVisible():
+                self._np_fullscreen.hide()
+        else:
+            self._sync_update_banner()
+        self._body_shell.set_theater_mode(hidden)
+        self._shell.set_cinematic(hidden)
+        self._resize_grips.set_enabled(not hidden)
+        if hidden:
+            self.setFocus(Qt.FocusReason.OtherFocusReason)
+        else:
+            self._sync_now_playing_visibility()
+
+    def _event_from_this_window(self, obj) -> bool:
+        if obj is self:
+            return True
+        if isinstance(obj, QWidget):
+            return obj.window() is self
+        return False
+
+    def eventFilter(self, obj, event) -> bool:
+        if self._event_from_this_window(obj):
+            etype = event.type()
+            if (
+                etype == QEvent.Type.KeyPress
+                and event.key() == Qt.Key.Key_S
+                and not event.isAutoRepeat()
+                and not (
+                    event.modifiers()
+                    & (
+                        Qt.KeyboardModifier.ControlModifier
+                        | Qt.KeyboardModifier.AltModifier
+                        | Qt.KeyboardModifier.MetaModifier
+                        | Qt.KeyboardModifier.ShiftModifier
+                    )
+                )
+            ):
+                if self._chrome_hidden or not is_typing_target(
+                    QApplication.focusWidget()
+                ):
+                    self._toggle_chrome_hidden()
+                    return True
+            elif (
+                self._chrome_hidden
+                and etype == QEvent.Type.MouseButtonPress
+                and event.button() == Qt.MouseButton.LeftButton
+            ):
+                self._set_chrome_hidden(False)
+                return True
+        return super().eventFilter(obj, event)
 
     def _sync_now_playing_visibility(self) -> None:
         wide = self.width() >= 1100
@@ -659,6 +742,9 @@ class QuantisMainWindow(QMainWindow):
         self.setGeometry(frame)
 
     def closeEvent(self, event) -> None:
+        app = QApplication.instance()
+        if app is not None:
+            app.removeEventFilter(self)
         if not (self.isMaximized() or self.isMinimized() or self.isFullScreen()):
             self._ui_prefs.set_window_geometry(self.saveGeometry())
         super().closeEvent(event)

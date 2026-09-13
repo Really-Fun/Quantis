@@ -66,6 +66,7 @@ class PlayerBar(QFrame):
     """Нижняя панель ~80px: meta | transport+seek | actions."""
 
     now_playing_toggle_requested = Signal()
+    hide_ui_requested = Signal()
 
     def __init__(
         self,
@@ -198,6 +199,12 @@ class PlayerBar(QFrame):
         self._download_btn.clicked.connect(self._on_download_clicked)
         self._now_btn = self._make_button("radio.svg", "Now Playing", size=32)
         self._now_btn.clicked.connect(self.now_playing_toggle_requested.emit)
+        self._hide_ui_btn = self._make_button(
+            "hide-ui-neon.svg",
+            "Скрыть интерфейс (S)",
+            size=32,
+        )
+        self._hide_ui_btn.clicked.connect(self.hide_ui_requested.emit)
         self._volume = QSlider(Qt.Orientation.Horizontal)
         self._volume.setObjectName("volSlider")
         self._volume.setFixedWidth(72)
@@ -216,6 +223,7 @@ class PlayerBar(QFrame):
         self._plugin_slot = QHBoxLayout()
         self._plugin_slot.setSpacing(2)
         self._right_layout.addLayout(self._plugin_slot)
+        self._right_layout.addWidget(self._hide_ui_btn)
         self._right_layout.addWidget(self._now_btn)
         self._right_layout.addWidget(self._download_btn)
         self._right_layout.addWidget(self._playlist_btn)
@@ -451,6 +459,7 @@ class PlayerBar(QFrame):
             self._playlist_btn,
             self._download_btn,
             self._now_btn,
+            self._hide_ui_btn,
             *self._plugin_buttons,
         ]
         for button in buttons:
