@@ -3,18 +3,20 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import QEvent, QPropertyAnimation, QRect, Qt, QUrl
-from PySide6.QtGui import QColor, QDesktopServices, QFont, QGuiApplication
+from PySide6.QtGui import (
+    QColor,
+    QDesktopServices,
+    QFont,
+    QGuiApplication,
+    QKeySequence,
+    QShortcut,
+)
 from PySide6.QtWidgets import (
-    QAbstractSpinBox,
     QApplication,
-    QComboBox,
     QGraphicsOpacityEffect,
     QHBoxLayout,
-    QLineEdit,
     QMainWindow,
-    QPlainTextEdit,
     QStackedWidget,
-    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -26,6 +28,13 @@ from quantis.ui.controllers.dynamic_wallpaper import DynamicWallpaperController
 from quantis.ui.cover_accent import accent_from_cover_path
 from quantis.ui.design_tokens import ACCENT_FALLBACK
 from quantis.ui.preferences import UiPreferences
+from quantis.ui.shortcuts import (
+    ALT_PAGE_IDS,
+    VOLUME_STEP,
+    is_arrow_navigation_target,
+    is_space_target,
+    is_typing_target,
+)
 from quantis.ui.ui_extensions import NavExtension, UiExtensionHost
 from quantis.ui.viewmodels.home_vm import HomeViewModel
 from quantis.ui.viewmodels.player_vm import PlayerViewModel
@@ -48,20 +57,6 @@ from quantis.ui.views.widgets.resize_grips import WindowResizeGrips
 from quantis.ui.views.widgets.side_nav import SideNavRail
 from quantis.ui.views.widgets.update_banner import UpdateBanner
 from quantis.ui.views.widgets.wallpaper_backdrop import BodyWithWallpaper
-
-
-def is_typing_target(widget: QWidget | None) -> bool:
-    """S не должен прятать UI, пока курсор в поле ввода."""
-    current = widget
-    while current is not None:
-        if isinstance(
-            current, (QLineEdit, QPlainTextEdit, QTextEdit, QAbstractSpinBox)
-        ):
-            return True
-        if isinstance(current, QComboBox):
-            return True
-        current = current.parentWidget()
-    return False
 
 
 class QuantisMainWindow(QMainWindow):
@@ -292,6 +287,8 @@ class QuantisMainWindow(QMainWindow):
         if app is not None:
             app.applicationStateChanged.connect(self._on_app_state_changed)
             app.installEventFilter(self)
+            app.focusChanged.connect(self._sync_shortcut_enabled)
+        self._install_shortcuts()
         self._refresh_eco_state()
         self._apply_ui_theme(self._ui_prefs.ui_theme)
         self._sync_now_playing_visibility()
@@ -356,6 +353,7 @@ class QuantisMainWindow(QMainWindow):
             self.setFocus(Qt.FocusReason.OtherFocusReason)
         else:
             self._sync_now_playing_visibility()
+        self._sync_shortcut_enabled()
 
     def _event_from_this_window(self, obj) -> bool:
         if obj is self:
@@ -364,35 +362,80 @@ class QuantisMainWindow(QMainWindow):
             return obj.window() is self
         return False
 
-    def eventFilter(self, obj, event) -> bool:
-        if self._event_from_this_window(obj):
-            etype = event.type()
-            if (
-                etype == QEvent.Type.KeyPress
-                and event.key() == Qt.Key.Key_S
-                and not event.isAutoRepeat()
-                and not (
-                    event.modifiers()
-                    & (
-                        Qt.KeyboardModifier.ControlModifier
-                        | Qt.KeyboardModifier.AltModifier
-                        | Qt.KeyboardModifier.MetaModifier
-                        | Qt.KeyboardModifier.ShiftModifier
-                    )
+    def _install_shortcuts(self) -> None:
+        self._sc_hide = self._make_shortcut("S", self._toggle_chrome_hidden)
+        self._sc_pause = self._make_shortcut(
+            Qt.Key.Key_Space, self._player_vm.toggle_pause
+        )
+        self._sc_like = self._make_shortcut("L", self._player_bar.toggle_like)
+        self._sc_prev = self._make_shortcut(
+            Qt.Key.Key_Left, self._player_vm.play_previous
+        )
+        self._sc_next = self._make_shortcut(Qt.Key.Key_Right, self._player_vm.play_next)
+        self._sc_repeat = self._make_shortcut("R", self._player_vm.cycle_repeat_mode)
+        self._sc_vol_up = self._make_shortcut(
+            Qt.Key.Key_Up, lambda: self._player_vm.nudge_volume(VOLUME_STEP)
+        )
+        self._sc_vol_up.setAutoRepeat(True)
+        self._sc_vol_down = self._make_shortcut(
+            Qt.Key.Key_Down, lambda: self._player_vm.nudge_volume(-VOLUME_STEP)
+        )
+        self._sc_vol_down.setAutoRepeat(True)
+        self._sc_pages: list[QShortcut] = []
+        for index, page_id in enumerate(ALT_PAGE_IDS, start=1):
+            self._sc_pages.append(
+                self._make_shortcut(
+                    f"Alt+{index}",
+                    lambda pid=page_id: self._goto_page(pid),
                 )
-            ):
-                if self._chrome_hidden or not is_typing_target(
-                    QApplication.focusWidget()
-                ):
-                    self._toggle_chrome_hidden()
-                    return True
-            elif (
-                self._chrome_hidden
-                and etype == QEvent.Type.MouseButtonPress
-                and event.button() == Qt.MouseButton.LeftButton
-            ):
-                self._set_chrome_hidden(False)
-                return True
+            )
+        self._make_shortcut("Alt+M", lambda: self._goto_page(self.PAGE_MEMBER))
+        self._make_shortcut("Alt+S", lambda: self._goto_page(self.PAGE_SETTINGS))
+        self._sync_shortcut_enabled()
+
+    def _make_shortcut(self, key, slot) -> QShortcut:
+        shortcut = QShortcut(QKeySequence(key), self)
+        shortcut.setContext(Qt.ShortcutContext.WindowShortcut)
+        shortcut.setAutoRepeat(False)
+        shortcut.activated.connect(slot)
+        return shortcut
+
+    def _goto_page(self, page_id: int) -> None:
+        if self._chrome_hidden:
+            self._set_chrome_hidden(False)
+        if self._stack.currentIndex() == self.PAGE_PLAYLIST:
+            self._current_page = -1
+        self._apply_page(page_id)
+
+    def _sync_shortcut_enabled(self, *_) -> None:
+        focus = QApplication.focusWidget()
+        typing = is_typing_target(focus)
+        arrows = is_arrow_navigation_target(focus)
+        space = is_space_target(focus)
+        hidden = self._chrome_hidden
+        if getattr(self, "_sc_hide", None) is not None:
+            self._sc_hide.setEnabled(hidden or not typing)
+        if getattr(self, "_sc_like", None) is not None:
+            self._sc_like.setEnabled(hidden or not typing)
+            self._sc_repeat.setEnabled(hidden or not typing)
+        if getattr(self, "_sc_pause", None) is not None:
+            self._sc_pause.setEnabled(hidden or not (typing or space))
+        if getattr(self, "_sc_vol_up", None) is not None:
+            enabled = hidden or not arrows
+            self._sc_vol_up.setEnabled(enabled)
+            self._sc_vol_down.setEnabled(enabled)
+            self._sc_prev.setEnabled(enabled)
+            self._sc_next.setEnabled(enabled)
+
+    def eventFilter(self, obj, event) -> bool:
+        if (
+            self._chrome_hidden
+            and self._event_from_this_window(obj)
+            and event.type() == QEvent.Type.MouseButtonPress
+            and event.button() == Qt.MouseButton.LeftButton
+        ):
+            self._set_chrome_hidden(False)
+            return True
         return super().eventFilter(obj, event)
 
     def _sync_now_playing_visibility(self) -> None:

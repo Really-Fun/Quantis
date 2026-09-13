@@ -86,6 +86,9 @@ class PlayerViewModel(BaseViewModel):
         UiPreferences().set_volume(clamped)
         self.volume_changed.emit(clamped)
 
+    def nudge_volume(self, delta: int) -> None:
+        self.set_volume(int(self._player.volume) + int(delta))
+
     def seek(self, position_ms: int) -> None:
         # Слайдер уводим сразу, а сам плеер — через контроллер: он ещё должен
         # догрузить буфер и подтянуть видео-фон.

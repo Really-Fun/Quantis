@@ -89,6 +89,11 @@ class Player:
     def on_stream_error(self, callback: Callable[[str], None]) -> None:
         self._stream_error_callbacks.append(callback)
 
+    def on_audio_buffer(self, callback: Callable) -> None:
+        hook = getattr(self._engine, "on_audio_buffer", None)
+        if callable(hook):
+            hook(callback)
+
     def play(self, source: str, *, start_ms: int = 0) -> None:
         self._stream_retry_used = False
         self._loading_source = True

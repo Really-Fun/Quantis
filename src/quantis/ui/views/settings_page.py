@@ -34,6 +34,7 @@ from quantis.services.wallpaper_policy import (
 )
 from quantis.ui.preferences import UiPreferences
 from quantis.ui.resources import UI_THEME_LABELS
+from quantis.ui.shortcuts import KEYBIND_HINTS
 from quantis.ui.views.widgets.glass_panel import GlassPanel
 from quantis.ui.wallpapers import (
     remap_renamed_wallpaper,
@@ -194,6 +195,19 @@ class SettingsPage(QWidget):
         self._eco_cb.toggled.connect(self._on_eco_toggled)
         eco_body.addWidget(self._eco_cb)
         panel_layout.addWidget(eco_row)
+
+        panel_layout.addWidget(
+            QLabel("Горячие клавиши", objectName="settingsSectionLabel")
+        )
+        binds_row, binds_body = self._row(
+            "Binds",
+            "Работают в любом месте окна. S в поле поиска печатает букву.",
+        )
+        for key, action in KEYBIND_HINTS:
+            line = QLabel(f"{key}  —  {action}")
+            line.setObjectName("settingsRowDesc")
+            binds_body.addWidget(line)
+        panel_layout.addWidget(binds_row)
 
         panel_layout.addWidget(QLabel("Хранилище", objectName="settingsSectionLabel"))
 

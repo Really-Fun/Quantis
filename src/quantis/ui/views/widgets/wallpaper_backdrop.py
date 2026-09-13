@@ -520,10 +520,21 @@ class BodyWithWallpaper(QWidget):
         self._backdrop.set_wallpaper(path)
 
     def set_theater_mode(self, enabled: bool) -> None:
-        """Прячет nav/страницы/плеер и показывает видео на всю зону."""
+        """Прячет nav/страницы/плеер. Фоновые слои плагинов остаются."""
         self._foreground.setVisible(not enabled)
-        self._layer_host.setVisible(not enabled)
+        # Cava останавливает таймер в hideEvent — слой нельзя прятать вместе с UI.
+        self._wake_background_layers()
         self._backdrop.set_cinematic(enabled)
+        self._restack()
+
+    def _wake_background_layers(self) -> None:
+        self._layer_host.show()
+        for child in self._layer_host.findChildren(
+            QWidget, options=Qt.FindChildOption.FindDirectChildrenOnly
+        ):
+            refresh = getattr(child, "_refresh_timer", None)
+            if callable(refresh):
+                refresh()
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)

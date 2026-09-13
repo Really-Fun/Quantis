@@ -9,6 +9,12 @@ from typing import Callable
 from PySide6.QtCore import QUrl
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer, QPlaybackOptions
 
+try:
+    from PySide6.QtMultimedia import QAudioBufferOutput, QAudioFormat
+except ImportError:  # Qt < 6.8
+    QAudioBufferOutput = None  # type: ignore[misc, assignment]
+    QAudioFormat = None  # type: ignore[misc, assignment]
+
 from quantis.player.volume import output_gain
 
 logger = logging.getLogger(__name__)
@@ -28,6 +34,8 @@ class QtMediaEngine:
         self._stopped_cbs: list[Callable[[], None]] = []
         self._ended_cbs: list[Callable[[], None]] = []
         self._error_cbs: list[Callable[[str], None]] = []
+        self._audio_buffer_cbs: list[Callable] = []
+        self._buffer_output = None
 
         self._pending_seek_ms = 0
         self._volume = int(round(self._audio.volume() * 100))
@@ -161,6 +169,32 @@ class QtMediaEngine:
 
     def on_error(self, callback: Callable[[str], None]) -> None:
         self._error_cbs.append(callback)
+
+    def on_audio_buffer(self, callback: Callable) -> None:
+        """PCM текущего потока — для визуализатора, без второго HTTP."""
+        self._audio_buffer_cbs.append(callback)
+        self._ensure_buffer_output()
+
+    def _ensure_buffer_output(self) -> None:
+        if self._buffer_output is not None or QAudioBufferOutput is None:
+            return
+        try:
+            fmt = QAudioFormat()
+            fmt.setSampleRate(22050)
+            fmt.setChannelCount(1)
+            fmt.setSampleFormat(QAudioFormat.SampleFormat.Int16)
+            output = QAudioBufferOutput(fmt)
+            output.audioBufferReceived.connect(self._emit_audio_buffer)
+            self._player.setAudioBufferOutput(output)
+            self._buffer_output = output
+        except Exception:
+            logger.debug("QAudioBufferOutput недоступен", exc_info=True)
+
+    def _emit_audio_buffer(self, buffer) -> None:
+        if not buffer.isValid():
+            return
+        for callback in self._audio_buffer_cbs:
+            callback(buffer)
 
     def _on_media_status(self, status: QMediaPlayer.MediaStatus) -> None:
         self._apply_pending_seek()

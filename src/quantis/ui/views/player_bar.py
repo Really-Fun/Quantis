@@ -251,6 +251,7 @@ class PlayerBar(QFrame):
         self._vm.position_changed.connect(self._on_position_changed)
         self._vm.duration_changed.connect(self._on_duration_changed)
         self._vm.repeat_mode_changed.connect(self._on_repeat_mode_changed)
+        self._vm.volume_changed.connect(self._on_volume_changed)
 
         self._volume.blockSignals(True)
         saved_volume = UiPreferences().volume
@@ -383,6 +384,9 @@ class PlayerBar(QFrame):
         self._track_liked = liked
         self._update_like_button()
 
+    def toggle_like(self) -> None:
+        self._on_like_clicked()
+
     def _on_like_clicked(self) -> None:
         track = self._current_track
         if track is None or self._bridge is None:
@@ -448,6 +452,13 @@ class PlayerBar(QFrame):
     def _on_seek_end(self) -> None:
         self._seeking = False
         self._vm.seek(self._position.value())
+
+    def _on_volume_changed(self, value: int) -> None:
+        if self._volume.value() == value:
+            return
+        self._volume.blockSignals(True)
+        self._volume.setValue(value)
+        self._volume.blockSignals(False)
 
     def refresh_theme(self) -> None:
         buttons = [
