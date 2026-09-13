@@ -28,7 +28,7 @@ _GRAD_YA = (QColor(BADGE_YANDEX), QColor(180, 140, 20))
 _GRAD_SC = (QColor(BADGE_SOUNDCLOUD), QColor(140, 70, 0))
 
 # Общий LRU: ключ "(path|track)|size" → pixmap. Ограничивает рост ОЗУ.
-_COVER_CACHE_MAX = 96
+_COVER_CACHE_MAX = 64
 _cover_lru: OrderedDict[str, QPixmap | None] = OrderedDict()
 
 
@@ -156,6 +156,8 @@ def load_cover_pixmap(path: str | Path | None, size: int) -> QPixmap | None:
         return _cache_put(cache_key, None)
 
     image = _crop_letterbox(image)
+    if image.format() != QImage.Format.Format_RGB32:
+        image = image.convertToFormat(QImage.Format.Format_RGB32)
     pixmap = _square_pixmap(QPixmap.fromImage(image), size)
     return _cache_put(cache_key, pixmap)
 

@@ -6,13 +6,22 @@ from quantis.services.wallpaper_policy import (
     WALLPAPER_SYNC_DRIFT_MS,
     clamp_wallpaper_fps,
     clamp_wallpaper_quality,
+    should_fetch_wallpaper_now,
     should_play_local_wallpaper,
     wallpaper_cache_format,
     wallpaper_decode_max_side,
     wallpaper_duration_filter,
     wallpaper_next_drift_tolerance,
     wallpaper_positions_drifted,
+    wallpaper_stream_conflicts,
+    wallpaper_yt_dlp_format,
 )
+
+
+def test_remote_wallpaper_waits_for_audio() -> None:
+    assert should_fetch_wallpaper_now(local=True, audio_live=False)
+    assert should_fetch_wallpaper_now(local=False, audio_live=True)
+    assert not should_fetch_wallpaper_now(local=False, audio_live=False)
 
 
 def test_local_short_clip_is_used() -> None:
@@ -53,3 +62,19 @@ def test_yt_dlp_format_includes_requested_height() -> None:
     assert "height<=360" in wallpaper_cache_format(360)
     assert "height<=720" in wallpaper_cache_format(720)
     assert wallpaper_decode_max_side(720) > wallpaper_decode_max_side(360)
+
+
+def test_wallpaper_stream_prefers_video_only() -> None:
+    fmt = wallpaper_yt_dlp_format(360)
+    assert fmt.startswith("bestvideo")
+    assert "acodec=none" in fmt
+
+
+def test_wallpaper_stream_conflicts_on_same_itag() -> None:
+    audio = "https://rr1.googlevideo.com/videoplayback?id=abc&itag=18&range=0-1"
+    video = "https://rr1.googlevideo.com/videoplayback?id=abc&itag=18&range=2-9"
+    other = "https://rr1.googlevideo.com/videoplayback?id=abc&itag=134"
+    assert wallpaper_stream_conflicts(audio, video)
+    assert not wallpaper_stream_conflicts(audio, other)
+    assert wallpaper_stream_conflicts(audio, audio)
+    assert not wallpaper_stream_conflicts("http://127.0.0.1:9/p", video)

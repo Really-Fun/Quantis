@@ -17,10 +17,12 @@ from quantis.services.music_service import MusicService
 from quantis.services.wallpaper_policy import (
     WALLPAPER_SYNC_DRIFT_MS,
     WALLPAPER_SYNC_INTERVAL_MS,
+    should_fetch_wallpaper_now,
     should_play_local_wallpaper,
     wallpaper_decode_max_side,
     wallpaper_next_drift_tolerance,
     wallpaper_positions_drifted,
+    wallpaper_stream_conflicts,
 )
 from quantis.ui.preferences import UiPreferences
 from quantis.ui.views.widgets.wallpaper_backdrop import WallpaperBackdrop
@@ -59,6 +61,7 @@ class DynamicWallpaperController(QObject):
         self._last_reload_at = 0.0
         self._applied_quality: int | None = None
         self._looping = False
+        self._video_armed = False
         self._drift_tolerance = WALLPAPER_SYNC_DRIFT_MS
 
         self._sync_timer = QTimer(self)
@@ -131,6 +134,7 @@ class DynamicWallpaperController(QObject):
             self._shown_key = None
             self._track = None
             self._paused_for_eco = False
+            self._video_armed = False
             self._sync_timer.stop()
 
     def _video_should_play(self) -> bool:
@@ -154,6 +158,8 @@ class DynamicWallpaperController(QObject):
             self._backdrop.pause_video()
 
     def _on_audio_resumed(self) -> None:
+        if self._video_armed and self._track is not None:
+            self._start_video_load(self._track)
         if not self._video_should_play():
             return
         self._backdrop.resume_video()
@@ -213,6 +219,15 @@ class DynamicWallpaperController(QObject):
         if cover is not None:
             self._backdrop.show_still(cover)
             self._shown_key = track_key
+        self._video_armed = True
+        if should_fetch_wallpaper_now(
+            local=self._local_video_path(track) is not None,
+            audio_live=self._video_should_play(),
+        ):
+            self._start_video_load(track)
+
+    def _start_video_load(self, track: Track) -> None:
+        self._video_armed = False
         self._bridge.schedule(self._load_video(track))
 
     def _on_stream_stalled(self) -> None:
@@ -298,9 +313,19 @@ class DynamicWallpaperController(QObject):
         still = path
         self._play_on_main(track_key, lambda: self._backdrop.show_still(still))
 
+    def _audio_source(self) -> str:
+        if self._playback is None:
+            return ""
+        return str(getattr(self._playback.player, "current_source", "") or "")
+
     def _play_stream(self, track_key: str, url: str, *, loop: bool) -> None:
         def _run() -> None:
             if self._pending_track_key != track_key:
+                return
+            if wallpaper_stream_conflicts(self._audio_source(), url):
+                logger.info(
+                    "Видео-фон: тот же поток, что и аудио — оставляем обложку"
+                )
                 return
             self._looping = loop
             # Короткий локальный клип крутится по кругу — к позиции трека его

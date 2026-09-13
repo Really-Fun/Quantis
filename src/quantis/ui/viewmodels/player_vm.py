@@ -111,6 +111,8 @@ class PlayerViewModel(BaseViewModel):
     def _update_timeline(self) -> None:
         if not self._player.current_source:
             return
+        if not getattr(self._playback, "audio_live", True):
+            return
         if getattr(self._playback, "is_seeking", False):
             return
         position = max(0, self._player.time)
@@ -173,8 +175,10 @@ class PlayerViewModel(BaseViewModel):
         self._last_duration = -1
         self._end_ticks = 0
         self.track_changed.emit(track)
+        self.position_changed.emit(0)
         catalog = max(0, int(getattr(track, "duration_ms", 0) or 0))
-        self._publish_duration(max(0, self._player.duration) or catalog)
+        self._last_duration = catalog if catalog > 0 else -1
+        self.duration_changed.emit(catalog)
         self.start_updates()
 
     def _on_paused(self) -> None:

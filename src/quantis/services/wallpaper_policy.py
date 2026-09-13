@@ -22,6 +22,11 @@ def should_play_local_wallpaper(size_bytes: int) -> bool:
     return 0 < size_bytes <= WALLPAPER_MAX_LOCAL_BYTES
 
 
+def should_fetch_wallpaper_now(*, local: bool, audio_live: bool) -> bool:
+    """Локальный клип — сразу. Remote yt-dlp не должен обгонять старт аудио."""
+    return bool(local or audio_live)
+
+
 def wallpaper_positions_drifted(
     audio_ms: int, video_ms: int, *, tolerance_ms: int = WALLPAPER_SYNC_DRIFT_MS
 ) -> bool:
@@ -60,15 +65,41 @@ def wallpaper_decode_max_side(height: int) -> int:
 
 def wallpaper_yt_dlp_format(height: int) -> str:
     h = clamp_wallpaper_quality(height)
-    return f"best[vcodec!=none][height<={h}]/best[height<={h}]/18"
+    extra = _FORMAT_FALLBACK_HEIGHT[h]
+    return (
+        f"bestvideo[height<={h}][protocol^=http]/"
+        f"best[height<={h}][vcodec!=none][acodec=none]/"
+        f"best[height<={h}][vcodec!=none]/"
+        f"best[height<={extra}][vcodec!=none]/"
+        f"18"
+    )
 
 
 def wallpaper_yt_dlp_android_format(height: int) -> str:
-    h = clamp_wallpaper_quality(height)
-    if h <= 360:
-        return "18/best[height<=360]/best[height<=480]"
-    extra = _FORMAT_FALLBACK_HEIGHT[h]
-    return f"best[height<={h}][vcodec!=none]/best[height<={h}]/best[height<={extra}]/18"
+    return wallpaper_yt_dlp_format(height)
+
+
+def wallpaper_stream_conflicts(audio_url: str | None, video_url: str | None) -> bool:
+    """Второй QMediaPlayer на тот же googlevideo itag рвёт звук и крутит трек с нуля."""
+    audio = (audio_url or "").strip()
+    video = (video_url or "").strip()
+    if not audio or not video:
+        return False
+    if audio == video:
+        return True
+    from urllib.parse import parse_qs, urlparse
+
+    audio_parts = urlparse(audio)
+    video_parts = urlparse(video)
+    if audio_parts.netloc != video_parts.netloc:
+        return False
+    if "googlevideo.com" not in audio_parts.netloc:
+        return False
+    audio_q = parse_qs(audio_parts.query)
+    video_q = parse_qs(video_parts.query)
+    return bool(audio_q.get("id") and audio_q.get("id") == video_q.get("id")) and (
+        audio_q.get("itag") == video_q.get("itag")
+    )
 
 
 def wallpaper_cache_format(height: int) -> str:

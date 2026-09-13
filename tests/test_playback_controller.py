@@ -8,7 +8,7 @@ import pytest
 
 from quantis.controllers.playback_controller import PlaybackController
 from quantis.models import YandexTrack
-from quantis.models.playlist import RecommendationPlaylist
+from quantis.models.playlist import RecommendationPlaylist, WavePlaylist
 from quantis.plugins.event_bus import EventBus
 from quantis.providers import PlaylistManager
 
@@ -81,6 +81,7 @@ async def test_play_track_announces_before_source_is_ready() -> None:
         await coro
 
     assert opened == [[track]]
+    player.stop.assert_called()
     player.play.assert_called_once_with("http://stream")
 
 
@@ -108,6 +109,39 @@ async def test_play_track_starts_from_beginning() -> None:
 
     history.get_resume_position.assert_not_called()
     player.play.assert_called_once_with("https://cdn.example/a.mp3")
+
+
+@pytest.mark.asyncio
+async def test_play_track_starts_before_wave_feedback() -> None:
+    player = MagicMock()
+    order: list[str] = []
+
+    async def notify(*_args, **_kwargs):
+        order.append("notify")
+
+    music = MagicMock()
+    music.streamer.open_playback = AsyncMock(return_value="http://stream")
+    music.provider.get_track_path = MagicMock(return_value="/path")
+    music.wave.notify_track_started = notify
+    player.play.side_effect = lambda *_args, **_kwargs: order.append("play")
+
+    manager = PlaylistManager()
+    track = YandexTrack(track_id="1", title="Song", author="Artist")
+    previous = manager.current_playlist
+    manager.set_playlist(WavePlaylist(tracks=[track], source="yandex"))
+    playback = PlaybackController(
+        player=player,
+        playlist_manager=manager,
+        music_service=music,
+        event_bus=EventBus(),
+        async_bridge=None,
+    )
+    try:
+        await playback.play_track(track)
+    finally:
+        manager.set_playlist(previous)
+
+    assert order == ["play", "notify"]
 
 
 @pytest.mark.asyncio

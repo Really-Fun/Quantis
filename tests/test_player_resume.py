@@ -93,6 +93,34 @@ def test_play_start_ms_requests_seek() -> None:
     assert engine.seeks == [12_000]
 
 
+def test_loading_ignores_stale_engine_position() -> None:
+    engine = StubEngine()
+    player = Player(engine=engine)
+    player.play("/tmp/old.mp3")
+    engine._position = 120_000
+    assert player.time == 120_000
+
+    player.play("https://rr.example/youtube.m4a")
+    engine._position = 120_000
+    assert player.time == 0
+    assert player.last_known_ms == 0
+
+    engine._position = 800
+    assert player.time == 800
+
+
+def test_recovery_play_keeps_resume_position() -> None:
+    engine = StubEngine()
+    player = Player(engine=engine)
+    player.play("https://cdn.example/a.mp3")
+    engine._position = 42_000
+    assert player.time == 42_000
+
+    player.play("https://cdn.example/a.mp3", start_ms=42_000)
+    engine._position = 42_000
+    assert player.time == 42_000
+
+
 def test_short_http_pause_resumes_in_place() -> None:
     engine = StubEngine()
     player = Player(engine=engine)
@@ -263,6 +291,17 @@ def test_end_of_media_before_playing_is_ignored() -> None:
 
     assert errors == []
     assert finished == []
+
+
+def test_last_known_ms_survives_engine_reset() -> None:
+    engine = StubEngine()
+    player = Player(engine=engine)
+    player.play("https://cdn.example/full.mp3")
+    engine._position = 10_400
+    assert player.time == 10_400
+    engine._position = 0
+    assert player.time == 0
+    assert player.last_known_ms == 10_400
 
 
 def test_end_of_media_with_reset_position_finishes() -> None:

@@ -184,9 +184,13 @@ class AsyncStreamer(AsyncStreamerInterface):
         self._cache.pop(key, None)
         self._stream_buffer.invalidate_track(track)
         self._http_proxy.invalidate_track(track)
+        if str(track.source).lower() == TrackSource.YOUTUBE:
+            self._youtube.invalidate(str(track.track_id))
 
     def set_eco(self, enabled: bool) -> None:
         self._stream_buffer.set_eco(enabled)
+        if enabled:
+            self._youtube.clear_cache()
 
     def shutdown(self) -> None:
         if self._buffer_loop is not None:

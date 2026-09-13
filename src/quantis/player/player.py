@@ -52,6 +52,7 @@ class Player:
         self._was_playing: bool = False
         self._finish_emitted: bool = False
         self._last_known_ms: int = 0
+        self._stale_position_ms: int = 0
 
         self._source_changed_callbacks: list[Callable[[str], None]] = []
         self._playback_paused_callbacks: list[Callable[[], None]] = []
@@ -96,9 +97,20 @@ class Player:
 
     def play(self, source: str, *, start_ms: int = 0) -> None:
         self._stream_retry_used = False
+        previous = max(
+            0,
+            int(self._engine.get_position_ms()),
+            int(self._last_known_ms),
+        )
+        resume_at = max(0, int(start_ms))
         self._loading_source = True
         self._finish_emitted = False
-        self._last_known_ms = 0
+        # Пока setSource не сбросил движок, он ещё отдаёт хвост прошлого трека.
+        if resume_at > 0 and abs(previous - resume_at) <= 2000:
+            self._stale_position_ms = 0
+        else:
+            self._stale_position_ms = previous if previous > 1500 else 0
+        self._last_known_ms = resume_at
         # Сессия активна сразу: иначе EndReached до PlayingState глушит
         # автопереход (типично для VLC на HTTP).
         self._playback_active = True
@@ -292,6 +304,11 @@ class Player:
             engine.set_position_ms(ms)
 
     @property
+    def last_known_ms(self) -> int:
+        """Последняя живая позиция: после EndOfMedia Qt часто сбрасывает time в 0."""
+        return max(0, int(self._last_known_ms))
+
+    @property
     def paused_at_ms(self) -> int:
         return max(0, self._paused_at_ms)
 
@@ -332,9 +349,17 @@ class Player:
     @property
     def time(self) -> int:
         position = max(0, int(self._engine.get_position_ms()))
+        if self._loading_source:
+            stale = max(0, self._stale_position_ms)
+            if stale > 1500 and abs(position - stale) <= 2000:
+                return max(0, self._last_known_ms)
+            if position > 500:
+                self._last_known_ms = position
+                self._loading_source = False
+                self._stale_position_ms = 0
+            return position
         if position > 500:
             self._last_known_ms = position
-            self._loading_source = False
         return position
 
     @time.setter

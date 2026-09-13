@@ -37,6 +37,8 @@ class NowPlayingFullscreen(QFrame):
         self._path_provider = path_provider
         self._track: Track | None = None
         self._bg = QPixmap()
+        self._bg_scaled = QPixmap()
+        self._bg_size = (0, 0)
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
 
         layout = QVBoxLayout(self)
@@ -88,6 +90,8 @@ class NowPlayingFullscreen(QFrame):
             self._artist.setText("")
             self._cover.clear()
             self._bg = QPixmap()
+            self._bg_scaled = QPixmap()
+            self._bg_size = (0, 0)
             self.update()
             return
         self._title.setText(track.title)
@@ -104,24 +108,43 @@ class NowPlayingFullscreen(QFrame):
             painter.end()
             self._cover.setPixmap(painted)
             self._bg = pix
+            self._bg_scaled = QPixmap()
+            self._bg_size = (0, 0)
         else:
             self._cover.clear()
             self._bg = QPixmap()
+            self._bg_scaled = QPixmap()
+            self._bg_size = (0, 0)
         self.update()
+
+    def _scaled_bg(self) -> QPixmap:
+        if self._bg.isNull():
+            return self._bg
+        size = (self.width(), self.height())
+        if not self._bg_scaled.isNull() and self._bg_size == size:
+            return self._bg_scaled
+        w, h = size
+        longest = max(w, h)
+        if longest > 960:
+            scale = 960 / longest
+            w = max(1, int(w * scale))
+            h = max(1, int(h * scale))
+        self._bg_scaled = self._bg.scaled(
+            w,
+            h,
+            Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+            Qt.TransformationMode.FastTransformation,
+        )
+        self._bg_size = size
+        return self._bg_scaled
 
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
         painter.fillRect(self.rect(), QColor(11, 13, 18, 230))
-        if not self._bg.isNull():
-            scaled = self._bg.scaled(
-                self.size(),
-                Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-                Qt.TransformationMode.SmoothTransformation,
-            )
-            x = (self.width() - scaled.width()) // 2
-            y = (self.height() - scaled.height()) // 2
+        scaled = self._scaled_bg()
+        if not scaled.isNull():
             painter.setOpacity(0.22)
-            painter.drawPixmap(x, y, scaled)
+            painter.drawPixmap(self.rect(), scaled)
             painter.setOpacity(1.0)
         painter.end()
         super().paintEvent(event)

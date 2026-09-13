@@ -274,3 +274,27 @@ async def test_handle_stream_error_uses_paused_position() -> None:
         42_000,
         reason="resume-after-pause",
     )
+
+
+def test_handle_stream_error_uses_last_known_when_time_resets() -> None:
+    player = MagicMock()
+    player.time = 0
+    player.paused_at_ms = 0
+    player.last_known_ms = 10_400
+    player.current_source = "https://rr.googlevideo.com/videoplayback"
+
+    playback = PlaybackController(
+        player=player,
+        playlist_manager=PlaylistManager(),
+        music_service=MagicMock(),
+        event_bus=EventBus(),
+        async_bridge=MagicMock(),
+    )
+    playback.request_playback_recovery = MagicMock()  # type: ignore[method-assign]
+
+    playback.handle_stream_error("ended-early")
+
+    playback.request_playback_recovery.assert_called_once_with(
+        10_400,
+        reason="ended-early",
+    )

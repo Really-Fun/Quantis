@@ -4,8 +4,15 @@ from collections.abc import Callable
 from pathlib import Path
 from time import monotonic
 
-from PySide6.QtCore import Qt, QUrl, Signal
-from PySide6.QtGui import QColor, QImage, QPainter, QPixmap, QRadialGradient
+from PySide6.QtCore import QSize, Qt, QUrl, Signal
+from PySide6.QtGui import (
+    QColor,
+    QImage,
+    QImageReader,
+    QPainter,
+    QPixmap,
+    QRadialGradient,
+)
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer, QVideoFrame, QVideoSink
 from PySide6.QtWidgets import QHBoxLayout, QWidget
 
@@ -15,7 +22,7 @@ from quantis.services.wallpaper_policy import (
 )
 from quantis.ui.views.widgets.cover_art import load_wallpaper_pixmap
 
-_WALLPAPER_MAX_SIDE = 1920
+_WALLPAPER_MAX_SIDE = 1280
 
 
 def _media_url(url: str) -> QUrl:
@@ -72,7 +79,7 @@ class _VideoSurface(QWidget):
         if image.isNull():
             return
         self._last_frame_at = 0.0
-        self._source = self._downscale(image)
+        self._source = self._compact_frame(image)
         self._rescale()
 
     def _on_frame(self, frame: QVideoFrame) -> None:
@@ -83,29 +90,34 @@ class _VideoSurface(QWidget):
             return
         self._last_frame_at = now
 
-        mapped = QVideoFrame(frame)
-        if not mapped.map(QVideoFrame.MapMode.ReadOnly):
+        if not frame.map(QVideoFrame.MapMode.ReadOnly):
             return
         try:
-            image = mapped.toImage()
+            image = frame.toImage()
         finally:
-            mapped.unmap()
+            frame.unmap()
 
         if image.isNull():
             return
 
-        self._source = self._downscale(image)
+        self._source = self._compact_frame(image)
         self._rescale()
 
-    def _downscale(self, image: QImage) -> QImage:
-        if max(image.width(), image.height()) <= self._max_side:
+    def _compact_frame(self, image: QImage) -> QImage:
+        """Даунскейл + RGB32: отцепляемся от буфера кадра, без альфы."""
+        if image.isNull():
             return image
-        return image.scaled(
-            self._max_side,
-            self._max_side,
-            Qt.AspectRatioMode.KeepAspectRatio,
-            Qt.TransformationMode.FastTransformation,
-        )
+        downscaled = max(image.width(), image.height()) > self._max_side
+        if downscaled:
+            image = image.scaled(
+                self._max_side,
+                self._max_side,
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.FastTransformation,
+            )
+        if image.format() != QImage.Format.Format_RGB32:
+            return image.convertToFormat(QImage.Format.Format_RGB32)
+        return image if downscaled else image.copy()
 
     def _rescale(self) -> None:
         if self._source.isNull():
@@ -186,11 +198,17 @@ class WallpaperBackdrop(QWidget):
         if self._wallpaper_path:
             self._rebuild_cache(force=True)
 
+    def _silence_video_audio(self) -> None:
+        if self._video_audio is None:
+            return
+        self._video_audio.setMuted(True)
+        self._video_audio.setVolume(0.0)
+
     def _ensure_video_player(self) -> QMediaPlayer:
         if self._video_player is None:
             self._video_player = QMediaPlayer(self)
             self._video_audio = QAudioOutput(self)
-            self._video_audio.setVolume(0.0)
+            self._silence_video_audio()
             self._video_player.setAudioOutput(self._video_audio)
             self._video_player.setVideoSink(self._video_surface.sink)
             self._video_player.mediaStatusChanged.connect(self._on_video_status)
@@ -262,6 +280,7 @@ class WallpaperBackdrop(QWidget):
             self._apply_pending_seek()
             return
         self._current_source = url
+        self._silence_video_audio()
         player.setSource(_media_url(url))
         player.play()
         self.update()
@@ -269,7 +288,19 @@ class WallpaperBackdrop(QWidget):
     def show_still(self, path: str) -> None:
         if not self._dynamic_enabled or not path:
             return
-        image = QImage(path)
+        reader = QImageReader(path)
+        reader.setAutoTransform(True)
+        original = reader.size()
+        max_side = self._video_surface._max_side
+        if original.isValid():
+            w, h = original.width(), original.height()
+            longest = max(w, h)
+            if longest > max_side:
+                scale = max_side / longest
+                reader.setScaledSize(
+                    QSize(max(1, int(w * scale)), max(1, int(h * scale)))
+                )
+        image = reader.read()
         if image.isNull():
             return
         self._loop_enabled = False
@@ -364,11 +395,13 @@ class WallpaperBackdrop(QWidget):
         duration = int(self._video_player.duration())
         if duration <= 0:
             return
+        # Сначала пауза и перемотка: иначе muxed-поток играет с нуля и слышно рестарт.
+        self._video_player.pause()
         self._video_player.setPosition(min(position, max(0, duration - 400)))
         self._pending_start_ms = 0
         self._follow_audio = False
-        if self._hold_until_audio:
-            self._video_player.pause()
+        if not self._hold_until_audio:
+            self._video_player.play()
 
     def _on_duration_ready(self, duration: int) -> None:
         if duration > 0:

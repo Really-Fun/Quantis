@@ -90,7 +90,8 @@ class PlaybackController:
     def handle_stream_error(self, message: str) -> None:
         """Повтор воспроизведения при ошибке медиадвижка."""
         paused_at = getattr(self.player, "paused_at_ms", 0) or 0
-        position = max(0, self.player.time, int(paused_at))
+        known = getattr(self.player, "last_known_ms", 0) or 0
+        position = max(0, int(self.player.time), int(paused_at), int(known))
         self.request_playback_recovery(position, reason=message)
 
     def request_playback_recovery(self, position_ms: int, *, reason: str = "stall") -> None:
@@ -305,6 +306,11 @@ class PlaybackController:
         self._stall_recoveries = 0
 
         def announce() -> None:
+            # Иначе прошлый трек продолжает играть, а ползунок тикает его время,
+            # пока yt-dlp резолвит YouTube.
+            stop = getattr(self.player, "stop", None)
+            if callable(stop):
+                stop()
             self.player.current_track = track
             if self._event_bus is not None:
                 self._event_bus.track_changed.emit(track)
@@ -339,15 +345,6 @@ class PlaybackController:
                     notify()
             return
 
-        playlist = self.playlist_manager.current_playlist
-        if (
-            isinstance(playlist, WavePlaylist)
-            and not self._wave_skip_start_feedback
-        ):
-            await self.music.wave.notify_track_started(track, playlist)
-        if seq != self._play_seq:
-            return
-
         def start_playback() -> None:
             if seq != self._play_seq:
                 return
@@ -362,6 +359,16 @@ class PlaybackController:
             self._bridge.invoke_main(start_playback)
         else:
             start_playback()
+
+        playlist = self.playlist_manager.current_playlist
+        if (
+            isinstance(playlist, WavePlaylist)
+            and not self._wave_skip_start_feedback
+        ):
+            try:
+                await self.music.wave.notify_track_started(track, playlist)
+            except Exception:
+                logger.debug("Wave start feedback не отправился", exc_info=True)
 
         if self._bridge is not None:
             self._bridge.schedule(self._prefetch_next_track(track))
