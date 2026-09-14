@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 )
 
 from quantis.core.async_bridge import AsyncBridge
+from quantis.models.playlist import RecommendationPlaylist, WavePlaylist
 from quantis.ui.async_ui import schedule
 from quantis.ui.playlist_actions import show_add_to_playlist_menu
 from quantis.ui.viewmodels.playlist_vm import PlaylistViewModel
@@ -208,6 +209,12 @@ class PlaylistPage(QWidget):
             self._count.setText("")
             return
         self._name.setText(playlist.name)
+        if isinstance(playlist, WavePlaylist):
+            self._tag.setText("ВОЛНА")
+        elif isinstance(playlist, RecommendationPlaylist) and playlist.infinite:
+            self._tag.setText("ПОТОК")
+        else:
+            self._tag.setText("ПЛЕЙЛИСТ")
         self._count.setText(self._tracks_label(self._vm.track_count))
         self._cover.set_content(playlist.name, playlist_cover_path(playlist))
 

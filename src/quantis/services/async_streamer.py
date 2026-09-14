@@ -143,8 +143,11 @@ class AsyncStreamer(AsyncStreamerInterface):
         finder: object | None = None,
         *,
         height: int = WALLPAPER_DEFAULT_QUALITY,
+        exclude_itags: frozenset[str] | None = None,
     ) -> str | None:
-        url, _duration = await self.get_video_info(track, finder, height=height)
+        url, _duration = await self.get_video_info(
+            track, finder, height=height, exclude_itags=exclude_itags
+        )
         return url
 
     async def get_video_info(
@@ -153,11 +156,14 @@ class AsyncStreamer(AsyncStreamerInterface):
         finder: object | None = None,
         *,
         height: int = WALLPAPER_DEFAULT_QUALITY,
+        exclude_itags: frozenset[str] | None = None,
     ) -> tuple[str | None, int]:
         video_id = await self._resolve_youtube_video_id(track, finder)
         if not video_id:
             return None, 0
-        return await self._youtube.get_video_info(video_id, height=height)
+        return await self._youtube.get_video_info(
+            video_id, height=height, exclude_itags=exclude_itags
+        )
 
     async def _resolve_youtube_video_id(
         self, track: Track, finder: object | None

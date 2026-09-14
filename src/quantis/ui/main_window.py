@@ -182,6 +182,7 @@ class QuantisMainWindow(QMainWindow):
 
         # Content column
         content_host = QWidget()
+        self._content_host = content_host
         content = QVBoxLayout(content_host)
         content.setContentsMargins(0, 0, 0, 0)
         content.setSpacing(0)
@@ -267,6 +268,7 @@ class QuantisMainWindow(QMainWindow):
         bundle.event_bus.track_changed.connect(self._sync_playing_track)
         bundle.event_bus.history_updated.connect(self._on_history_updated)
         bundle.event_bus.playlists_updated.connect(self._on_playlists_updated)
+        bundle.event_bus.queue_extended.connect(self._on_queue_extended)
         bundle.event_bus.error_occurred.connect(self._show_error)
         self._search_vm.download_finished.connect(
             lambda: self._home_vm.refresh_downloaded(self._bridge)
@@ -339,20 +341,23 @@ class QuantisMainWindow(QMainWindow):
         if self._chrome_hidden == hidden:
             return
         self._chrome_hidden = hidden
-        self._header.setVisible(not hidden)
+        self._nav.setVisible(not hidden)
+        self._content_host.setVisible(not hidden)
         if hidden:
             self._update_banner.hide()
+            self._now_playing.hide()
             if self._np_fullscreen.isVisible():
                 self._np_fullscreen.hide()
+            self._body_shell.layout_host.setContentsMargins(0, 0, 0, 0)
         else:
+            self._body_shell.layout_host.setContentsMargins(10, 10, 10, 0)
             self._sync_update_banner()
+            self._sync_now_playing_visibility()
         self._body_shell.set_theater_mode(hidden)
         self._shell.set_cinematic(hidden)
-        self._resize_grips.set_enabled(not hidden)
+        self._player_bar.set_cinematic(hidden)
         if hidden:
             self.setFocus(Qt.FocusReason.OtherFocusReason)
-        else:
-            self._sync_now_playing_visibility()
         self._sync_shortcut_enabled()
 
     def _event_from_this_window(self, obj) -> bool:
@@ -431,6 +436,7 @@ class QuantisMainWindow(QMainWindow):
         if (
             self._chrome_hidden
             and self._event_from_this_window(obj)
+            and not self._is_pinned_chrome(obj)
             and event.type() == QEvent.Type.MouseButtonPress
             and event.button() == Qt.MouseButton.LeftButton
         ):
@@ -438,7 +444,18 @@ class QuantisMainWindow(QMainWindow):
             return True
         return super().eventFilter(obj, event)
 
+    def _is_pinned_chrome(self, obj) -> bool:
+        widget = obj if isinstance(obj, QWidget) else None
+        while widget is not None:
+            if widget is self._header or widget is self._player_bar:
+                return True
+            widget = widget.parentWidget()
+        return self._resize_grips.owns(obj if isinstance(obj, QWidget) else None)
+
     def _sync_now_playing_visibility(self) -> None:
+        if self._chrome_hidden:
+            self._now_playing.hide()
+            return
         wide = self.width() >= 1100
         show = self._ui_prefs.show_now_playing_panel and wide
         self._now_playing.setVisible(show)
@@ -719,6 +736,12 @@ class QuantisMainWindow(QMainWindow):
 
             if isinstance(pl, UserPlaylist):
                 schedule(self._reload_open_user_playlist(pl.name), self._bridge)
+
+    def _on_queue_extended(self, playlist) -> None:
+        self._home_vm.apply_queue_extended(playlist)
+        if self._playlist_page is not None and self._playlist_vm.playlist is playlist:
+            self._playlist_vm.sync_appended()
+            self._header.set_page(playlist.name, f"{len(playlist)} треков")
 
     def _on_playlist_tracks_mutated(self) -> None:
         playlist = self._playlist_vm.playlist

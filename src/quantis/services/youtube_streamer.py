@@ -14,6 +14,7 @@ from quantis.models.track import seconds_to_ms
 from quantis.services.wallpaper_policy import (
     WALLPAPER_DEFAULT_QUALITY,
     clamp_wallpaper_quality,
+    wallpaper_url_itag,
     wallpaper_yt_dlp_android_format,
     wallpaper_yt_dlp_format,
 )
@@ -80,40 +81,61 @@ class AsyncYoutubeStreamer(AsyncStreamerInterface):
         self._executor = executor
         self._info_lock = Lock()
         self._info_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+        self._video_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 
     def invalidate(self, track_id: str) -> None:
         with self._info_lock:
-            self._info_cache.pop(str(track_id), None)
+            key = str(track_id)
+            self._info_cache.pop(key, None)
+            self._video_cache.pop(key, None)
 
     def clear_cache(self) -> None:
         with self._info_lock:
             self._info_cache.clear()
+            self._video_cache.clear()
 
     def _cached_info(self, track_id: str) -> dict[str, Any] | None:
+        return self._cached_from(self._info_cache, track_id)
+
+    def _cached_video_info(self, track_id: str) -> dict[str, Any] | None:
+        return self._cached_from(self._video_cache, track_id)
+
+    def _cached_from(
+        self, cache: dict[str, tuple[float, dict[str, Any]]], track_id: str
+    ) -> dict[str, Any] | None:
         key = str(track_id)
         now = monotonic()
         with self._info_lock:
-            hit = self._info_cache.get(key)
+            hit = cache.get(key)
             if hit is None:
                 return None
             stamped, info = hit
             if now - stamped > _INFO_CACHE_TTL_SEC:
-                self._info_cache.pop(key, None)
+                cache.pop(key, None)
                 return None
             return info
 
     def _store_info(self, track_id: str, info: dict[str, Any] | None) -> None:
+        self._store_into(self._info_cache, track_id, info)
+
+    def _store_video_info(self, track_id: str, info: dict[str, Any] | None) -> None:
+        self._store_into(self._video_cache, track_id, info)
+
+    def _store_into(
+        self,
+        cache: dict[str, tuple[float, dict[str, Any]]],
+        track_id: str,
+        info: dict[str, Any] | None,
+    ) -> None:
         slim = slim_youtube_info(info)
         if not slim:
             return
         key = str(track_id)
         with self._info_lock:
-            self._info_cache[key] = (monotonic(), slim)
-            while len(self._info_cache) > _INFO_CACHE_MAX:
-                oldest = min(
-                    self._info_cache, key=lambda item: self._info_cache[item][0]
-                )
-                self._info_cache.pop(oldest, None)
+            cache[key] = (monotonic(), slim)
+            while len(cache) > _INFO_CACHE_MAX:
+                oldest = min(cache, key=lambda item: cache[item][0])
+                cache.pop(oldest, None)
 
     def _attempt_opts(
         self, *, video: bool = False, height: int = WALLPAPER_DEFAULT_QUALITY
@@ -146,7 +168,13 @@ class AsyncYoutubeStreamer(AsyncStreamerInterface):
         ) -> dict:
             youtube: dict[str, Any] = {
                 "player_client": clients,
-                "skip": ["hls", "dash", "translated_subs"],
+                # Video-only itag 134/160 сидят в adaptive; skip dash их выкидывает,
+                # и фон остаётся с тем же itag=18, что и звук.
+                "skip": (
+                    ["hls", "translated_subs"]
+                    if video
+                    else ["hls", "dash", "translated_subs"]
+                ),
             }
             if skip_player:
                 # Innertube android без webpage/player JS — обычно <2с.
@@ -198,6 +226,38 @@ class AsyncYoutubeStreamer(AsyncStreamerInterface):
             return False
         return True
 
+    @classmethod
+    def _format_itag(cls, fmt: dict) -> str | None:
+        fid = str(fmt.get("format_id") or "").split("-", 1)[0].split("+", 1)[0]
+        if fid.isdigit():
+            return fid
+        return wallpaper_url_itag(str(fmt.get("url") or ""))
+
+    @staticmethod
+    def _has_video(fmt: dict) -> bool:
+        vcodec = str(fmt.get("vcodec") or "none").lower()
+        if vcodec not in ("", "none"):
+            return True
+        return int(fmt.get("height") or 0) > 0
+
+    @staticmethod
+    def _has_audio(fmt: dict) -> bool:
+        acodec = str(fmt.get("acodec") or "none").lower()
+        return acodec not in ("", "none")
+
+    @classmethod
+    def _qt_video_rank(cls, fmt: dict) -> int:
+        """Qt Multimedia надёжнее берёт H264/mp4, чем VP9/AV1."""
+        vcodec = str(fmt.get("vcodec") or "").lower()
+        ext = str(fmt.get("ext") or "").lower()
+        if "avc" in vcodec or vcodec.startswith("avc1") or ext == "mp4":
+            if "vp" in vcodec or "av01" in vcodec or "av1" in vcodec:
+                return 1
+            return 2
+        if "vp9" in vcodec or "vp09" in vcodec or ext == "webm":
+            return 1
+        return 0
+
     @staticmethod
     def _duration_ms_from_info(info: dict[str, Any] | None) -> int:
         if not info:
@@ -211,49 +271,76 @@ class AsyncYoutubeStreamer(AsyncStreamerInterface):
         *,
         prefer_video: bool = False,
         target_height: int = WALLPAPER_DEFAULT_QUALITY,
+        video_only: bool = False,
+        exclude_itags: frozenset[str] | None = None,
     ) -> str | None:
         if not info:
             return None
 
-        formats = [f for f in (info.get("formats") or []) if cls._is_playable_format(f)]
+        blocked = exclude_itags or frozenset()
+        formats = [
+            fmt
+            for fmt in (info.get("formats") or [])
+            if cls._is_playable_format(fmt)
+            and (not blocked or cls._format_itag(fmt) not in blocked)
+        ]
         top_url = info.get("url")
-        if top_url and cls._is_playable_format(
-            {
-                "url": top_url,
-                "protocol": info.get("protocol"),
-                "ext": info.get("ext"),
-                "format_id": info.get("format_id"),
-                "vcodec": info.get("vcodec"),
-                "acodec": info.get("acodec"),
-            }
-        ):
-            vcodec = str(info.get("vcodec") or "none")
-            acodec = str(info.get("acodec") or "none")
-            has_audio = acodec not in ("", "none")
-            has_video = vcodec not in ("", "none")
+        top_fmt = {
+            "url": top_url,
+            "protocol": info.get("protocol"),
+            "ext": info.get("ext"),
+            "format_id": info.get("format_id"),
+            "vcodec": info.get("vcodec"),
+            "acodec": info.get("acodec"),
+            "height": info.get("height"),
+        }
+        top_blocked = bool(
+            blocked and cls._format_itag(top_fmt) in blocked
+        )
+        if top_url and cls._is_playable_format(top_fmt) and not top_blocked:
             if prefer_video:
-                if has_video and not has_audio:
+                if cls._has_video(top_fmt) and not cls._has_audio(top_fmt):
                     return str(top_url)
-            elif has_audio and not has_video:
+            elif cls._has_audio(top_fmt) and not cls._has_video(top_fmt):
                 return str(top_url)
 
+        if prefer_video:
+            formats = [fmt for fmt in formats if cls._has_video(fmt)]
+            if video_only:
+                formats = [
+                    fmt
+                    for fmt in formats
+                    if cls._has_video(fmt) and not cls._has_audio(fmt)
+                ]
+            if not formats:
+                if (
+                    top_url
+                    and not top_blocked
+                    and cls._is_playable_format(top_fmt)
+                    and cls._has_video(top_fmt)
+                    and (not video_only or not cls._has_audio(top_fmt))
+                ):
+                    return str(top_url)
+                return None
+
         if not formats:
+            if top_blocked:
+                return None
             return str(top_url) if top_url else None
 
         def score(fmt: dict) -> tuple:
-            vcodec = str(fmt.get("vcodec") or "none")
-            acodec = str(fmt.get("acodec") or "none")
-            has_audio = acodec not in ("", "none")
-            has_video = vcodec not in ("", "none")
+            has_audio = cls._has_audio(fmt)
+            has_video = cls._has_video(fmt)
             audio_only = has_audio and not has_video
             progressive = has_audio and has_video
             ext = str(fmt.get("ext") or "").lower()
             abr = int(fmt.get("abr") or fmt.get("tbr") or 0)
             height = int(fmt.get("height") or 0)
             if prefer_video:
-                video_only = has_video and not has_audio
+                only_video = has_video and not has_audio
                 return (
-                    2 if video_only else (1 if has_video else 0),
+                    2 if only_video else 1,
+                    cls._qt_video_rank(fmt),
                     -abs(height - target_height) if height else -9999,
                     -abr,
                 )
@@ -281,10 +368,17 @@ class AsyncYoutubeStreamer(AsyncStreamerInterface):
         return url
 
     async def get_video_info(
-        self, video_id: str, height: int = WALLPAPER_DEFAULT_QUALITY
+        self,
+        video_id: str,
+        height: int = WALLPAPER_DEFAULT_QUALITY,
+        exclude_itags: frozenset[str] | None = None,
     ) -> tuple[str | None, int]:
         return await get_running_loop().run_in_executor(
-            self._executor, self.sync_video_stream, video_id, height
+            self._executor,
+            self.sync_video_stream,
+            video_id,
+            height,
+            exclude_itags,
         )
 
     def sync_stream(self, track_id: str) -> tuple[str | None, int]:
@@ -341,7 +435,10 @@ class AsyncYoutubeStreamer(AsyncStreamerInterface):
         return None, 0
 
     def sync_video_stream(
-        self, track_id: str, height: int = WALLPAPER_DEFAULT_QUALITY
+        self,
+        track_id: str,
+        height: int = WALLPAPER_DEFAULT_QUALITY,
+        exclude_itags: frozenset[str] | None = None,
     ) -> tuple[str | None, int]:
         from yt_dlp import YoutubeDL
 
@@ -351,29 +448,51 @@ class AsyncYoutubeStreamer(AsyncStreamerInterface):
             logger.warning("Некорректный YouTube id: %s", track_id)
             return None, 0
 
-        cached = self._cached_info(track_id)
-        if cached:
-            picked = self._pick_stream_url(
-                cached, prefer_video=True, target_height=height
+        blocked = exclude_itags or frozenset()
+
+        def pick(info: dict[str, Any] | None, *, video_only: bool) -> str | None:
+            return self._pick_stream_url(
+                info,
+                prefer_video=True,
+                target_height=height,
+                video_only=video_only,
+                exclude_itags=blocked,
             )
+
+        def duration_of(info: dict[str, Any] | None) -> int:
+            return int((info or {}).get("duration") or 0)
+
+        for cached in (self._cached_video_info(track_id), self._cached_info(track_id)):
+            picked = pick(cached, video_only=True)
             if picked:
-                return picked, int(cached.get("duration") or 0)
+                return picked, duration_of(cached)
 
         url = f"https://www.youtube.com/watch?v={track_id}"
+        muxed_fallback: str | None = None
+        muxed_duration = 0
         for opts in self._attempt_opts(video=True, height=height):
             try:
                 with YoutubeDL(opts) as yt:
                     info = yt.extract_info(url, download=False)
-                self._store_info(track_id, info)
-                picked = self._pick_stream_url(
-                    info, prefer_video=True, target_height=height
-                )
-                duration = int((info or {}).get("duration") or 0)
+                self._store_video_info(track_id, info)
+                picked = pick(info, video_only=True)
+                duration = duration_of(info)
                 if picked:
                     return picked, duration
+                if muxed_fallback is None:
+                    muxed = pick(info, video_only=False)
+                    if muxed:
+                        muxed_fallback = muxed
+                        muxed_duration = duration
             except Exception:
                 logger.debug(
                     "YouTube video attempt failed: %s", track_id, exc_info=True
                 )
+        if muxed_fallback:
+            logger.info(
+                "YouTube video %s: только muxed, video-only нет",
+                track_id,
+            )
+            return muxed_fallback, muxed_duration
         logger.error("Не удалось получить URL видео YouTube: %s", track_id)
         return None, 0

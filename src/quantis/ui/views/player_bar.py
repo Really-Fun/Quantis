@@ -4,7 +4,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from PySide6.QtCore import QSize, Qt, Signal
-from PySide6.QtGui import QColor, QPainter, QPainterPath, QPixmap
+from PySide6.QtGui import QColor, QLinearGradient, QPainter, QPainterPath, QPixmap
 from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
@@ -93,8 +93,11 @@ class PlayerBar(QFrame):
         self._track_liked = False
         self._plugin_buttons: list[QToolButton] = []
         self._extensions = UiExtensionHost.instance()
+        self._cinematic = False
         self.setObjectName("playerDock")
         self.setFixedHeight(88)
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, False)
+        self.setAutoFillBackground(False)
 
         dock = QVBoxLayout(self)
         dock.setContentsMargins(10, 4, 10, 10)
@@ -102,6 +105,7 @@ class PlayerBar(QFrame):
 
         card = QFrame()
         card.setObjectName("PlayMenu")
+        self._card = card
 
         card_layout = QVBoxLayout(card)
         card_layout.setContentsMargins(16, 10, 16, 10)
@@ -460,6 +464,38 @@ class PlayerBar(QFrame):
         self._volume.setValue(value)
         self._volume.blockSignals(False)
 
+    def set_cinematic(self, enabled: bool) -> None:
+        if self._cinematic == enabled:
+            return
+        self._cinematic = enabled
+        self._sync_cinematic_card()
+        self.update()
+
+    def _sync_cinematic_card(self) -> None:
+        if self._cinematic:
+            self._card.setStyleSheet(
+                "QFrame#PlayMenu {"
+                " background: rgba(0, 0, 0, 0.38);"
+                " border: none;"
+                "}"
+            )
+        else:
+            self._card.setStyleSheet("")
+
+    def paintEvent(self, event) -> None:
+        super().paintEvent(event)
+        if not self._cinematic:
+            return
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        rect = self.rect()
+        fade = QLinearGradient(0, 0, 0, rect.height())
+        fade.setColorAt(0.0, QColor(0, 0, 0, 20))
+        fade.setColorAt(0.35, QColor(0, 0, 0, 110))
+        fade.setColorAt(1.0, QColor(0, 0, 0, 175))
+        painter.fillRect(rect, fade)
+        painter.end()
+
     def refresh_theme(self) -> None:
         buttons = [
             self._repeat_btn,
@@ -478,10 +514,10 @@ class PlayerBar(QFrame):
         self._set_title_playing(self._is_playing)
         self._update_like_button()
         self._update_repeat_button(self._vm.repeat_mode)
-        card = self.findChild(QFrame, "PlayMenu")
-        if card is not None:
-            style = self.style()
-            style.unpolish(card)
-            style.polish(card)
-            card.update()
+        card = self._card
+        style = self.style()
+        style.unpolish(card)
+        style.polish(card)
+        self._sync_cinematic_card()
+        card.update()
         self.update()

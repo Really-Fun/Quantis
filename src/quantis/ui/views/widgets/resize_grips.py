@@ -52,6 +52,14 @@ class WindowResizeGrips:
             _ResizeGrip(window, edges, cursor) for edges, cursor in self._SPECS
         ]
 
+    def owns(self, widget: QWidget | None) -> bool:
+        current = widget
+        while current is not None:
+            if current in self._grips:
+                return True
+            current = current.parentWidget()
+        return False
+
     def set_enabled(self, enabled: bool) -> None:
         if self._enabled == enabled:
             return

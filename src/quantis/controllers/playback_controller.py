@@ -6,7 +6,7 @@ from pathlib import Path
 
 from quantis.core.async_bridge import AsyncBridge
 from quantis.models import Track
-from quantis.models.playlist import WavePlaylist
+from quantis.models.playlist import RecommendationPlaylist, WavePlaylist
 from quantis.models.repeat_mode import RepeatMode
 from quantis.player import Player
 from quantis.plugins.event_bus import EventBus
@@ -257,6 +257,10 @@ class PlaybackController:
         playlist = self.playlist_manager.current_playlist
         if playlist is None or len(playlist) == 0:
             return
+        if isinstance(playlist, RecommendationPlaylist) and playlist.infinite:
+            added = await self.music.recommendation.ensure_extended(playlist, current)
+            if added:
+                self._emit_queue_extended(playlist)
         tracks = playlist.tracks.values
         try:
             index = tracks.index(current)
@@ -382,6 +386,10 @@ class PlaybackController:
             await self._play_wave_next(playlist)
             return
 
+        if isinstance(playlist, RecommendationPlaylist) and playlist.infinite:
+            await self._play_recommendation_next(playlist)
+            return
+
         track = playlist.move_next_track()
         await self.play_track(track)
 
@@ -410,6 +418,39 @@ class PlaybackController:
             await self.play_track(nxt)
         finally:
             self._wave_skip_start_feedback = False
+
+    async def _play_recommendation_next(self, playlist: RecommendationPlaylist) -> None:
+        finished = self._current_track
+        if finished is None:
+            try:
+                finished = playlist.get_current_track()
+            except Exception:
+                finished = None
+        if finished is None:
+            return
+
+        before = len(playlist)
+        nxt = await self.music.recommendation.continue_after_finish(playlist, finished)
+        if nxt is None:
+            logger.info("Рекомендации: нет следующего трека")
+            return
+        if len(playlist) > before:
+            self._emit_queue_extended(playlist)
+        await self.play_track(nxt)
+
+    def _emit_queue_extended(self, playlist) -> None:
+        if self._event_bus is None:
+            return
+
+        def emit() -> None:
+            signal = getattr(self._event_bus, "queue_extended", None)
+            if signal is not None:
+                signal.emit(playlist)
+
+        if self._bridge is not None:
+            self._bridge.invoke_main(emit)
+        else:
+            emit()
 
     async def play_previous(self) -> None:
         playlist = self.playlist_manager.current_playlist

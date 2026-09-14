@@ -5,10 +5,11 @@ from __future__ import annotations
 # Часовой mp4 в кэш не качаем: это сотни МБ, стрима хватает.
 WALLPAPER_CACHE_MAX_SEC = 15 * 60
 WALLPAPER_MAX_LOCAL_BYTES = 40 * 1024 * 1024
-WALLPAPER_SYNC_INTERVAL_MS = 1200
+WALLPAPER_SYNC_INTERVAL_MS = 800
 WALLPAPER_SYNC_DRIFT_MS = 1500
-# Если видео стабильно не догоняет, порог растёт: лучше лёгкий рассинхрон,
-# чем перемотка HTTP-потока каждую секунду.
+WALLPAPER_SEEK_SLOP_MS = 1500
+# Если видео играет, но стабильно не догоняет, порог растёт: лучше лёгкий
+# рассинхрон, чем перемотка HTTP-потока каждую секунду.
 WALLPAPER_MAX_DRIFT_MS = 6000
 WALLPAPER_QUALITY_CHOICES = (360, 480, 720)
 WALLPAPER_FPS_CHOICES = (5, 10, 15, 24, 30)
@@ -35,8 +36,33 @@ def wallpaper_positions_drifted(
     return abs(audio_ms - video_ms) > max(WALLPAPER_SYNC_DRIFT_MS, tolerance_ms)
 
 
-def wallpaper_next_drift_tolerance(current_ms: int) -> int:
+def wallpaper_next_drift_tolerance(
+    current_ms: int, *, video_advancing: bool = True
+) -> int:
+    """Порог не растим, пока видео ещё на нуле: иначе сдаёмся до первой перемотки."""
+    if not video_advancing:
+        return max(WALLPAPER_SYNC_DRIFT_MS, int(current_ms))
     return min(WALLPAPER_MAX_DRIFT_MS, max(WALLPAPER_SYNC_DRIFT_MS, current_ms) * 2)
+
+
+def wallpaper_can_apply_seek(*, duration_ms: int, media_ready: bool) -> bool:
+    """Без duration setPosition на googlevideo срывает декод — остаётся обложка."""
+    _ = media_ready
+    return int(duration_ms) > 0
+
+
+def wallpaper_seek_target(position_ms: int, duration_ms: int) -> int:
+    position = max(0, int(position_ms))
+    duration = int(duration_ms)
+    if duration > 400:
+        return min(position, max(0, duration - 400))
+    return position
+
+
+def wallpaper_seek_landed(
+    position_ms: int, target_ms: int, *, slop_ms: int = WALLPAPER_SEEK_SLOP_MS
+) -> bool:
+    return abs(int(position_ms) - int(target_ms)) <= max(0, int(slop_ms))
 
 
 def wallpaper_duration_filter(info: dict, *, incomplete: bool = False) -> str | None:
@@ -67,16 +93,42 @@ def wallpaper_yt_dlp_format(height: int) -> str:
     h = clamp_wallpaper_quality(height)
     extra = _FORMAT_FALLBACK_HEIGHT[h]
     return (
-        f"bestvideo[height<={h}][protocol^=http]/"
+        f"bestvideo[height<={h}][vcodec^=avc1][protocol=https]/"
+        f"bestvideo[height<={h}][ext=mp4][protocol=https]/"
+        f"bestvideo[height<={h}][protocol=https]/"
         f"best[height<={h}][vcodec!=none][acodec=none]/"
-        f"best[height<={h}][vcodec!=none]/"
-        f"best[height<={extra}][vcodec!=none]/"
-        f"18"
+        f"best[height<={extra}][vcodec!=none][acodec=none]"
     )
 
 
 def wallpaper_yt_dlp_android_format(height: int) -> str:
     return wallpaper_yt_dlp_format(height)
+
+
+def wallpaper_url_itag(url: str | None) -> str | None:
+    """itag из googlevideo URL — чтобы фон не брал тот же поток, что и звук."""
+    raw = (url or "").strip()
+    if not raw:
+        return None
+    from urllib.parse import parse_qs, urlparse
+
+    values = parse_qs(urlparse(raw).query).get("itag") or []
+    itag = str(values[0]).strip() if values else ""
+    return itag or None
+
+
+_MUXED_ITAGS = frozenset({"17", "18", "22", "59", "78"})
+
+
+def wallpaper_source_has_video(url: str | None) -> bool:
+    """Трек уже muxed (itag 18) — второй googlevideo не нужен, кадры есть в плеере."""
+    raw = (url or "").strip()
+    if not raw:
+        return False
+    lowered = raw.lower()
+    if "mime=video" in lowered or "mime%3dvideo" in lowered:
+        return True
+    return wallpaper_url_itag(raw) in _MUXED_ITAGS
 
 
 def wallpaper_stream_conflicts(audio_url: str | None, video_url: str | None) -> bool:

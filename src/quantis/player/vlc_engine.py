@@ -165,6 +165,9 @@ class VlcMediaEngine:
         if self._player.play() == -1:
             self._bridge.errored.emit(f"VLC не смог открыть: {source}")
 
+    def set_video_sink(self, sink) -> None:
+        _ = sink
+
     def pause_media(self) -> None:
         self._player.set_pause(1)
 

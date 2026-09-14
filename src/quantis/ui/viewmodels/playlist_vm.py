@@ -110,6 +110,19 @@ class PlaylistViewModel(BaseViewModel):
     def set_playing_track(self, track: Track | None) -> None:
         self._model.set_playing_track(track)
 
+    def sync_appended(self) -> None:
+        """Подтянуть новые треки, если очередь выросла."""
+        playlist = self._playlist
+        if playlist is None:
+            return
+        known = self._model.all_tracks()
+        fresh = list(playlist.tracks.values)
+        if len(fresh) <= len(known):
+            return
+        self._model.append_tracks(fresh[len(known) :])
+        self.playlist_changed.emit()
+        self.tracks_mutated.emit()
+
     async def play_all(self, start_index: int = 0) -> None:
         playlist = self._playlist
         if playlist is None:
@@ -179,7 +192,10 @@ class PlaylistViewModel(BaseViewModel):
         if not tracks:
             return
         index = max(0, min(start_index, len(tracks) - 1))
-        working = self._clone_playlist(playlist, tracks)
+        if isinstance(playlist, RecommendationPlaylist) and playlist.infinite:
+            working = playlist
+        else:
+            working = self._clone_playlist(playlist, tracks)
         working.set_current_track(index)
         self._playback.playlist_manager.set_playlist(working)
         await self._playback.play_track(tracks[index])
@@ -195,7 +211,15 @@ class PlaylistViewModel(BaseViewModel):
         if isinstance(playlist, UserPlaylist):
             return UserPlaylist(playlist.name, tracks, playlist.cover_path)
         if isinstance(playlist, RecommendationPlaylist):
-            return RecommendationPlaylist(playlist.name, tracks, playlist.cover_path)
+            clone = RecommendationPlaylist(
+                playlist.name,
+                tracks,
+                playlist.cover_path,
+                seeds=playlist.seeds,
+                infinite=playlist.infinite,
+            )
+            clone._seed_index = playlist._seed_index
+            return clone
         if isinstance(playlist, WavePlaylist):
             return WavePlaylist(
                 playlist.name,

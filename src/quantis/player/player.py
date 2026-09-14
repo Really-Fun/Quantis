@@ -69,6 +69,10 @@ class Player:
         self._stream_retry_used = False
         self._engine.on_error(self._on_engine_error)
 
+    @property
+    def media_player(self):
+        return getattr(self._engine, "media_player", None)
+
     def on_source_changed(self, callback: Callable[[str], None]) -> None:
         self._source_changed_callbacks.append(callback)
 

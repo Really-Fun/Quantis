@@ -180,8 +180,8 @@ class HomeViewModel(BaseViewModel):
                 limit=32,
             )
 
-            recommendation_tracks, recommendation_playlist = await self._load_recommendations(
-                recent_tracks
+            recommendation_tracks, recommendation_playlist = (
+                await self._load_recommendations(recent_tracks, liked_tracks)
             )
             wave_playlist = await self._load_wave()
             full_snapshot = self._build_snapshot(
@@ -245,6 +245,17 @@ class HomeViewModel(BaseViewModel):
                     count=wave_count,
                     cover_path=get_asset_path("assets/icons/radio.svg"),
                     kind="wave",
+                )
+            )
+
+        rec_count = len(recommendation_tracks)
+        if rec_count:
+            library_playlists.append(
+                _CountedShell(
+                    "Рекомендации",
+                    count=rec_count,
+                    cover_path=get_asset_path("assets/icons/recomendation.svg"),
+                    kind="recommendations",
                 )
             )
 
@@ -400,35 +411,39 @@ class HomeViewModel(BaseViewModel):
         return playlist
 
     async def _load_recommendations(
-        self, recent_tracks: list[Track]
+        self,
+        recent_tracks: list[Track],
+        liked_tracks: list[Track] | None = None,
     ) -> tuple[list[Track], RecommendationPlaylist | None]:
-        if not recent_tracks:
-            try:
-                fallback = await self._music.finder.get_tracks("chill mix", value=10)
-            except Exception:
-                logger.exception("Не удалось загрузить рекомендации")
-                return [], None
-            if not fallback:
-                return [], None
-            playlist = RecommendationPlaylist(name="Для вас", tracks=fallback)
-            return fallback, playlist
-
-        seed = recent_tracks[0]
+        seeds = _unique_seeds(recent_tracks, liked_tracks or [])
         try:
-            playlist = await self._music.recommendation.generate_radio_from_track(seed)
+            playlist = await self._music.recommendation.generate_from_history(seeds)
         except Exception:
-            logger.exception("Не удалось сгенерировать радио для главной")
-            return recent_tracks[1:9], None
+            logger.exception("Не удалось сгенерировать рекомендации")
+            if not seeds:
+                return [], None
+            fallback = seeds[:5]
+            return fallback, RecommendationPlaylist(
+                name="Рекомендации",
+                tracks=fallback,
+                seeds=seeds,
+                infinite=True,
+            )
         tracks = list(playlist.tracks.values)
-        return tracks[:12], playlist
+        return tracks, playlist
 
     async def play_track(self, track: Track) -> None:
         await self._playback.play_track(track)
 
     async def play_recent_at(self, index: int) -> None:
-        await self._play_from_model(self._recent_model, index)
+        playlist = RecentlyPlayedPlaylist(tracks=self._recent_model.all_tracks())
+        await self.play_playlist(playlist, start_index=index)
 
     async def play_recommendation_at(self, index: int) -> None:
+        playlist = self._recommendation_playlist
+        if playlist is not None and len(playlist):
+            await self.play_playlist(playlist, start_index=index)
+            return
         await self._play_from_model(self._recommendation_model, index)
 
     async def play_downloaded_at(self, index: int) -> None:
@@ -478,7 +493,7 @@ class HomeViewModel(BaseViewModel):
                 batch_id=playlist.batch_id,
             )
         elif isinstance(playlist, RecommendationPlaylist):
-            working = RecommendationPlaylist(playlist.name, tracks, playlist.cover_path)
+            working = playlist
         else:
             working = RecommendationPlaylist(playlist.name, tracks, playlist.cover_path)
         working.set_current_track(index)
@@ -498,6 +513,12 @@ class HomeViewModel(BaseViewModel):
                 if self._wave_playlist is not None and len(self._wave_playlist):
                     return self._wave_playlist
                 return WavePlaylist(tracks=())
+            if playlist.kind == "recommendations":
+                if self._recommendation_playlist is not None:
+                    return self._recommendation_playlist
+                return RecommendationPlaylist(
+                    tracks=self._recommendation_model.all_tracks()
+                )
         return playlist
 
     async def open_wave(self) -> WavePlaylist | None:
@@ -512,6 +533,97 @@ class HomeViewModel(BaseViewModel):
         if playlist is None:
             return
         await self.play_playlist(playlist, start_index=0)
+
+    async def ensure_recommendations(self) -> RecommendationPlaylist | None:
+        current = self._recommendation_playlist
+        if current is not None and len(current):
+            return current
+        recent = list(self._recent_model.all_tracks())
+        liked = list(self._liked_model.all_tracks())
+        tracks, playlist = await self._load_recommendations(recent, liked)
+        if playlist is None or not tracks:
+            return None
+        self._recommendation_playlist = playlist
+        bridge = self._bridge
+        if bridge is not None:
+
+            def apply() -> None:
+                snap = self._snapshot
+                self._snapshot = HomeSnapshot(
+                    greeting=snap.greeting,
+                    quick_playlists=snap.quick_playlists,
+                    library_playlists=_replace_shell_count(
+                        snap.library_playlists,
+                        "recommendations",
+                        len(tracks),
+                    ),
+                    recommendation_tracks=tuple(tracks),
+                    recent_tracks=snap.recent_tracks,
+                    wave_ready=snap.wave_ready,
+                    wave_track_count=snap.wave_track_count,
+                    wave_source=snap.wave_source,
+                )
+                self._recommendation_model.set_tracks(tracks)
+                self.home_changed.emit()
+
+            bridge.invoke_main(apply)
+            schedule_cover_prefetch(
+                tracks,
+                self._music.downloader,
+                bridge,
+                on_done=lambda: self.home_changed.emit(),
+                limit=16,
+            )
+        return playlist
+
+    async def open_recommendations(self) -> RecommendationPlaylist | None:
+        return await self.ensure_recommendations()
+
+    async def play_recommendations(self) -> None:
+        playlist = await self.ensure_recommendations()
+        if playlist is None:
+            return
+        await self.play_playlist(playlist, start_index=0)
+
+    def apply_queue_extended(self, playlist) -> None:
+        """Очередь рекомендаций выросла — обновить модель и карточку."""
+        if not isinstance(playlist, RecommendationPlaylist):
+            return
+        owned = self._recommendation_playlist
+        if owned is not None and playlist is not owned:
+            return
+        self._recommendation_playlist = playlist
+        tracks = list(playlist.tracks.values)
+        known = self._recommendation_model.all_tracks()
+        if len(tracks) > len(known):
+            self._recommendation_model.append_tracks(tracks[len(known) :])
+        else:
+            self._recommendation_model.set_tracks(tracks)
+        snap = self._snapshot
+        library = _replace_shell_count(
+            snap.library_playlists, "recommendations", len(tracks)
+        )
+        self._snapshot = HomeSnapshot(
+            greeting=snap.greeting,
+            quick_playlists=tuple(list(library)[:6]),
+            library_playlists=tuple(library),
+            recommendation_tracks=tuple(tracks),
+            recent_tracks=snap.recent_tracks,
+            wave_ready=snap.wave_ready,
+            wave_track_count=snap.wave_track_count,
+            wave_source=snap.wave_source,
+        )
+        self.home_changed.emit()
+        if self._bridge is not None:
+            new_tracks = tracks[len(known) :]
+            if new_tracks:
+                schedule_cover_prefetch(
+                    new_tracks,
+                    self._music.downloader,
+                    self._bridge,
+                    on_done=lambda: self.home_changed.emit(),
+                    limit=16,
+                )
 
     async def refresh_liked(self, bridge: AsyncBridge | None = None) -> None:
         bridge = bridge or self._bridge
@@ -646,3 +758,50 @@ def _greeting_text() -> str:
     if 18 <= hour < 23:
         return "Добрый вечер"
     return "Доброй ночи"
+
+
+def _unique_seeds(*groups: list[Track]) -> list[Track]:
+    seen: set[tuple[str, str]] = set()
+    seeds: list[Track] = []
+    for group in groups:
+        for track in group:
+            key = (str(track.source), str(track.track_id))
+            if key in seen:
+                continue
+            seen.add(key)
+            seeds.append(track)
+    return seeds
+
+
+def _replace_shell_count(
+    playlists: tuple[Playlist, ...] | list[Playlist],
+    kind: str,
+    count: int,
+) -> list[Playlist]:
+    updated: list[Playlist] = []
+    found = False
+    for playlist in playlists:
+        if isinstance(playlist, _CountedShell) and playlist.kind == kind:
+            found = True
+            updated.append(
+                _CountedShell(
+                    playlist.name,
+                    count=count,
+                    cover_path=playlist.cover_path,
+                    kind=kind,
+                )
+            )
+        else:
+            updated.append(playlist)
+    if not found and count and kind == "recommendations":
+        insert_at = 1 if updated and getattr(updated[0], "kind", None) == "wave" else 0
+        updated.insert(
+            insert_at,
+            _CountedShell(
+                "Рекомендации",
+                count=count,
+                cover_path=get_asset_path("assets/icons/recomendation.svg"),
+                kind=kind,
+            ),
+        )
+    return updated

@@ -9,6 +9,7 @@ from PySide6.QtGui import (
     QColor,
     QImage,
     QImageReader,
+    QLinearGradient,
     QPainter,
     QPixmap,
     QRadialGradient,
@@ -18,7 +19,10 @@ from PySide6.QtWidgets import QHBoxLayout, QWidget
 
 from quantis.services.wallpaper_policy import (
     WALLPAPER_DEFAULT_FPS,
+    wallpaper_can_apply_seek,
     wallpaper_decode_max_side,
+    wallpaper_seek_landed,
+    wallpaper_seek_target,
 )
 from quantis.ui.views.widgets.cover_art import load_wallpaper_pixmap
 
@@ -150,14 +154,28 @@ class _VideoSurface(QWidget):
         y = (rect.height() - self._scaled.height()) // 2
         painter.drawImage(x, y, self._scaled)
         painter.setOpacity(1.0)
-
-        if not self._cinematic:
-            radius = max(rect.width(), rect.height()) * 0.7
-            vignette = QRadialGradient(rect.center(), radius)
-            vignette.setColorAt(0.4, QColor(0, 0, 0, 0))
-            vignette.setColorAt(1.0, QColor(0, 0, 0, 140))
-            painter.fillRect(rect, vignette)
+        self._paint_dim(painter, rect)
         painter.end()
+
+    def _paint_dim(self, painter: QPainter, rect) -> None:
+        radius = max(rect.width(), rect.height()) * (0.74 if self._cinematic else 0.7)
+        vignette = QRadialGradient(rect.center(), radius)
+        if self._cinematic:
+            painter.fillRect(rect, QColor(0, 0, 0, 28))
+            vignette.setColorAt(0.0, QColor(0, 0, 0, 0))
+            vignette.setColorAt(0.42, QColor(0, 0, 0, 18))
+            vignette.setColorAt(0.72, QColor(0, 0, 0, 95))
+            vignette.setColorAt(1.0, QColor(0, 0, 0, 175))
+            painter.fillRect(rect, vignette)
+            bottom = QLinearGradient(0, rect.height() * 0.58, 0, rect.height())
+            bottom.setColorAt(0.0, QColor(0, 0, 0, 0))
+            bottom.setColorAt(0.4, QColor(0, 0, 0, 55))
+            bottom.setColorAt(1.0, QColor(0, 0, 0, 170))
+            painter.fillRect(rect, bottom)
+            return
+        vignette.setColorAt(0.4, QColor(0, 0, 0, 0))
+        vignette.setColorAt(1.0, QColor(0, 0, 0, 140))
+        painter.fillRect(rect, vignette)
 
 
 class WallpaperBackdrop(QWidget):
@@ -188,6 +206,8 @@ class WallpaperBackdrop(QWidget):
         self._hold_until_audio = False
         self._position_provider: Callable[[], int] | None = None
         self._stall_notified = False
+        self._seeking = False
+        self._host_player: QMediaPlayer | None = None
 
         self._video_surface = _VideoSurface(self)
         self._video_surface.hide()
@@ -214,7 +234,49 @@ class WallpaperBackdrop(QWidget):
             self._video_player.mediaStatusChanged.connect(self._on_video_status)
             self._video_player.durationChanged.connect(self._on_duration_ready)
             self._video_player.errorOccurred.connect(self._on_video_error)
+        elif self._host_player is None:
+            self._video_player.setVideoSink(self._video_surface.sink)
         return self._video_player
+
+    def is_following_audio_player(self) -> bool:
+        return self._host_player is not None
+
+    def follow_media_player(self, player: QMediaPlayer | None) -> None:
+        """Кадры с плеера трека: без второго googlevideo и без рассинхрона."""
+        if not self._dynamic_enabled:
+            return
+        if player is self._host_player and player is not None:
+            self._video_active = True
+            self._video_surface.show()
+            self.lower()
+            return
+        self._detach_host()
+        if self._video_player is not None:
+            self._video_player.stop()
+            self._video_player.setVideoSink(None)
+            self._video_player.setSource(QUrl())
+        if player is None:
+            return
+        self._host_player = player
+        self._loop_enabled = False
+        self._follow_audio = False
+        self._hold_until_audio = False
+        self._pending_start_ms = 0
+        self._stall_notified = False
+        self._video_active = True
+        self._current_source = "host-player"
+        self._cached = QPixmap()
+        self._cache_size = (0, 0)
+        player.setVideoSink(self._video_surface.sink)
+        self._video_surface.show()
+        self.lower()
+        self.update()
+
+    def _detach_host(self) -> None:
+        if self._host_player is None:
+            return
+        self._host_player.setVideoSink(None)
+        self._host_player = None
 
     def set_variant(self, variant: str) -> None:
         if self._variant != variant:
@@ -262,6 +324,7 @@ class WallpaperBackdrop(QWidget):
     ) -> None:
         if not self._dynamic_enabled or not url:
             return
+        self._detach_host()
         self._loop_enabled = loop
         self._follow_audio = follow_audio and not loop
         self._hold_until_audio = hold_until_audio and not loop
@@ -324,6 +387,8 @@ class WallpaperBackdrop(QWidget):
         return self._video_active and not self._video_surface.is_empty()
 
     def is_video_playing(self) -> bool:
+        if self._host_player is not None:
+            return self._video_active
         if self._video_player is None:
             return False
         return self._video_active and self._video_player.playbackState() in (
@@ -337,25 +402,32 @@ class WallpaperBackdrop(QWidget):
         return max(0, int(self._video_player.position()))
 
     def seek_ms(self, position_ms: int) -> None:
+        if self._host_player is not None:
+            return
         if self._video_player is None or not self._video_active:
             return
-        self._pending_start_ms = 0
+        self._pending_start_ms = max(0, int(position_ms))
         self._follow_audio = False
         self._hold_until_audio = False
-        duration = int(self._video_player.duration())
-        position = max(0, int(position_ms))
-        if duration > 0:
-            position = min(position, max(0, duration - 400))
-        self._video_player.setPosition(position)
+        self._apply_pending_seek()
 
     def pause_video(self) -> None:
+        if self._host_player is not None:
+            return
         if self._video_active and self._video_player is not None:
             self._video_player.pause()
 
     def resume_video(self) -> None:
         self._hold_until_audio = False
-        if self._video_active and self._dynamic_enabled and self._video_player is not None:
+        if self._host_player is not None:
+            return
+        if (
+            self._video_active
+            and self._dynamic_enabled
+            and self._video_player is not None
+        ):
             self._video_player.play()
+            self._apply_pending_seek()
 
     def stop_video(self) -> None:
         self._video_active = False
@@ -365,7 +437,10 @@ class WallpaperBackdrop(QWidget):
         self._follow_audio = False
         self._hold_until_audio = False
         self._stall_notified = False
+        self._seeking = False
+        self._detach_host()
         if self._video_player is not None:
+            self._video_player.setVideoSink(self._video_surface.sink)
             self._video_player.stop()
         self._video_surface.clear()
         self._video_surface.hide()
@@ -383,8 +458,18 @@ class WallpaperBackdrop(QWidget):
         source = self._current_source or ""
         return source.startswith(("http://", "https://"))
 
-    def _apply_pending_seek(self) -> None:
+    def _media_ready_for_seek(self) -> bool:
         if self._video_player is None:
+            return False
+        status = self._video_player.mediaStatus()
+        return status in (
+            QMediaPlayer.MediaStatus.LoadedMedia,
+            QMediaPlayer.MediaStatus.BufferingMedia,
+            QMediaPlayer.MediaStatus.BufferedMedia,
+        )
+
+    def _apply_pending_seek(self) -> None:
+        if self._video_player is None or self._seeking:
             return
         if not self._follow_audio and self._pending_start_ms <= 0:
             return
@@ -393,15 +478,26 @@ class WallpaperBackdrop(QWidget):
             # Пока грузился поток, трек ушёл вперёд — берём позицию на сейчас.
             position = max(0, int(self._position_provider()))
         duration = int(self._video_player.duration())
-        if duration <= 0:
+        if not wallpaper_can_apply_seek(
+            duration_ms=duration, media_ready=self._media_ready_for_seek()
+        ):
             return
-        # Сначала пауза и перемотка: иначе muxed-поток играет с нуля и слышно рестарт.
-        self._video_player.pause()
-        self._video_player.setPosition(min(position, max(0, duration - 400)))
-        self._pending_start_ms = 0
-        self._follow_audio = False
-        if not self._hold_until_audio:
-            self._video_player.play()
+        target = wallpaper_seek_target(position, duration)
+        self._seeking = True
+        try:
+            playing = (
+                self._video_player.playbackState()
+                == QMediaPlayer.PlaybackState.PlayingState
+            )
+            self._video_player.setPosition(target)
+            landed = wallpaper_seek_landed(self._video_player.position(), target)
+            if landed:
+                self._pending_start_ms = 0
+                self._follow_audio = False
+            if not playing and not self._hold_until_audio:
+                self._video_player.play()
+        finally:
+            self._seeking = False
 
     def _on_duration_ready(self, duration: int) -> None:
         if duration > 0:
@@ -553,9 +649,7 @@ class BodyWithWallpaper(QWidget):
         self._backdrop.set_wallpaper(path)
 
     def set_theater_mode(self, enabled: bool) -> None:
-        """Прячет nav/страницы/плеер. Фоновые слои плагинов остаются."""
-        self._foreground.setVisible(not enabled)
-        # Cava останавливает таймер в hideEvent — слой нельзя прятать вместе с UI.
+        """Видео на весь контент. Шапка и плеер остаются снаружи."""
         self._wake_background_layers()
         self._backdrop.set_cinematic(enabled)
         self._restack()

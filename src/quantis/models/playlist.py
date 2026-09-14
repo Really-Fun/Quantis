@@ -133,15 +133,21 @@ class Playlist(ABC):
 
 
 class RecommendationPlaylist(Playlist):
-    """Плейлист рекомендаций."""
+    """Плейлист рекомендаций: пачки с YouTube, очередь растёт в конце."""
 
     def __init__(
         self,
         name: str = "Рекомендации",
         tracks: Iterable[Track] | None = None,
         cover_path: str = get_asset_path("assets/icons/recomendation.svg"),
+        *,
+        seeds: Iterable[Track] | None = None,
+        infinite: bool = False,
     ) -> None:
         super().__init__(name, tracks or (), cover_path)
+        self.seeds = tuple(seeds or ())
+        self._seed_index = 0
+        self.infinite = infinite
 
     def get_tracks(self) -> Tuple[Track, ...]:
         """Получаем список треков из плейлиста
@@ -150,6 +156,27 @@ class RecommendationPlaylist(Playlist):
             Tuple[Track, ...]: список треков
         """
         return tuple(self.tracks.values)
+
+    def append_tracks(self, tracks: Iterable[Track]) -> int:
+        """Добавляет новые треки в конец (без дублей). Возвращает число добавленных."""
+        existing = {(str(t.source), str(t.track_id)) for t in self.tracks.values}
+        extra = [
+            track
+            for track in tracks
+            if (str(track.source), str(track.track_id)) not in existing
+        ]
+        if not extra:
+            return 0
+        self.tracks.values = tuple(list(self.tracks.values) + extra)
+        return len(extra)
+
+    def take_seed(self, fallback: Track) -> Track:
+        """Следующий сид из истории БД, иначе текущий трек."""
+        if not self.seeds:
+            return fallback
+        seed = self.seeds[self._seed_index % len(self.seeds)]
+        self._seed_index += 1
+        return seed
 
 
 class DownloadPlaylist(Playlist):

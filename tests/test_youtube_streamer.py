@@ -130,6 +130,7 @@ def test_audio_attempts_use_socket_timeout() -> None:
     first_youtube = (attempts[0].get("extractor_args") or {}).get("youtube", {})
     assert first_youtube.get("player_client") == ["android"]
     assert "webpage" in (first_youtube.get("player_skip") or [])
+    assert "dash" in (first_youtube.get("skip") or [])
     assert "web" not in first_youtube.get("player_client", [])
     second_clients = (
         (attempts[1].get("extractor_args") or {})
@@ -147,13 +148,15 @@ def test_wallpaper_video_format_is_360p() -> None:
         assert "bestvideo" in fmt
         assert "acodec=none" in fmt
         assert "height<=360" in fmt
+        skip = (opts.get("extractor_args") or {}).get("youtube", {}).get("skip") or []
+        assert "dash" not in skip
 
 
 def test_wallpaper_video_format_honors_720p() -> None:
     streamer = AsyncYoutubeStreamer(None)  # type: ignore[arg-type]
     video_opts = streamer._attempt_opts(video=True, height=720)
     for opts in video_opts:
-        assert "height<=720" in opts["format"] or opts["format"].startswith("18/")
+        assert "height<=720" in opts["format"]
 
 
 def test_picks_video_only_over_muxed() -> None:
@@ -189,6 +192,130 @@ def test_picks_video_only_over_muxed() -> None:
         info, prefer_video=True, target_height=360
     )
     assert picked == "https://rr.example/video-only.mp4"
+
+
+def test_video_pick_ignores_audio_only_cache() -> None:
+    info = {
+        "url": "https://rr.example/audio.m4a",
+        "protocol": "https",
+        "ext": "m4a",
+        "vcodec": "none",
+        "acodec": "aac",
+        "formats": [
+            {
+                "url": "https://rr.example/audio.m4a",
+                "protocol": "https",
+                "ext": "m4a",
+                "vcodec": "none",
+                "acodec": "aac",
+                "abr": 128,
+            }
+        ],
+    }
+    assert AsyncYoutubeStreamer._pick_stream_url(info, prefer_video=True) is None
+    streamer = AsyncYoutubeStreamer(None)  # type: ignore[arg-type]
+    streamer._store_info("dQw4w9WgXcQ", info)
+    streamer._attempt_opts = lambda **_kwargs: []  # type: ignore[method-assign]
+    url, _duration = streamer.sync_video_stream("dQw4w9WgXcQ", 360)
+    assert url is None
+
+
+def test_picks_h264_video_only_over_vp9() -> None:
+    info = {
+        "formats": [
+            {
+                "url": "https://rr.example/vp9.webm",
+                "protocol": "https",
+                "ext": "webm",
+                "vcodec": "vp9",
+                "acodec": "none",
+                "height": 360,
+                "tbr": 300,
+            },
+            {
+                "url": "https://rr.example/h264.mp4",
+                "protocol": "https",
+                "ext": "mp4",
+                "vcodec": "avc1.4d401e",
+                "acodec": "none",
+                "height": 360,
+                "tbr": 250,
+            },
+        ],
+    }
+    assert (
+        AsyncYoutubeStreamer._pick_stream_url(
+            info, prefer_video=True, target_height=360
+        )
+        == "https://rr.example/h264.mp4"
+    )
+
+
+def test_sync_video_does_not_reuse_muxed_audio_cache() -> None:
+    muxed = {
+        "duration": 236,
+        "url": "https://rr.example/videoplayback?id=abc&itag=18",
+        "protocol": "https",
+        "ext": "mp4",
+        "vcodec": "h264",
+        "acodec": "aac",
+        "format_id": "18",
+        "height": 360,
+        "formats": [
+            {
+                "url": "https://rr.example/videoplayback?id=abc&itag=18",
+                "protocol": "https",
+                "ext": "mp4",
+                "vcodec": "h264",
+                "acodec": "aac",
+                "format_id": "18",
+                "height": 360,
+            }
+        ],
+    }
+    assert (
+        AsyncYoutubeStreamer._pick_stream_url(
+            muxed, prefer_video=True, video_only=True
+        )
+        is None
+    )
+    streamer = AsyncYoutubeStreamer(None)  # type: ignore[arg-type]
+    streamer._store_info("dQw4w9WgXcQ", muxed)
+    streamer._attempt_opts = lambda **_kwargs: []  # type: ignore[method-assign]
+    url, _duration = streamer.sync_video_stream("dQw4w9WgXcQ", 360)
+    assert url is None
+
+
+def test_sync_video_excludes_audio_itag() -> None:
+    info = {
+        "duration": 236,
+        "formats": [
+            {
+                "url": "https://rr.example/videoplayback?id=abc&itag=18",
+                "protocol": "https",
+                "ext": "mp4",
+                "vcodec": "h264",
+                "acodec": "aac",
+                "format_id": "18",
+                "height": 360,
+            },
+            {
+                "url": "https://rr.example/videoplayback?id=abc&itag=134",
+                "protocol": "https",
+                "ext": "mp4",
+                "vcodec": "avc1.4d401e",
+                "acodec": "none",
+                "format_id": "134",
+                "height": 360,
+            },
+        ],
+    }
+    streamer = AsyncYoutubeStreamer(None)  # type: ignore[arg-type]
+    streamer._store_info("dQw4w9WgXcQ", info)
+    url, _duration = streamer.sync_video_stream(
+        "dQw4w9WgXcQ", 360, frozenset({"18"})
+    )
+    assert url == "https://rr.example/videoplayback?id=abc&itag=134"
 
 
 def test_picks_video_near_requested_height() -> None:

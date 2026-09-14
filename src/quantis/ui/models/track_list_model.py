@@ -90,6 +90,17 @@ class TrackListModel(QAbstractTableModel):
         self._loaded_count = min(len(self._tracks), self._batch_size)
         self.endResetModel()
 
+    def append_tracks(self, tracks: list[Track]) -> None:
+        extra = [track for track in tracks if track not in self._tracks]
+        if not extra:
+            return
+        start = self._loaded_count
+        end = start + len(extra) - 1
+        self.beginInsertRows(QModelIndex(), start, end)
+        self._tracks.extend(extra)
+        self._loaded_count += len(extra)
+        self.endInsertRows()
+
     def all_tracks(self) -> list[Track]:
         return self._tracks
 

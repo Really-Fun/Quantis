@@ -52,11 +52,11 @@ def test_is_typing_target_walks_parents(qapp) -> None:
     assert is_typing_target(child) is True
 
 
-def test_theater_mode_hides_foreground(qapp) -> None:
+def test_theater_mode_keeps_foreground(qapp) -> None:
     body = BodyWithWallpaper()
     assert not body._foreground.isHidden()
     body.set_theater_mode(True)
-    assert body._foreground.isHidden()
+    assert not body._foreground.isHidden()
     assert not body._layer_host.isHidden()
     assert body._backdrop._video_surface._cinematic is True
     assert body._backdrop._video_surface._opacity == 1.0

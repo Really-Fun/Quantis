@@ -160,9 +160,19 @@ class HomePage(QWidget):
         self._library_section.add_widget_block(self._playlist_shelf)
         self._layout.addWidget(self._library_section)
 
-        self._recommend_section = HomeSection("Поток на сегодня")
+        self._recommend_section = HomeSection(
+            "Рекомендации",
+            "5 треков с YouTube · в конце подгрузим ещё",
+        )
+        listen_btn = QToolButton()
+        listen_btn.setObjectName("homeSectionAction")
+        listen_btn.setText("▶ Слушать")
+        listen_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        listen_btn.setToolTip("Слушать поток рекомендаций")
+        listen_btn.clicked.connect(self._on_recommendations_play)
+        self._recommend_section.set_header_action(listen_btn)
         self._recommend_list = self._make_track_table(self._vm.recommendation_model)
-        self._recommend_empty = QLabel("Включи любой трек — соберём поток")
+        self._recommend_empty = QLabel("Включи любой трек — соберём поток из истории")
         self._recommend_empty.setObjectName("homeEmptyHint")
         self._recommend_empty.setWordWrap(True)
         rec_host = QWidget()
@@ -307,6 +317,9 @@ class HomePage(QWidget):
         if getattr(playlist, "kind", None) == "wave":
             self._on_wave_open()
             return
+        if getattr(playlist, "kind", None) == "recommendations":
+            self._on_recommendations_open()
+            return
         self.playlist_open_requested.emit(self._vm.resolve_playlist(playlist))
 
     def _on_wave_open(self) -> None:
@@ -354,6 +367,25 @@ class HomePage(QWidget):
             track_count=count,
             source=self._vm.snapshot.wave_source,
         )
+
+    def _on_recommendations_open(self) -> None:
+        if self._bridge is None:
+            return
+        schedule(self._open_recommendations_async(), self._bridge)
+
+    def _on_recommendations_play(self) -> None:
+        if self._bridge is None:
+            return
+        schedule(self._play_recommendations_async(), self._bridge)
+
+    async def _open_recommendations_async(self) -> None:
+        playlist = await self._vm.open_recommendations()
+        if playlist is None or not len(playlist):
+            return
+        self.playlist_open_requested.emit(playlist)
+
+    async def _play_recommendations_async(self) -> None:
+        await self._vm.play_recommendations()
 
     def _on_play_model(self, model: TrackListModel, row: int) -> None:
         if self._bridge is None:

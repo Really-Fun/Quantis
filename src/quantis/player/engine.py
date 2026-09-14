@@ -45,6 +45,10 @@ class QtMediaEngine:
         self._player.errorOccurred.connect(self._on_error)
         self._player.durationChanged.connect(self._on_duration_changed)
 
+    def set_video_sink(self, sink) -> None:
+        """Обои читают кадры того же QMediaPlayer — без второго HTTP."""
+        self._player.setVideoSink(sink)
+
     @property
     def media_player(self) -> QMediaPlayer:
         """Совместимость со старым кодом/тестами."""
