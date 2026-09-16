@@ -80,10 +80,10 @@ src/quantis/
 .github/              # шаблоны Issues/PR, CoC, CONTRIBUTING, SECURITY, FUNDING
 docs/                 # архитектура, сборка, карта UI
 docs/assets/          # логотип и скриншоты для README
-packaging/            # PyInstaller rthooks для qt / vlc
-scripts/              # build_exe.py, build.ps1 — сборка Quantis / Quantis-VLC
-installer/            # Inno Setup
-main.spec             # spec-файл PyInstaller
+packaging/
+├── inno/             # Inno Setup (quantis.iss)
+├── pyinstaller/      # main.spec, VERSIONINFO, runtime hooks
+└── scripts/          # build_exe.py, build_installer.py, bootloader
 tests/                # pytest, маркер @pytest.mark.network для сетевых тестов
 ```
 

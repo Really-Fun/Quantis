@@ -8,7 +8,8 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-Set-Location (Split-Path $PSScriptRoot -Parent)
+$Root = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
+Set-Location $Root
 
 if ($Backend -eq "vlc") {
     poetry install --with dev,vlc
@@ -19,4 +20,4 @@ if ($Backend -eq "vlc") {
     poetry install --with dev
 }
 
-poetry run python scripts/build_exe.py $Backend
+poetry run python packaging/scripts/build_exe.py $Backend

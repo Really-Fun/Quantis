@@ -9,7 +9,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 def main() -> int:
@@ -18,7 +18,7 @@ def main() -> int:
         "--backend",
         choices=("qt", "vlc"),
         default="qt",
-        help="Тот же backend, что у scripts/build_exe.py",
+        help="Тот же backend, что у packaging/scripts/build_exe.py",
     )
     args = parser.parse_args()
 
@@ -35,12 +35,12 @@ def main() -> int:
         print(
             "Inno Setup (iscc) не найден в PATH.\n"
             f"Вручную: iscc /DAppVersion={version} /DBackend={args.backend} "
-            "installer\\quantis.iss",
+            "packaging\\inno\\quantis.iss",
             file=sys.stderr,
         )
         return 1
 
-    iss = ROOT / "installer" / "quantis.iss"
+    iss = ROOT / "packaging" / "inno" / "quantis.iss"
     cmd = [
         iscc,
         f"/DAppVersion={version}",

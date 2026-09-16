@@ -22,41 +22,42 @@ poetry version patch    # 0.2.1 → 0.2.2
 ```bat
 REM Qt (по умолчанию)
 poetry install --with dev
-poetry run python scripts/build_exe.py qt
+poetry run python packaging/scripts/build_exe.py qt
 
 REM VLC — нужен установленный VideoLAN VLC (для libvlc.dll + plugins)
 poetry install --with dev,vlc
 set VLC_HOME=C:\Program Files\VideoLAN\VLC
-poetry run python scripts/build_exe.py vlc
+poetry run python packaging/scripts/build_exe.py vlc
 ```
 
 То же через PowerShell:
 
 ```powershell
-.\scripts\build.ps1 -Backend qt
-.\scripts\build.ps1 -Backend vlc -VlcHome "C:\Program Files\VideoLAN\VLC"
+.\packaging\scripts\build.ps1 -Backend qt
+.\packaging\scripts\build.ps1 -Backend vlc -VlcHome "C:\Program Files\VideoLAN\VLC"
 ```
 
 Каталог VLC можно передать и аргументом, минуя переменную окружения:
 
 ```bat
-poetry run python scripts/build_exe.py vlc --vlc-home "C:\Program Files\VideoLAN\VLC"
+poetry run python packaging/scripts/build_exe.py vlc --vlc-home "C:\Program Files\VideoLAN\VLC"
 ```
 
-`scripts/build_exe.py` — тонкая обёртка над PyInstaller: выставляет
-`QUANTIS_MEDIA_BACKEND`, запускает `main.spec` и раскладывает результат по
-`dist/` (рабочие файлы — в `build/pyi-<backend>/`). Выбор движка на этапе
-сборки читают rthook'и из `packaging/`.
+`packaging/scripts/build_exe.py` — тонкая обёртка над PyInstaller: выставляет
+`QUANTIS_MEDIA_BACKEND`, запускает `packaging/pyinstaller/main.spec` и раскладывает
+результат по `dist/` (рабочие файлы — в `build/pyi-<backend>/`). Выбор движка на
+этапе сборки читают rthook'и из `packaging/pyinstaller/hooks/`.
 
 В сборку **Quantis-VLC** дополнительно копируются `libvlc.dll` и `plugins/`
 из `VLC_HOME`.
 
 ### VERSIONINFO (Windows)
 
-При сборке `main.spec` пишет `packaging/quantis_version_info.txt` из
-`[project]` в `pyproject.toml` (версия, описание, автор → CompanyName) и
-передаёт его в `EXE(..., version=...)`. В проводнике это поля
-Properties → Details у `Quantis.exe`.
+При сборке `packaging/pyinstaller/main.spec` пишет
+`packaging/pyinstaller/quantis_version_info.txt` из `[project]` в
+`pyproject.toml` (версия, описание, автор → CompanyName) и передаёт его в
+`EXE(..., version=...)`. В проводнике это поля Properties → Details у
+`Quantis.exe`.
 
 ### Свой PyInstaller bootloader (меньше AV false positives)
 
@@ -71,12 +72,12 @@ Properties → Details у `Quantis.exe`.
 # Клонирует pyinstaller/pyinstaller (тег = установленная версия),
 # собирает bootloader через waf и подменяет runw.exe / run.exe
 # в активном PyInstaller (у нас часто это ./PyInstaller/).
-.\scripts\rebuild_pyi_bootloader.ps1
+.\packaging\scripts\rebuild_pyi_bootloader.ps1
 
 # Явный тег / MinGW / каталог назначения
-.\scripts\rebuild_pyi_bootloader.ps1 -Tag v6.22.2
-.\scripts\rebuild_pyi_bootloader.ps1 -Gcc
-.\scripts\rebuild_pyi_bootloader.ps1 -Dest "C:\projects\Quantis\PyInstaller"
+.\packaging\scripts\rebuild_pyi_bootloader.ps1 -Tag v6.22.2
+.\packaging\scripts\rebuild_pyi_bootloader.ps1 -Gcc
+.\packaging\scripts\rebuild_pyi_bootloader.ps1 -Dest "C:\projects\Quantis\PyInstaller"
 ```
 
 Исходники временно лежат в `build/pyinstaller-src/` (уже в `.gitignore`
@@ -86,7 +87,7 @@ Properties → Details у `Quantis.exe`.
 После подмены пересоберите приложение:
 
 ```bat
-poetry run python scripts/build_exe.py qt
+poetry run python packaging/scripts/build_exe.py qt
 ```
 
 На VirusTotal лучше заливать onedir zip или Inno-установщик, а не голый
@@ -100,7 +101,7 @@ poetry run python scripts/build_exe.py qt
 ```bash
 # нужен системный PyGObject, на Arch: pacman -S python-gobject
 poetry install --with dev
-poetry run python scripts/build_exe.py qt --mpris
+poetry run python packaging/scripts/build_exe.py qt --mpris
 ```
 
 Результат тот же onedir: `dist/Quantis/Quantis`.
@@ -117,16 +118,16 @@ poetry run quantis
 
 ## Установщик Inno Setup
 
-Готовый скрипт — [installer/quantis.iss](../installer/quantis.iss). Ему нужен
+Готовый скрипт — [packaging/inno/quantis.iss](../packaging/inno/quantis.iss). Ему нужен
 уже собранный onedir-каталог из `dist/`:
 
 ```bat
-poetry run python scripts/build_exe.py qt
-poetry run python scripts/build_installer.py
+poetry run python packaging/scripts/build_exe.py qt
+poetry run python packaging/scripts/build_installer.py
 
 REM VLC-сборка
-poetry run python scripts/build_exe.py vlc
-poetry run python scripts/build_installer.py --backend vlc
+poetry run python packaging/scripts/build_exe.py vlc
+poetry run python packaging/scripts/build_installer.py --backend vlc
 ```
 
 Версия установщика берётся из `pyproject.toml` (``poetry version``).

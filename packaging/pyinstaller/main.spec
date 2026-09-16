@@ -2,19 +2,19 @@
 """PyInstaller: Quantis с выбором медиадвижка.
 
 Сборка Qt (по умолчанию):
-    poetry run python scripts/build_exe.py qt
+    poetry run python packaging/scripts/build_exe.py qt
 
 Сборка VLC:
     poetry install --with dev,vlc
     set VLC_HOME=C:\\Program Files\\VideoLAN\\VLC
-    poetry run python scripts/build_exe.py vlc
+    poetry run python packaging/scripts/build_exe.py vlc
 
 Linux с MPRIS (кладёт mpris_server в бандл, Windows-сборка его вырезает):
-    poetry run python scripts/build_exe.py qt --mpris
+    poetry run python packaging/scripts/build_exe.py qt --mpris
 
 Или напрямую:
     set QUANTIS_MEDIA_BACKEND=qt
-    poetry run pyinstaller main.spec --noconfirm
+    poetry run pyinstaller packaging/pyinstaller/main.spec --noconfirm
 """
 
 from __future__ import annotations
@@ -31,13 +31,15 @@ except ImportError:
     copy_metadata = None
 
 try:
-    ROOT = Path(SPECPATH).resolve()
+    SPEC_DIR = Path(SPECPATH).resolve()
 except NameError:
-    ROOT = Path.cwd()
+    SPEC_DIR = Path.cwd() / "packaging" / "pyinstaller"
 
+# spec живёт в packaging/pyinstaller/ — корень репозитория на два уровня выше
+ROOT = SPEC_DIR.parents[1]
 SRC = ROOT / "src"
 QUANTIS = SRC / "quantis"
-PACKAGING = ROOT / "packaging"
+HOOKS = SPEC_DIR / "hooks"
 
 BACKEND = os.environ.get("QUANTIS_MEDIA_BACKEND", "qt").strip().lower()
 if BACKEND not in ("qt", "vlc"):
@@ -68,7 +70,7 @@ hiddenimports: list[str] = []
 runtime_hooks: list[str] = []
 
 # Версия из pyproject.toml — в бандл, чтобы exe не зависел от stale dist-info.
-# VERSIONINFO (Windows Properties → Details) пишется рядом в packaging/.
+# VERSIONINFO (Windows Properties → Details) пишется в packaging/pyinstaller/.
 _app_version = ""
 _version_file = None
 try:
@@ -86,7 +88,7 @@ except Exception:
 try:
     import importlib.util
 
-    _vi_path = PACKAGING / "version_info.py"
+    _vi_path = SPEC_DIR / "version_info.py"
     _vi_spec = importlib.util.spec_from_file_location(
         "quantis_packaging_version_info", _vi_path
     )
@@ -113,12 +115,12 @@ if _app_version:
 if _version_file is not None:
     print(f"[Quantis] VERSIONINFO {_version_file}")
 
-rthook = PACKAGING / f"rthook_backend_{BACKEND}.py"
+rthook = HOOKS / f"rthook_backend_{BACKEND}.py"
 if rthook.is_file():
     runtime_hooks.append(str(rthook))
 
 if BACKEND == "vlc":
-    vlc_hook = PACKAGING / "rthook_vlc_path.py"
+    vlc_hook = HOOKS / "rthook_vlc_path.py"
     if vlc_hook.is_file():
         runtime_hooks.append(str(vlc_hook))
 

@@ -76,7 +76,7 @@ def render_version_info(
     return f"""# UTF-8
 #
 # Auto-generated from pyproject.toml - do not edit by hand.
-# Regenerated during PyInstaller builds (main.spec).
+# Regenerated during PyInstaller builds (packaging/pyinstaller/main.spec).
 #
 VSVersionInfo(
   ffi=FixedFileInfo(
@@ -120,14 +120,16 @@ def write_version_info(
     original_filename: str | None = None,
     out_path: Path | None = None,
 ) -> Path | None:
-    """Write ``packaging/quantis_version_info.txt``. Returns path or None."""
+    """Write ``packaging/pyinstaller/quantis_version_info.txt``. Returns path or None."""
     meta = load_project_meta(root)
     version = meta.get("version") or ""
     if not version:
         return None
     if original_filename is None:
         original_filename = f"{product_name}.exe"
-    target = out_path or (root / "packaging" / "quantis_version_info.txt")
+    target = out_path or (
+        root / "packaging" / "pyinstaller" / "quantis_version_info.txt"
+    )
     target.parent.mkdir(parents=True, exist_ok=True)
     text = render_version_info(
         version=version,

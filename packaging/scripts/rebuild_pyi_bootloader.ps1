@@ -12,13 +12,13 @@
 #     when MSVC is missing. Pass -Gcc to force MinGW.
 #
 # Usage:
-#   .\scripts\rebuild_pyi_bootloader.ps1
-#   .\scripts\rebuild_pyi_bootloader.ps1 -Tag v6.22.2
-#   .\scripts\rebuild_pyi_bootloader.ps1 -Gcc
-#   .\scripts\rebuild_pyi_bootloader.ps1 -Dest "C:\path\to\PyInstaller"
+#   .\packaging\scripts\rebuild_pyi_bootloader.ps1
+#   .\packaging\scripts\rebuild_pyi_bootloader.ps1 -Tag v6.22.2
+#   .\packaging\scripts\rebuild_pyi_bootloader.ps1 -Gcc
+#   .\packaging\scripts\rebuild_pyi_bootloader.ps1 -Dest "C:\path\to\PyInstaller"
 #
 # After a successful run, rebuild the app:
-#   poetry run python scripts/build_exe.py qt
+#   poetry run python packaging/scripts/build_exe.py qt
 
 param(
     [string]$Tag = "",
@@ -30,7 +30,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
-$Root = Split-Path $PSScriptRoot -Parent
+$Root = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 Set-Location $Root
 
 function Get-VenvPython {
@@ -212,7 +212,7 @@ Write-Host "    runw.exe SHA256: $($runw.After)"
 if ($runw.Before -and -not $runw.Changed) {
     Write-Warning "runw.exe hash matches the previous file. Rebuild may have reproduced a stock binary (same toolchain/sources as the release)."
 }
-Write-Host "    Next: poetry run python scripts/build_exe.py qt"
+Write-Host "    Next: poetry run python packaging/scripts/build_exe.py qt"
 
 if (-not $KeepSrc) {
     Write-Host "    Tip: pass -KeepSrc to retain $SrcDir for inspection."

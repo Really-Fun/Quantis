@@ -2,10 +2,10 @@
 """Сборка Quantis.exe с выбранным медиадвижком.
 
 Примеры:
-    python scripts/build_exe.py qt
-    python scripts/build_exe.py vlc
-    python scripts/build_exe.py vlc --vlc-home "C:\\Program Files\\VideoLAN\\VLC"
-    python scripts/build_exe.py qt --mpris
+    python packaging/scripts/build_exe.py qt
+    python packaging/scripts/build_exe.py vlc
+    python packaging/scripts/build_exe.py vlc --vlc-home "C:\\Program Files\\VideoLAN\\VLC"
+    python packaging/scripts/build_exe.py qt --mpris
 """
 
 from __future__ import annotations
@@ -17,7 +17,8 @@ import subprocess
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
+SPEC = ROOT / "packaging" / "pyinstaller" / "main.spec"
 
 
 def main() -> int:
@@ -67,7 +68,7 @@ def main() -> int:
         sys.executable,
         "-m",
         "PyInstaller",
-        str(ROOT / "main.spec"),
+        str(SPEC),
         "--noconfirm",
         "--distpath",
         str(dist_bundle),
@@ -87,16 +88,20 @@ def main() -> int:
 
     built = dist_bundle / name
     if not built.is_dir():
-        # Legacy HOMEPATH rewrite fallback (main/dist/...)
-        alt = ROOT / "main" / "dist" / name
+        # HOMEPATH rewrite fallback (spec-relative dist/...)
+        alt = ROOT / "packaging" / "pyinstaller" / "dist" / name
         if alt.is_dir():
             built = alt
         else:
-            print(
-                f"ERROR: expected onedir missing: {dist_bundle / name}",
-                file=sys.stderr,
-            )
-            return 1
+            legacy_alt = ROOT / "main" / "dist" / name
+            if legacy_alt.is_dir():
+                built = legacy_alt
+            else:
+                print(
+                    f"ERROR: expected onedir missing: {dist_bundle / name}",
+                    file=sys.stderr,
+                )
+                return 1
 
     if final_dir.exists():
         shutil.rmtree(final_dir)
@@ -105,13 +110,17 @@ def main() -> int:
         dist_bundle.rmdir()
     except OSError:
         pass
-    legacy = ROOT / "main" / "dist"
-    if legacy.is_dir() and not any(legacy.iterdir()):
-        legacy.rmdir()
-        try:
-            (ROOT / "main").rmdir()
-        except OSError:
-            pass
+    for leftover, prune_parent in (
+        (ROOT / "main" / "dist", True),
+        (ROOT / "packaging" / "pyinstaller" / "dist", False),
+    ):
+        if leftover.is_dir() and not any(leftover.iterdir()):
+            leftover.rmdir()
+            if prune_parent:
+                try:
+                    leftover.parent.rmdir()
+                except OSError:
+                    pass
 
     print(f"==> OK: dist/{name}/{name}.exe")
     if args.mpris:
