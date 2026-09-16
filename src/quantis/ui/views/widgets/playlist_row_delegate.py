@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QRect, QSize, Qt
-from PySide6.QtGui import QColor, QFontMetrics, QPainter, QPainterPath, QPen
+from PySide6.QtGui import QFontMetrics, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QStyle, QStyledItemDelegate
 
 from quantis.models.playlist import Playlist
 from quantis.ui.models.playlist_list_model import PlaylistListModel
+from quantis.ui.preferences import UiPreferences
 from quantis.ui.views.widgets.cover_art import load_cover_pixmap, playlist_cover_path
-from quantis.ui.views.widgets.delegate_paint_kit import FONT_AUTHOR, FONT_TITLE
+from quantis.ui.views.widgets.delegate_paint_kit import FONT_AUTHOR, FONT_TITLE, paint_colors
 from quantis.ui.views.widgets.playlist_card import playlist_tracks_label
 
 
@@ -17,12 +18,17 @@ class PlaylistRowDelegate(QStyledItemDelegate):
     CARD_HEIGHT = 56
     COVER_SIZE = 40
 
-    _C_BG_HOVER = QColor(255, 255, 255, 12)
-    _C_BG_IDLE = QColor(255, 255, 255, 6)
-    _C_BORDER = QColor(255, 255, 255, 22)
-    _C_BORDER_HOVER = QColor(46, 230, 255, 50)
-    _C_TITLE = QColor(248, 250, 252)
-    _C_META = QColor(226, 232, 240, 120)
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self._prefs = UiPreferences()
+        self._prefs.changed.connect(self._on_theme_changed)
+
+    def _on_theme_changed(self) -> None:
+        parent = self.parent()
+        if parent is not None and hasattr(parent, "viewport"):
+            parent.viewport().update()
+        elif parent is not None:
+            parent.update()
 
     def sizeHint(self, option, index) -> QSize:
         view = option.widget
@@ -36,6 +42,7 @@ class PlaylistRowDelegate(QStyledItemDelegate):
         if playlist is None:
             return
 
+        colors = paint_colors(self._prefs.ui_theme)
         hovered = bool(option.state & QStyle.StateFlag.State_MouseOver)
         selected = bool(option.state & QStyle.StateFlag.State_Selected)
         rect = option.rect.adjusted(0, 2, 0, -2)
@@ -44,9 +51,9 @@ class PlaylistRowDelegate(QStyledItemDelegate):
         path = QPainterPath()
         path.addRoundedRect(rect, 12, 12)
         painter.fillPath(
-            path, self._C_BG_HOVER if hovered or selected else self._C_BG_IDLE
+            path, colors.bg_hover if hovered or selected else colors.bg_idle
         )
-        pen = QPen(self._C_BORDER_HOVER if hovered or selected else self._C_BORDER)
+        pen = QPen(colors.border_hover if hovered or selected else colors.border)
         pen.setWidthF(1.0)
         painter.setPen(pen)
         painter.drawPath(path)
@@ -65,8 +72,8 @@ class PlaylistRowDelegate(QStyledItemDelegate):
         if pixmap is not None and not pixmap.isNull():
             painter.drawPixmap(cover, pixmap)
         else:
-            painter.fillRect(cover, QColor(255, 255, 255, 18))
-            painter.setPen(QColor(248, 250, 252, 200))
+            painter.fillRect(cover, colors.bg_hover)
+            painter.setPen(colors.title)
             painter.drawText(
                 cover, Qt.AlignmentFlag.AlignCenter, (playlist.name[:1] or "?").upper()
             )
@@ -76,7 +83,7 @@ class PlaylistRowDelegate(QStyledItemDelegate):
         title_rect = QRect(text_left, rect.y() + 8, rect.right() - text_left - 12, 22)
         meta_rect = QRect(text_left, title_rect.bottom() - 2, title_rect.width(), 18)
 
-        painter.setPen(self._C_TITLE)
+        painter.setPen(colors.title)
         painter.setFont(FONT_TITLE)
         painter.drawText(
             title_rect,
@@ -85,7 +92,7 @@ class PlaylistRowDelegate(QStyledItemDelegate):
                 playlist.name, Qt.TextElideMode.ElideRight, title_rect.width()
             ),
         )
-        painter.setPen(self._C_META)
+        painter.setPen(colors.meta)
         painter.setFont(FONT_AUTHOR)
         painter.drawText(
             meta_rect,

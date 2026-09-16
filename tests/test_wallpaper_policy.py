@@ -12,11 +12,14 @@ from quantis.services.wallpaper_policy import (
     wallpaper_can_apply_seek,
     wallpaper_decode_max_side,
     wallpaper_duration_filter,
+    wallpaper_format_quality,
+    wallpaper_muxed_height,
     wallpaper_next_drift_tolerance,
     wallpaper_positions_drifted,
     wallpaper_seek_landed,
     wallpaper_seek_target,
     wallpaper_source_has_video,
+    wallpaper_source_meets_quality,
     wallpaper_stream_conflicts,
     wallpaper_url_itag,
     wallpaper_yt_dlp_format,
@@ -74,17 +77,30 @@ def test_wallpaper_seek_retries_without_duration() -> None:
 
 def test_quality_and_fps_are_clamped_to_choices() -> None:
     assert clamp_wallpaper_quality(720) == 720
-    assert clamp_wallpaper_quality(1080) == 720
+    assert clamp_wallpaper_quality(1080) == 1080
+    assert clamp_wallpaper_quality(1440) == 1080
     assert clamp_wallpaper_quality(400) == 360
     assert clamp_wallpaper_fps(30) == 30
     assert clamp_wallpaper_fps(12) == 10
-    assert clamp_wallpaper_fps(60) == 30
+    assert clamp_wallpaper_fps(60) == 60
+    assert clamp_wallpaper_fps(120) == 60
 
 
 def test_yt_dlp_format_includes_requested_height() -> None:
     assert "height<=360" in wallpaper_cache_format(360)
     assert "height<=720" in wallpaper_cache_format(720)
+    assert "height<=1080" in wallpaper_cache_format(1080)
+    assert "height=720" in wallpaper_yt_dlp_format(720)
+    assert "height=1080" in wallpaper_yt_dlp_format(1080)
     assert wallpaper_decode_max_side(720) > wallpaper_decode_max_side(360)
+    assert wallpaper_decode_max_side(1080) > wallpaper_decode_max_side(720)
+
+
+def test_format_quality_uses_itag_class() -> None:
+    assert wallpaper_format_quality(itag="136", width=1280, height=534) == 720
+    assert wallpaper_format_quality(itag="137", width=1920, height=802) == 1080
+    assert wallpaper_format_quality(itag="18", width=640, height=268) == 360
+    assert wallpaper_format_quality(height=720) == 720
 
 
 def test_wallpaper_stream_prefers_video_only() -> None:
@@ -94,6 +110,7 @@ def test_wallpaper_stream_prefers_video_only() -> None:
     assert "vcodec^=avc1" in fmt
     assert "protocol=https" in fmt
     assert "/18" not in fmt
+    assert fmt.endswith("/best")
 
 
 def test_wallpaper_stream_conflicts_on_same_itag() -> None:
@@ -112,4 +129,14 @@ def test_wallpaper_stream_conflicts_on_same_itag() -> None:
     )
     assert wallpaper_source_has_video(
         "https://rr.example/videoplayback?mime=video%2Fmp4&itag=18"
+    )
+    assert wallpaper_muxed_height(audio) == 360
+    assert wallpaper_muxed_height(other) is None
+    assert wallpaper_source_meets_quality(audio, 360)
+    assert not wallpaper_source_meets_quality(audio, 720)
+    assert wallpaper_source_meets_quality(
+        "https://rr1.googlevideo.com/videoplayback?id=abc&itag=22", 720
+    )
+    assert not wallpaper_source_meets_quality(
+        "https://rr1.googlevideo.com/videoplayback?id=abc&itag=22", 1080
     )

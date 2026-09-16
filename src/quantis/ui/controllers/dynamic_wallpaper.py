@@ -23,6 +23,7 @@ from quantis.services.wallpaper_policy import (
     wallpaper_next_drift_tolerance,
     wallpaper_positions_drifted,
     wallpaper_source_has_video,
+    wallpaper_source_meets_quality,
     wallpaper_stream_conflicts,
     wallpaper_url_itag,
 )
@@ -157,7 +158,9 @@ class DynamicWallpaperController(QObject):
             return
         if not self._prefs.dynamic_wallpaper_enabled:
             return
-        if wallpaper_source_has_video(source):
+        if wallpaper_source_meets_quality(
+            source, self._prefs.dynamic_wallpaper_quality
+        ):
             self._try_follow_audio(self._track)
 
     def _audio_position_ms(self) -> int:
@@ -287,6 +290,8 @@ class DynamicWallpaperController(QObject):
             )
         except Exception:
             logger.exception("Не удалось получить видео для обоев: %s", track)
+            if self._try_follow_audio(track, require_quality=False):
+                return
             await self._show_cover(track, track_key)
             return
 
@@ -297,6 +302,9 @@ class DynamicWallpaperController(QObject):
                 "Динамические обои: стрим %ss для %s", duration or "?", track
             )
             self._play_stream(track_key, url, loop=False)
+            return
+
+        if self._try_follow_audio(track, require_quality=False):
             return
 
         logger.warning("Видео для обоев не найдено: %s", track)
@@ -319,6 +327,8 @@ class DynamicWallpaperController(QObject):
                 return
             if not url:
                 self._reload_fails += 1
+                if self._try_follow_audio(track, require_quality=False):
+                    return
                 if self._reload_fails >= 3:
                     await self._show_cover(track, track_key)
                 return
@@ -327,6 +337,8 @@ class DynamicWallpaperController(QObject):
         except Exception:
             logger.exception("Не удалось обновить видео-фон: %s", track)
             self._reload_fails += 1
+            if self._try_follow_audio(track, require_quality=False):
+                return
             if self._reload_fails >= 3:
                 await self._show_cover(track, track_key)
         finally:
@@ -357,10 +369,17 @@ class DynamicWallpaperController(QObject):
             return None
         return getattr(self._playback.player, "media_player", None)
 
-    def _try_follow_audio(self, track: Track) -> bool:
+    def _try_follow_audio(self, track: Track, *, require_quality: bool = True) -> bool:
         host = self._audio_media_player()
         source = self._audio_source()
-        if host is None or not wallpaper_source_has_video(source):
+        if host is None:
+            return False
+        if require_quality:
+            if not wallpaper_source_meets_quality(
+                source, self._prefs.dynamic_wallpaper_quality
+            ):
+                return False
+        elif not wallpaper_source_has_video(source):
             return False
         track_key = _track_key(track)
         self._video_armed = False
@@ -396,6 +415,9 @@ class DynamicWallpaperController(QObject):
                 ):
                     self._excluded_itags = self._excluded_itags | {itag}
                     self._start_video_load(self._track)
+                    return
+                if self._track is not None:
+                    self._try_follow_audio(self._track, require_quality=False)
                 return
             self._looping = loop
             # Короткий локальный клип крутится по кругу — к позиции трека его

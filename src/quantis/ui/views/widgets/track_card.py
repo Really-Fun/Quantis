@@ -19,8 +19,6 @@ from quantis.ui.preferences import UiPreferences
 from quantis.ui.resources import THEME_EDITORIAL
 from quantis.ui.views.widgets.cover_art import load_track_cover, paint_rounded_cover
 from quantis.ui.views.widgets.delegate_paint_kit import (
-    C_ACCENT,
-    C_TITLE,
     C_TITLE_PLAYING,
     FONT_ACTION,
     FONT_AUTHOR,
@@ -30,6 +28,7 @@ from quantis.ui.views.widgets.delegate_paint_kit import (
     FONT_EDITORIAL_TITLE,
     FONT_TITLE,
     SOURCE_LABELS,
+    paint_colors,
 )
 
 
@@ -39,15 +38,8 @@ class TrackCardDelegate(QStyledItemDelegate):
     COVER_SIZE = 40
     ACTION_SIZE = 26
 
-    _C_BG_PLAYING = QColor(0, 229, 255, 22)
-    _C_BG_HOVER = QColor(255, 255, 255, 10)
-    _C_BG_IDLE = QColor(255, 255, 255, 4)
-    _C_AUTHOR = QColor(248, 250, 252, 120)
     _C_DL_OK_BG = QColor(34, 197, 94, 60)
     _C_DL_OK_PEN = QColor(34, 197, 94, 140)
-    _C_DL_HOVER_BG = QColor(255, 255, 255, 16)
-    _C_DL_HOVER_PEN = QColor(255, 255, 255, 50)
-    _C_DL_HOVER_TEXT = QColor(248, 250, 252, 200)
     _C_EDITORIAL_BG = QColor(12, 12, 14)
     _C_EDITORIAL_HOVER = QColor(255, 255, 255, 8)
     _C_EDITORIAL_IDX = QColor(255, 255, 255, 10)
@@ -138,10 +130,11 @@ class TrackCardDelegate(QStyledItemDelegate):
             painter.setFont(FONT_ACTION)
             painter.drawText(action_rect, Qt.AlignmentFlag.AlignCenter, "✓")
         elif hovered:
-            painter.setBrush(self._C_DL_HOVER_BG)
-            painter.setPen(QPen(self._C_DL_HOVER_PEN, 1))
+            colors = paint_colors(self._prefs.ui_theme)
+            painter.setBrush(colors.dl_hover_bg)
+            painter.setPen(QPen(colors.dl_hover_pen, 1))
             painter.drawEllipse(action_rect)
-            painter.setPen(self._C_DL_HOVER_TEXT)
+            painter.setPen(colors.dl_hover_text)
             painter.setFont(FONT_ACTION)
             painter.drawText(action_rect, Qt.AlignmentFlag.AlignCenter, "↓")
 
@@ -155,19 +148,20 @@ class TrackCardDelegate(QStyledItemDelegate):
         selected: bool,
     ) -> None:
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
+        colors = paint_colors(self._prefs.ui_theme)
 
         if is_playing:
-            painter.setBrush(self._C_BG_PLAYING)
+            painter.setBrush(colors.bg_playing)
         elif hovered or selected:
-            painter.setBrush(self._C_BG_HOVER)
+            painter.setBrush(colors.bg_hover)
         else:
-            painter.setBrush(self._C_BG_IDLE)
+            painter.setBrush(colors.bg_idle)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.drawRoundedRect(rect, self.CARD_RADIUS, self.CARD_RADIUS)
 
         if is_playing:
             bar = QRect(rect.left() + 2, rect.top() + 10, 3, rect.height() - 20)
-            painter.setBrush(C_ACCENT)
+            painter.setBrush(colors.accent)
             painter.drawRoundedRect(bar, 2, 2)
 
         cover_rect = QRect(
@@ -201,7 +195,7 @@ class TrackCardDelegate(QStyledItemDelegate):
         title_rect = QRect(text_left, rect.top() + 10, text_w, 20)
         author_rect = QRect(text_left, rect.top() + 28, text_w, 16)
 
-        painter.setPen(C_TITLE_PLAYING if is_playing else C_TITLE)
+        painter.setPen(colors.title_playing if is_playing else colors.title)
         painter.setFont(FONT_TITLE)
         painter.drawText(
             title_rect,
@@ -215,7 +209,7 @@ class TrackCardDelegate(QStyledItemDelegate):
         if badge:
             subtitle = f"{subtitle} · {badge}" if subtitle else badge
 
-        painter.setPen(self._C_AUTHOR)
+        painter.setPen(colors.subtitle)
         painter.setFont(FONT_AUTHOR)
         painter.drawText(
             author_rect,

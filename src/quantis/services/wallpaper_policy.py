@@ -11,12 +11,12 @@ WALLPAPER_SEEK_SLOP_MS = 1500
 # Если видео играет, но стабильно не догоняет, порог растёт: лучше лёгкий
 # рассинхрон, чем перемотка HTTP-потока каждую секунду.
 WALLPAPER_MAX_DRIFT_MS = 6000
-WALLPAPER_QUALITY_CHOICES = (360, 480, 720)
-WALLPAPER_FPS_CHOICES = (5, 10, 15, 24, 30)
+WALLPAPER_QUALITY_CHOICES = (360, 480, 720, 1080)
+WALLPAPER_FPS_CHOICES = (5, 10, 15, 24, 30, 60)
 WALLPAPER_DEFAULT_QUALITY = 360
 WALLPAPER_DEFAULT_FPS = 10
-_DECODE_MAX_SIDE = {360: 640, 480: 854, 720: 1280}
-_FORMAT_FALLBACK_HEIGHT = {360: 480, 480: 720, 720: 720}
+_DECODE_MAX_SIDE = {360: 640, 480: 854, 720: 1280, 1080: 1920}
+_FORMAT_FALLBACK_HEIGHT = {360: 480, 480: 720, 720: 1080, 1080: 1080}
 
 
 def should_play_local_wallpaper(size_bytes: int) -> bool:
@@ -93,11 +93,16 @@ def wallpaper_yt_dlp_format(height: int) -> str:
     h = clamp_wallpaper_quality(height)
     extra = _FORMAT_FALLBACK_HEIGHT[h]
     return (
+        f"bestvideo[height={h}][vcodec^=avc1][protocol=https]/"
+        f"bestvideo[height={h}][ext=mp4][protocol=https]/"
+        f"bestvideo[height={h}][protocol=https]/"
         f"bestvideo[height<={h}][vcodec^=avc1][protocol=https]/"
         f"bestvideo[height<={h}][ext=mp4][protocol=https]/"
         f"bestvideo[height<={h}][protocol=https]/"
         f"best[height<={h}][vcodec!=none][acodec=none]/"
-        f"best[height<={extra}][vcodec!=none][acodec=none]"
+        f"best[height<={extra}][vcodec!=none][acodec=none]/"
+        f"bestvideo/"
+        f"best"
     )
 
 
@@ -117,6 +122,40 @@ def wallpaper_url_itag(url: str | None) -> str | None:
     return itag or None
 
 
+# YouTube itag → заявленное качество. Пиксели часто ниже (640x268 «360p»).
+_ITAG_QUALITY = {
+    "17": 144,
+    "160": 144,
+    "278": 144,
+    "394": 144,
+    "133": 240,
+    "242": 240,
+    "395": 240,
+    "18": 360,
+    "134": 360,
+    "243": 360,
+    "396": 360,
+    "59": 480,
+    "78": 480,
+    "135": 480,
+    "244": 480,
+    "397": 480,
+    "22": 720,
+    "136": 720,
+    "247": 720,
+    "298": 720,
+    "398": 720,
+    "137": 1080,
+    "248": 1080,
+    "299": 1080,
+    "399": 1080,
+    "271": 1440,
+    "308": 1440,
+    "400": 1440,
+    "313": 2160,
+    "315": 2160,
+    "401": 2160,
+}
 _MUXED_ITAGS = frozenset({"17", "18", "22", "59", "78"})
 
 
@@ -129,6 +168,44 @@ def wallpaper_source_has_video(url: str | None) -> bool:
     if "mime=video" in lowered or "mime%3dvideo" in lowered:
         return True
     return wallpaper_url_itag(raw) in _MUXED_ITAGS
+
+
+def wallpaper_muxed_height(url: str | None) -> int | None:
+    itag = wallpaper_url_itag(url)
+    if not itag or itag not in _MUXED_ITAGS:
+        return None
+    return _ITAG_QUALITY.get(itag)
+
+
+def wallpaper_format_quality(
+    *, itag: str | None = None, width: int = 0, height: int = 0
+) -> int:
+    """Класс качества потока: itag 136 = 720p, даже если кадр 1280x534."""
+    known = _ITAG_QUALITY.get(str(itag or "").strip())
+    if known:
+        return known
+    width = int(width or 0)
+    height = int(height or 0)
+    side = max(width, height)
+    if height >= 1080 or side >= 1920:
+        return 1080
+    if height >= 720 or side >= 1280:
+        return 720
+    if height >= 480 or side >= 854:
+        return 480
+    if height >= 360 or side >= 640:
+        return 360
+    return height
+
+
+def wallpaper_source_meets_quality(url: str | None, height: int) -> bool:
+    """Следовать за аудио-плеером только если его кадры не хуже выбранного качества."""
+    if not wallpaper_source_has_video(url):
+        return False
+    known = wallpaper_muxed_height(url)
+    if known is None:
+        return False
+    return known >= clamp_wallpaper_quality(height)
 
 
 def wallpaper_stream_conflicts(audio_url: str | None, video_url: str | None) -> bool:

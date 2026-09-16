@@ -50,19 +50,19 @@ def test_wallpaper_quality_and_fps_defaults(qapp) -> None:
 
 def test_wallpaper_quality_and_fps_persist(qapp) -> None:
     prefs = UiPreferences()
-    prefs.set_dynamic_wallpaper_quality(720)
+    prefs.set_dynamic_wallpaper_quality(1080)
     prefs.set_dynamic_wallpaper_fps(24)
-    assert prefs.dynamic_wallpaper_quality == 720
+    assert prefs.dynamic_wallpaper_quality == 1080
     assert prefs.dynamic_wallpaper_fps == 24
 
     stored = QSettings("ReallyFun", "Quantis")
-    assert int(stored.value("ui/dynamic_wallpaper_quality")) == 720
+    assert int(stored.value("ui/dynamic_wallpaper_quality")) == 1080
     assert int(stored.value("ui/dynamic_wallpaper_fps")) == 24
 
 
 def test_wallpaper_quality_and_fps_clamped(qapp) -> None:
     prefs = UiPreferences()
-    prefs.set_dynamic_wallpaper_quality(1080)
-    prefs.set_dynamic_wallpaper_fps(60)
-    assert prefs.dynamic_wallpaper_quality == 720
-    assert prefs.dynamic_wallpaper_fps == 30
+    prefs.set_dynamic_wallpaper_quality(2160)
+    prefs.set_dynamic_wallpaper_fps(120)
+    assert prefs.dynamic_wallpaper_quality == 1080
+    assert prefs.dynamic_wallpaper_fps == 60

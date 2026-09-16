@@ -9,6 +9,7 @@ from PySide6.QtWidgets import QSizePolicy, QWidget
 from quantis.models import Track
 from quantis.ui.design_tokens import ACCENT_FALLBACK
 from quantis.ui.preferences import UiPreferences
+from quantis.ui.views.widgets.delegate_paint_kit import paint_colors
 
 _ROW_H = 44
 _PAD = 4
@@ -75,8 +76,9 @@ class ListenBars(QWidget):
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        colors = paint_colors(self._prefs.ui_theme)
         if not self._tracks:
-            painter.setPen(QColor(248, 250, 252, 90))
+            painter.setPen(colors.empty)
             painter.setFont(QFont(self.font().family(), 12))
             painter.drawText(
                 self.rect().adjusted(12, 0, -12, 0),
@@ -104,9 +106,9 @@ class ListenBars(QWidget):
             if index == self._hover:
                 hover = QPainterPath()
                 hover.addRoundedRect(QRectF(row), 10, 10)
-                painter.fillPath(hover, QColor(255, 255, 255, 10))
+                painter.fillPath(hover, colors.bg_hover)
 
-            painter.setPen(QColor(248, 250, 252, 70))
+            painter.setPen(colors.meta)
             painter.setFont(meta_font)
             painter.drawText(
                 QRect(12, y, 22, _ROW_H - 4),
@@ -131,7 +133,7 @@ class ListenBars(QWidget):
             )
             painter.fillPath(path, gradient)
 
-            painter.setPen(QColor(248, 250, 252, 230))
+            painter.setPen(colors.title)
             painter.setFont(title_font)
             painter.drawText(
                 QRect(bar_left, y + 2, bar_span, 22),
@@ -143,7 +145,7 @@ class ListenBars(QWidget):
                 ),
             )
 
-            painter.setPen(QColor(248, 250, 252, 200))
+            painter.setPen(colors.subtitle)
             painter.setFont(count_font)
             painter.drawText(
                 QRect(bar_right + 8, y, 56, _ROW_H - 4),

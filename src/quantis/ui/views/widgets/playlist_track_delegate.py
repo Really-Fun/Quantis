@@ -6,21 +6,14 @@ from PySide6.QtWidgets import QStyle, QStyledItemDelegate
 
 from quantis.models.track import Track
 from quantis.ui.models import TrackListModel
+from quantis.ui.preferences import UiPreferences
 from quantis.ui.views.widgets.cover_art import load_track_cover, paint_rounded_cover
 from quantis.ui.views.widgets.delegate_paint_kit import (
-    C_ACCENT,
-    C_BG_ALT,
-    C_BG_HOVER,
-    C_BG_PLAYING,
-    C_INDEX,
-    C_INDEX_PLAYING,
-    C_SUBTITLE,
-    C_TITLE,
-    C_TITLE_PLAYING,
     FONT_AUTHOR,
     FONT_INDEX,
     FONT_TITLE,
     SOURCE_LABELS,
+    paint_colors,
 )
 
 
@@ -33,6 +26,15 @@ class PlaylistTrackDelegate(QStyledItemDelegate):
         super().__init__(parent)
         self._fm_title = QFontMetrics(FONT_TITLE)
         self._fm_author = QFontMetrics(FONT_AUTHOR)
+        self._prefs = UiPreferences()
+        self._prefs.changed.connect(self._on_theme_changed)
+
+    def _on_theme_changed(self) -> None:
+        parent = self.parent()
+        if parent is not None and hasattr(parent, "viewport"):
+            parent.viewport().update()
+        elif parent is not None:
+            parent.update()
 
     def sizeHint(self, option, index) -> QSize:
         width = 320
@@ -59,17 +61,18 @@ class PlaylistTrackDelegate(QStyledItemDelegate):
         row = index.row()
         rect = option.rect
 
+        colors = paint_colors(self._prefs.ui_theme)
         if is_playing:
-            painter.fillRect(rect, C_BG_PLAYING)
+            painter.fillRect(rect, colors.bg_playing)
         elif hovered or selected:
-            painter.fillRect(rect, C_BG_HOVER)
+            painter.fillRect(rect, colors.bg_hover)
         elif row % 2 == 1:
-            painter.fillRect(rect, C_BG_ALT)
+            painter.fillRect(rect, colors.bg_alt)
 
         if is_playing:
             painter.fillRect(
                 QRect(rect.left(), rect.top() + 8, 3, rect.height() - 16),
-                C_ACCENT,
+                colors.accent,
             )
 
         inner = rect.adjusted(8, 0, -8, 0)
@@ -84,7 +87,7 @@ class PlaylistTrackDelegate(QStyledItemDelegate):
         text_w = max(0, inner.right() - text_left)
 
         painter.setFont(FONT_INDEX)
-        painter.setPen(C_INDEX_PLAYING if is_playing else C_INDEX)
+        painter.setPen(colors.index_playing if is_playing else colors.index)
         painter.drawText(idx_rect, Qt.AlignmentFlag.AlignCenter, f"{row + 1}")
 
         paint_rounded_cover(
@@ -105,7 +108,7 @@ class PlaylistTrackDelegate(QStyledItemDelegate):
         author_rect = QRect(text_left, inner.top() + 30, text_w, 16)
 
         painter.setFont(FONT_TITLE)
-        painter.setPen(C_TITLE_PLAYING if is_playing else C_TITLE)
+        painter.setPen(colors.title_playing if is_playing else colors.title)
         painter.drawText(
             title_rect,
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
@@ -123,7 +126,7 @@ class PlaylistTrackDelegate(QStyledItemDelegate):
             subtitle = f"{subtitle} · {badge}"
 
         painter.setFont(FONT_AUTHOR)
-        painter.setPen(C_SUBTITLE)
+        painter.setPen(colors.subtitle)
         painter.drawText(
             author_rect,
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,

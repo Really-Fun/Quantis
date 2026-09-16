@@ -14,6 +14,7 @@ from quantis.models.track import seconds_to_ms
 from quantis.services.wallpaper_policy import (
     WALLPAPER_DEFAULT_QUALITY,
     clamp_wallpaper_quality,
+    wallpaper_format_quality,
     wallpaper_url_itag,
     wallpaper_yt_dlp_android_format,
     wallpaper_yt_dlp_format,
@@ -33,9 +34,19 @@ _SLIM_FORMAT_KEYS = (
     "acodec",
     "abr",
     "tbr",
+    "width",
     "height",
 )
-_SLIM_INFO_KEYS = ("url", "protocol", "ext", "format_id", "vcodec", "acodec")
+_SLIM_INFO_KEYS = (
+    "url",
+    "protocol",
+    "ext",
+    "format_id",
+    "vcodec",
+    "acodec",
+    "width",
+    "height",
+)
 
 
 def _slim_format(fmt: dict[str, Any]) -> dict[str, Any]:
@@ -188,9 +199,14 @@ class AsyncYoutubeStreamer(AsyncStreamerInterface):
                 opts["cookiefile"] = cookiefile
             return opts
 
-        attempts: list[dict] = [
-            build(["android"], format_id=android_fmt),
-        ]
+        attempts: list[dict] = []
+        if video:
+            # android больше не отдаёт adaptive 720/1080 — только muxed itag 18.
+            attempts.append(
+                build(["tv_embedded"], format_id=fmt, skip_player=False)
+            )
+        else:
+            attempts.append(build(["android"], format_id=android_fmt))
         if cookiefile:
             attempts.append(
                 build(
@@ -202,6 +218,10 @@ class AsyncYoutubeStreamer(AsyncStreamerInterface):
             )
         else:
             attempts.append(build(["web"], format_id=fmt, skip_player=False))
+        if video:
+            attempts.append(
+                build(["android"], format_id=android_fmt, skip_player=False)
+            )
 
         return attempts
 
@@ -259,6 +279,23 @@ class AsyncYoutubeStreamer(AsyncStreamerInterface):
         return 0
 
     @staticmethod
+    def _video_height_fit(height: int, target: int) -> int:
+        """Ближе к запрошенному качеству лучше; выше цели штрафуем."""
+        if height <= 0 or target <= 0:
+            return -10_000
+        if height <= target:
+            return height
+        return (2 * target) - height
+
+    @classmethod
+    def _format_quality_height(cls, fmt: dict) -> int:
+        return wallpaper_format_quality(
+            itag=cls._format_itag(fmt),
+            width=int(fmt.get("width") or 0),
+            height=int(fmt.get("height") or 0),
+        )
+
+    @staticmethod
     def _duration_ms_from_info(info: dict[str, Any] | None) -> int:
         if not info:
             return 0
@@ -293,14 +330,20 @@ class AsyncYoutubeStreamer(AsyncStreamerInterface):
             "vcodec": info.get("vcodec"),
             "acodec": info.get("acodec"),
             "height": info.get("height"),
+            "width": info.get("width"),
         }
         top_blocked = bool(
             blocked and cls._format_itag(top_fmt) in blocked
         )
         if top_url and cls._is_playable_format(top_fmt) and not top_blocked:
             if prefer_video:
-                if cls._has_video(top_fmt) and not cls._has_audio(top_fmt):
-                    return str(top_url)
+                if cls._has_video(top_fmt) and (
+                    not video_only or not cls._has_audio(top_fmt)
+                ):
+                    if all(
+                        str(fmt.get("url") or "") != str(top_url) for fmt in formats
+                    ):
+                        formats.append(top_fmt)
             elif cls._has_audio(top_fmt) and not cls._has_video(top_fmt):
                 return str(top_url)
 
@@ -335,13 +378,14 @@ class AsyncYoutubeStreamer(AsyncStreamerInterface):
             progressive = has_audio and has_video
             ext = str(fmt.get("ext") or "").lower()
             abr = int(fmt.get("abr") or fmt.get("tbr") or 0)
-            height = int(fmt.get("height") or 0)
             if prefer_video:
                 only_video = has_video and not has_audio
                 return (
                     2 if only_video else 1,
+                    cls._video_height_fit(
+                        cls._format_quality_height(fmt), target_height
+                    ),
                     cls._qt_video_rank(fmt),
-                    -abs(height - target_height) if height else -9999,
                     -abr,
                 )
             return (
@@ -449,6 +493,7 @@ class AsyncYoutubeStreamer(AsyncStreamerInterface):
             return None, 0
 
         blocked = exclude_itags or frozenset()
+        height = clamp_wallpaper_quality(height)
 
         def pick(info: dict[str, Any] | None, *, video_only: bool) -> str | None:
             return self._pick_stream_url(
@@ -478,6 +523,14 @@ class AsyncYoutubeStreamer(AsyncStreamerInterface):
                 picked = pick(info, video_only=True)
                 duration = duration_of(info)
                 if picked:
+                    logger.info(
+                        "YouTube video %s: video-only via format=%s clients=%s",
+                        track_id,
+                        opts.get("format"),
+                        (opts.get("extractor_args") or {})
+                        .get("youtube", {})
+                        .get("player_client"),
+                    )
                     return picked, duration
                 if muxed_fallback is None:
                     muxed = pick(info, video_only=False)

@@ -163,6 +163,7 @@ class SettingsPage(QWidget):
             360: "360p — меньше нагрузка",
             480: "480p",
             720: "720p — чётче",
+            1080: "1080p — максимум",
         }
         for height in WALLPAPER_QUALITY_CHOICES:
             self._wallpaper_quality_combo.addItem(quality_labels[height], height)

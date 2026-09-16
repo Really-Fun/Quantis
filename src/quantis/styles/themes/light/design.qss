@@ -1,93 +1,400 @@
-/* Light — мягкий серо-голубой, не белая вспышка */
+/* Light — фарфор, чернила, акцент Aurora. Перекрывает тёмные widget_styles. */
 
-QWidget { color: #2a3038; }
+QWidget {
+    color: #1B2030;
+}
 
-QFrame#glassPanel {
-    background: rgba(48, 54, 64, 0.58);
-    border: none;
-    border-radius: 14px;
+QFrame#glassPanel,
+QFrame#TrackListPanel {
+    background: rgba(255, 255, 255, 0.78);
+    border: 1px solid rgba(27, 32, 48, 0.08);
+    border-radius: 16px;
 }
 
 QFrame#appHeader {
-    background: rgba(40, 44, 52, 0.48);
+    background: qlineargradient(
+        x1:0, y1:0, x2:0, y2:1,
+        stop:0 rgba(255, 255, 255, 0.92),
+        stop:1 rgba(255, 255, 255, 0.62)
+    );
     border: none;
+    border-bottom: 1px solid rgba(27, 32, 48, 0.06);
 }
 
 #headerGreeting {
-    font-size: 20px;
-    font-weight: 700;
-    color: #f0f3f6;
+    font-size: 14px;
+    font-weight: 650;
+    color: #1B2030;
+    letter-spacing: 0.15px;
+}
+
+#headerBrandWordmark {
+    color: #1B2030;
+}
+
+QLabel#headerSub {
+    color: rgba(27, 32, 48, 0.45);
+}
+
+QFrame#appHeader QToolButton#windowHideUiBtn:hover,
+QFrame#appHeader QToolButton#windowMinBtn:hover,
+QFrame#appHeader QToolButton#windowMaxBtn:hover {
+    background: rgba(27, 32, 48, 0.08);
 }
 
 #sectionTitle {
-    font-size: 12px;
-    font-weight: 600;
-    color: rgba(220, 228, 236, 0.65);
-    letter-spacing: 0.5px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #667085;
+    letter-spacing: 1.8px;
     text-transform: uppercase;
 }
 
 #searchInput {
-    background: rgba(0, 0, 0, 0.22);
-    border: none;
-    border-radius: 10px;
-    padding: 12px 14px;
+    background: rgba(255, 255, 255, 0.82);
+    border: 1px solid rgba(27, 32, 48, 0.08);
+    border-radius: 14px;
+    padding: 13px 16px;
     font-size: 14px;
-    color: #f0f3f6;
+    color: #1B2030;
+    selection-background-color: rgba(108, 92, 231, 0.22);
 }
 #searchInput:focus {
-    background: rgba(0, 0, 0, 0.32);
+    background: #FFFFFF;
+    border-color: rgba(108, 92, 231, 0.55);
 }
 
 QPushButton#searchButton {
-    background: rgba(94, 179, 232, 0.28);
+    background: #6C5CE7;
     border: none;
-    border-radius: 10px;
-    color: #f0f3f6;
-    font-weight: 600;
-    padding: 8px 16px;
+    border-radius: 12px;
+    color: #FFFFFF;
+    font-weight: 700;
+    padding: 10px 18px;
 }
 QPushButton#searchButton:hover {
-    background: rgba(94, 179, 232, 0.4);
+    background: #7F71F0;
 }
 
-#searchStatus { color: rgba(200, 208, 218, 0.7); font-size: 11px; }
-
-QLabel#settingsSectionLabel {
+#searchStatus {
+    color: #667085;
     font-size: 11px;
-    font-weight: 700;
-    color: rgba(94, 179, 232, 0.85);
-    letter-spacing: 1.5px;
-    text-transform: uppercase;
+    min-height: 16px;
 }
-QLabel#settingsRowTitle { color: #f0f3f6; font-size: 14px; font-weight: 600; }
-QLabel#settingsRowDesc { color: rgba(200, 208, 218, 0.65); font-size: 12px; }
-QCheckBox#settingsCheck { font-size: 13px; color: #dce4ec; }
 
-QComboBox#themeCombo, QLineEdit#settingLineEdit {
-    background: rgba(0, 0, 0, 0.22);
-    border: none;
-    border-radius: 10px;
-    padding: 10px 12px;
-    color: #f0f3f6;
+QToolButton#sourceFilterChip {
+    background: rgba(27, 32, 48, 0.04);
+    border: 1px solid rgba(27, 32, 48, 0.08);
+    border-radius: 999px;
+    color: #667085;
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 600;
 }
-QComboBox#themeCombo QAbstractItemView {
-    background: #2a3038;
-    color: #f0f3f6;
-    border: none;
-    selection-background-color: rgba(94, 179, 232, 0.35);
+QToolButton#sourceFilterChip:checked {
+    background: rgba(108, 92, 231, 0.16);
+    border-color: rgba(108, 92, 231, 0.45);
+    color: #1B2030;
+}
+QToolButton#sourceFilterChip:hover {
+    background: rgba(27, 32, 48, 0.07);
 }
 
 QFrame#featuredPanel {
-    background: rgba(44, 48, 56, 0.52);
+    background: transparent;
     border: none;
-    border-radius: 14px;
+    border-radius: 18px;
 }
 
-QScrollBar:vertical { width: 4px; background: transparent; }
-QScrollBar::handle:vertical {
-    background: rgba(94, 179, 232, 0.45);
-    min-height: 40px;
-    border-radius: 2px;
+QFrame#nowPlayingPanel {
+    background: rgba(255, 255, 255, 0.82);
+    border: 1px solid rgba(27, 32, 48, 0.08);
+    border-radius: 16px;
 }
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+
+#nowPlayingTitle {
+    color: #1B2030;
+    font-size: 16px;
+    font-weight: 700;
+}
+#nowPlayingArtist {
+    color: #667085;
+    font-size: 13px;
+}
+#nowPlayingSourceBtn,
+#nowPlayingStubBtn {
+    background: rgba(27, 32, 48, 0.05);
+    border: 1px solid rgba(27, 32, 48, 0.08);
+    border-radius: 12px;
+    color: #1B2030;
+    padding: 8px 12px;
+    font-size: 12px;
+    font-weight: 600;
+}
+#nowPlayingSourceBtn:hover,
+#nowPlayingStubBtn:hover {
+    background: rgba(108, 92, 231, 0.14);
+}
+
+QFrame#pluginCard {
+    background: rgba(255, 255, 255, 0.86);
+    border: 1px solid rgba(27, 32, 48, 0.08);
+    border-radius: 16px;
+}
+#pluginCardTitle { color: #1B2030; font-size: 14px; font-weight: 700; }
+#pluginCardAuthor { color: #667085; font-size: 12px; }
+#pluginCardDesc { color: #667085; font-size: 12px; }
+
+QScrollBar:vertical { width: 5px; background: transparent; margin: 8px 2px; }
+QScrollBar::handle:vertical {
+    background: rgba(108, 92, 231, 0.42);
+    min-height: 48px;
+    border-radius: 3px;
+}
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical { height: 0; }
+
+/* Главная — widget_styles/home.qss заточен под тёмную палитру */
+QLabel#homeKicker {
+    color: rgba(108, 92, 231, 0.88);
+}
+QLabel#homeGreeting {
+    color: #1B2030;
+}
+QLabel#homeGreetingSub {
+    color: rgba(27, 32, 48, 0.48);
+}
+QLabel#homeSectionTitle {
+    color: #1B2030;
+}
+QLabel#homeSectionSubtitle {
+    color: rgba(27, 32, 48, 0.42);
+}
+QLabel#homeSectionBadge {
+    color: rgba(27, 32, 48, 0.62);
+    background: rgba(27, 32, 48, 0.05);
+    border: 1px solid rgba(27, 32, 48, 0.08);
+}
+QLabel#homePillBadge {
+    color: rgba(27, 32, 48, 0.72);
+    background: rgba(27, 32, 48, 0.05);
+    border: 1px solid rgba(27, 32, 48, 0.08);
+}
+QLabel#homePillBadge[variant="wave"] {
+    color: #4C46C8;
+    background: rgba(108, 92, 231, 0.10);
+    border-color: rgba(108, 92, 231, 0.22);
+}
+QLabel#homePillBadge[variant="continue"] {
+    color: #C2415A;
+    background: rgba(255, 92, 122, 0.10);
+    border-color: rgba(255, 92, 122, 0.22);
+}
+QLabel#homeEmptyHint {
+    color: rgba(27, 32, 48, 0.40);
+}
+QFrame#playlistCard[hovered="true"] QLabel#playlistCardTitle {
+    color: #6C5CE7;
+}
+QLabel#playlistCardTitle,
+QLabel#quickPickTitle {
+    color: #1B2030;
+}
+QToolButton#homeSectionAction {
+    background: rgba(27, 32, 48, 0.05);
+    border: 1px solid rgba(27, 32, 48, 0.10);
+    color: #3D4555;
+}
+QToolButton#homeSectionAction:hover {
+    background: rgba(108, 92, 231, 0.14);
+    border-color: rgba(108, 92, 231, 0.40);
+    color: #1B2030;
+}
+QLabel#featuredCover {
+    background: rgba(108, 92, 231, 0.08);
+    border: 1px solid rgba(108, 92, 231, 0.16);
+    color: #6C5CE7;
+}
+QLabel#featuredTitle {
+    color: #1B2030;
+}
+QLabel#featuredAuthor {
+    color: rgba(27, 32, 48, 0.52);
+}
+QToolButton#featuredPlayBtn {
+    background: #1B2030;
+    color: #F7F8FB;
+}
+QToolButton#featuredPlayBtn:hover {
+    background: #6C5CE7;
+    color: #FFFFFF;
+}
+QToolButton#featuredPlayBtn:disabled {
+    background: rgba(27, 32, 48, 0.08);
+    color: rgba(27, 32, 48, 0.32);
+}
+QLabel#wavePromoSubtitle {
+    color: rgba(27, 32, 48, 0.48);
+}
+QLabel#wavePromoCount {
+    color: #4C46C8;
+}
+QToolButton#wavePromoPlayBtn {
+    background: rgba(108, 92, 231, 0.12);
+    border: 1px solid rgba(108, 92, 231, 0.28);
+    color: #4C46C8;
+}
+QToolButton#wavePromoPlayBtn:hover {
+    background: #6C5CE7;
+    border-color: #6C5CE7;
+    color: #FFFFFF;
+}
+
+/* Статистика */
+QFrame#statsMetric {
+    background-color: rgba(255, 255, 255, 0.72);
+    border: 1px solid rgba(27, 32, 48, 0.08);
+}
+QLabel#statsMetricValue { color: #1B2030; }
+QLabel#statsMetricLabel { color: rgba(27, 32, 48, 0.48); }
+
+/* Плейлист */
+#TrackListPanel {
+    border-top: 1px solid rgba(108, 92, 231, 0.14);
+}
+#listDivider {
+    background: rgba(27, 32, 48, 0.08);
+}
+#playlistCoverFrame {
+    background: rgba(27, 32, 48, 0.04);
+    border: 1px solid rgba(27, 32, 48, 0.08);
+}
+#colHeaderNum,
+#colHeaderTitle,
+#colHeaderSource {
+    color: rgba(27, 32, 48, 0.38);
+}
+#backButton {
+    color: #1B2030;
+    background: rgba(27, 32, 48, 0.05);
+    border: 1px solid rgba(27, 32, 48, 0.08);
+}
+#backButton:hover {
+    background: rgba(108, 92, 231, 0.14);
+    border-color: rgba(108, 92, 231, 0.28);
+}
+#playlistTag { color: rgba(108, 92, 231, 0.85); }
+#playlistName { color: #1B2030; }
+#playlistCount { color: rgba(27, 32, 48, 0.48); }
+#actionButton[accent="true"] {
+    color: #FFFFFF;
+    background: #6C5CE7;
+}
+#actionButton[accent="true"]:hover {
+    background: #7F71F0;
+}
+#actionButton[accent="false"] {
+    color: #1B2030;
+    background: rgba(27, 32, 48, 0.06);
+}
+
+/* Настройки — settings.qss грузится позже, нужна более высокая специфичность */
+QWidget#settingsPage QFrame#settingsPanel {
+    background: rgba(255, 255, 255, 0.82);
+    border: 1px solid rgba(27, 32, 48, 0.08);
+}
+QWidget#settingsPage QLabel#settingsSectionLabel {
+    font-size: 11px;
+    font-weight: 700;
+    color: #6C5CE7;
+    letter-spacing: 1.8px;
+    text-transform: uppercase;
+}
+QWidget#settingsPage QFrame#settingsRow {
+    background: rgba(27, 32, 48, 0.035);
+    border: 1px solid rgba(27, 32, 48, 0.07);
+}
+QWidget#settingsPage QLabel#settingsRowTitle {
+    color: #1B2030;
+    font-size: 14px;
+    font-weight: 650;
+}
+QWidget#settingsPage QLabel#settingsRowDesc {
+    color: #667085;
+    font-size: 12px;
+}
+QWidget#settingsPage QCheckBox#settingsCheck {
+    font-size: 13px;
+    color: #3D4555;
+    spacing: 8px;
+}
+QWidget#settingsPage QCheckBox#settingsCheck::indicator {
+    border: 1px solid rgba(27, 32, 48, 0.22);
+    background: rgba(255, 255, 255, 0.9);
+}
+QWidget#settingsPage QCheckBox#settingsCheck::indicator:checked {
+    background: #6C5CE7;
+    border-color: #6C5CE7;
+}
+QWidget#settingsPage QComboBox#themeCombo,
+QWidget#settingsPage QLineEdit#settingLineEdit {
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(27, 32, 48, 0.10);
+    border-radius: 12px;
+    padding: 10px 12px;
+    color: #1B2030;
+}
+QWidget#settingsPage QComboBox#themeCombo:hover,
+QWidget#settingsPage QLineEdit#settingLineEdit:focus {
+    border-color: rgba(108, 92, 231, 0.45);
+    background: #FFFFFF;
+}
+QWidget#settingsPage QComboBox#themeCombo QAbstractItemView {
+    background: #FFFFFF;
+    color: #1B2030;
+    border: 1px solid rgba(27, 32, 48, 0.10);
+    selection-background-color: rgba(108, 92, 231, 0.16);
+}
+QWidget#settingsPage QPushButton#settingsButton {
+    background: rgba(27, 32, 48, 0.05);
+    border: 1px solid rgba(27, 32, 48, 0.10);
+    color: #3D4555;
+}
+QWidget#settingsPage QPushButton#settingsButton:hover {
+    background: rgba(108, 92, 231, 0.14);
+    border-color: rgba(108, 92, 231, 0.40);
+    color: #1B2030;
+}
+QFrame#updateBanner {
+    background: rgba(108, 92, 231, 0.10);
+    border-bottom: 1px solid rgba(108, 92, 231, 0.18);
+}
+QFrame#updateBanner QLabel#updateBannerText {
+    color: #1B2030;
+}
+QFrame#updateBanner QPushButton#updateBannerButton {
+    background: rgba(255, 255, 255, 0.7);
+    border: 1px solid rgba(27, 32, 48, 0.10);
+    color: #3D4555;
+}
+QFrame#updateBanner QPushButton#updateBannerButton:hover {
+    background: rgba(108, 92, 231, 0.14);
+    border-color: rgba(108, 92, 231, 0.40);
+    color: #1B2030;
+}
+
+#playlistTitle {
+    color: #1B2030;
+}
+#playlistCount {
+    color: rgba(27, 32, 48, 0.48);
+}
+
+QFrame#playerInnerDivider {
+    background: qlineargradient(
+        x1:0, y1:0, x2:1, y2:0,
+        stop:0 rgba(108, 92, 231, 0),
+        stop:0.5 rgba(108, 92, 231, 0.28),
+        stop:1 rgba(108, 92, 231, 0)
+    );
+}

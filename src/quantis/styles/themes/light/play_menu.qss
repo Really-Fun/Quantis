@@ -1,33 +1,95 @@
-/* Light player — приглушённый, не ослепляющий */
+/* Light player — матовое стекло, не тёмный док */
 
-#PlayMenu {
-    background: rgba(32, 36, 44, 0.92);
+#playerDock {
+    background: transparent;
     border: none;
-    border-radius: 14px;
+    min-height: 80px;
 }
 
-#trackTitle { color: #f4f6f8; }
-#trackArtist { color: rgba(200, 208, 218, 0.85); }
-#timeLabel { color: rgba(180, 188, 200, 0.75); }
-#coverLabel { background: rgba(255, 255, 255, 0.08); border: none; }
-#volIcon { color: rgba(180, 188, 200, 0.7); }
+#PlayMenu {
+    background: rgba(255, 255, 255, 0.88);
+    border: 1px solid rgba(27, 32, 48, 0.08);
+    border-radius: 16px;
+}
+
+#trackTitle {
+    color: #1B2030;
+    font-size: 14px;
+    font-weight: 650;
+}
+#trackTitle[playing="true"] { color: #6C5CE7; }
+#trackArtist { color: #667085; font-size: 12px; }
+#timeLabel { color: #667085; }
+#coverLabel {
+    background: rgba(27, 32, 48, 0.05);
+    border: 1px solid rgba(27, 32, 48, 0.08);
+}
+#volIcon { color: #667085; }
 
 #seekSlider::groove:horizontal,
 #volSlider::groove:horizontal {
-    background: rgba(255, 255, 255, 0.15);
+    background: rgba(27, 32, 48, 0.10);
+    height: 4px;
+    border-radius: 2px;
 }
-#seekSlider::sub-page:horizontal { background: #5eb3e8; border-radius: 2px; }
-#seekSlider::handle:horizontal { background: #e8ecf0; }
-#seekSlider::handle:horizontal:hover { background: #5eb3e8; }
+#seekSlider::sub-page:horizontal {
+    background: #6C5CE7;
+    border-radius: 2px;
+}
+#seekSlider::handle:horizontal {
+    background: #FFFFFF;
+    border: 2px solid #6C5CE7;
+    width: 12px;
+    height: 12px;
+    margin: -5px 0;
+    border-radius: 6px;
+}
+#seekSlider::handle:horizontal:hover {
+    background: #6C5CE7;
+    border-color: #FFFFFF;
+}
 
-#volSlider::sub-page:horizontal { background: rgba(94, 179, 232, 0.6); border-radius: 2px; }
-#volSlider::handle:horizontal { background: #e8ecf0; }
+#volSlider::sub-page:horizontal {
+    background: rgba(108, 92, 231, 0.55);
+    border-radius: 2px;
+}
+#volSlider::handle:horizontal {
+    background: #1B2030;
+    width: 10px;
+    height: 10px;
+    margin: -4px 0;
+    border-radius: 5px;
+}
 
-#controlButton { background: transparent; }
-#controlButton:hover { background: rgba(255, 255, 255, 0.08); }
+#controlButton {
+    background: transparent;
+    color: #1B2030;
+    border-radius: 20px;
+    padding: 0;
+    margin: 0;
+}
+#controlButton:hover {
+    background: rgba(27, 32, 48, 0.06);
+}
 #controlButton[accent=true] {
-    background: #5eb3e8;
+    background: #6C5CE7;
+    color: #FFFFFF;
+    border-radius: 20px;
+    padding: 0;
+    margin: 0;
 }
 #controlButton[accent=true]:hover {
-    background: #78c4f0;
+    background: #7F71F0;
+}
+#controlButton[liked="true"] {
+    background: rgba(255, 78, 69, 0.16);
+}
+#repeatButton[state="active"] {
+    background: rgba(108, 92, 231, 0.12);
+}
+#repeatButton[repeatMode="track"] {
+    background: rgba(108, 92, 231, 0.20);
+}
+#controlButton[plugin="true"] {
+    border: 1px solid rgba(102, 112, 133, 0.28);
 }

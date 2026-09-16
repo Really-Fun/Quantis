@@ -140,6 +140,18 @@ def test_audio_attempts_use_socket_timeout() -> None:
     assert "web" in second_clients
 
 
+def test_wallpaper_video_uses_tv_embedded_first() -> None:
+    streamer = AsyncYoutubeStreamer(None)  # type: ignore[arg-type]
+    video_opts = streamer._attempt_opts(video=True, height=1080)
+    first = (video_opts[0].get("extractor_args") or {}).get("youtube", {})
+    assert first.get("player_client") == ["tv_embedded"]
+    clients = [
+        ((opts.get("extractor_args") or {}).get("youtube", {})).get("player_client")
+        for opts in video_opts
+    ]
+    assert ["android"] in clients
+
+
 def test_wallpaper_video_format_is_360p() -> None:
     streamer = AsyncYoutubeStreamer(None)  # type: ignore[arg-type]
     video_opts = streamer._attempt_opts(video=True)
@@ -150,13 +162,25 @@ def test_wallpaper_video_format_is_360p() -> None:
         assert "height<=360" in fmt
         skip = (opts.get("extractor_args") or {}).get("youtube", {}).get("skip") or []
         assert "dash" not in skip
+        youtube = (opts.get("extractor_args") or {}).get("youtube", {})
+        assert "webpage" not in (youtube.get("player_skip") or [])
+        assert opts["format"].endswith("/best")
 
 
 def test_wallpaper_video_format_honors_720p() -> None:
     streamer = AsyncYoutubeStreamer(None)  # type: ignore[arg-type]
     video_opts = streamer._attempt_opts(video=True, height=720)
     for opts in video_opts:
+        assert "height=720" in opts["format"]
         assert "height<=720" in opts["format"]
+
+
+def test_wallpaper_video_format_honors_1080p() -> None:
+    streamer = AsyncYoutubeStreamer(None)  # type: ignore[arg-type]
+    video_opts = streamer._attempt_opts(video=True, height=1080)
+    for opts in video_opts:
+        assert "height=1080" in opts["format"]
+        assert "height<=1080" in opts["format"]
 
 
 def test_picks_video_only_over_muxed() -> None:
@@ -352,5 +376,126 @@ def test_picks_video_near_requested_height() -> None:
             info, prefer_video=True, target_height=720
         )
         == "https://rr.example/720.mp4"
+    )
+
+
+def test_picks_requested_height_over_lower_avc1() -> None:
+    info = {
+        "url": "https://rr.example/360-avc.mp4",
+        "protocol": "https",
+        "ext": "mp4",
+        "vcodec": "avc1.4d401e",
+        "acodec": "none",
+        "height": 360,
+        "formats": [
+            {
+                "url": "https://rr.example/360-avc.mp4",
+                "protocol": "https",
+                "ext": "mp4",
+                "vcodec": "avc1.4d401e",
+                "acodec": "none",
+                "height": 360,
+                "tbr": 250,
+            },
+            {
+                "url": "https://rr.example/720-vp9.webm",
+                "protocol": "https",
+                "ext": "webm",
+                "vcodec": "vp9",
+                "acodec": "none",
+                "height": 720,
+                "tbr": 900,
+            },
+            {
+                "url": "https://rr.example/1080-vp9.webm",
+                "protocol": "https",
+                "ext": "webm",
+                "vcodec": "vp9",
+                "acodec": "none",
+                "height": 1080,
+                "tbr": 1800,
+            },
+        ],
+    }
+    assert (
+        AsyncYoutubeStreamer._pick_stream_url(
+            info, prefer_video=True, target_height=720, video_only=True
+        )
+        == "https://rr.example/720-vp9.webm"
+    )
+    assert (
+        AsyncYoutubeStreamer._pick_stream_url(
+            info, prefer_video=True, target_height=1080, video_only=True
+        )
+        == "https://rr.example/1080-vp9.webm"
+    )
+    info["formats"].append(
+        {
+            "url": "https://rr.example/720-avc.mp4",
+            "protocol": "https",
+            "ext": "mp4",
+            "vcodec": "avc1.4d401f",
+            "acodec": "none",
+            "height": 720,
+            "tbr": 800,
+        }
+    )
+    assert (
+        AsyncYoutubeStreamer._pick_stream_url(
+            info, prefer_video=True, target_height=720, video_only=True
+        )
+        == "https://rr.example/720-avc.mp4"
+    )
+
+
+def test_picks_itag_quality_class_not_raw_pixels() -> None:
+    info = {
+        "formats": [
+            {
+                "url": "https://rr.example/134.mp4",
+                "protocol": "https",
+                "ext": "mp4",
+                "vcodec": "avc1.4d401e",
+                "acodec": "none",
+                "format_id": "134",
+                "width": 640,
+                "height": 268,
+                "tbr": 250,
+            },
+            {
+                "url": "https://rr.example/136.mp4",
+                "protocol": "https",
+                "ext": "mp4",
+                "vcodec": "avc1.4d401f",
+                "acodec": "none",
+                "format_id": "136",
+                "width": 1280,
+                "height": 534,
+                "tbr": 800,
+            },
+            {
+                "url": "https://rr.example/137.mp4",
+                "protocol": "https",
+                "ext": "mp4",
+                "vcodec": "avc1.640028",
+                "acodec": "none",
+                "format_id": "137",
+                "width": 1920,
+                "height": 802,
+                "tbr": 1400,
+            },
+        ]
+    }
+    assert (
+        AsyncYoutubeStreamer._pick_stream_url(
+            info, prefer_video=True, target_height=720, video_only=True
+        )
+        == "https://rr.example/136.mp4"
+    )
+    assert (
+        AsyncYoutubeStreamer._pick_stream_url(
+            info, prefer_video=True, target_height=1080, video_only=True
+        )
+        == "https://rr.example/137.mp4"
     )
 
