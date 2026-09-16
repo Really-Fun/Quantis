@@ -1,7 +1,0 @@
-{
-  "id": "hello_plugin",
-  "name": "Hello Plugin",
-  "version": "0.1.0",
-  "author": "Quantis",
-  "description": "Пример: логирует смену и окончание трека в консоль"
-}

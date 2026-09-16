@@ -1,8 +1,0 @@
-{
-  "id": "nfs_speaker",
-  "name": "Need For Speed Speaker",
-  "version": "0.1.0",
-  "author": "Really-Fun",
-  "description": "Диктор сообщает, какой трек будет играть",
-  "icon": "nfs.png"
-}
