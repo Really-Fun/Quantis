@@ -83,15 +83,9 @@ Thumbs.db
 background/user/*
 !background/user/.gitkeep
 
-# Плагины пользователя
+# Плагины пользователя — не коммитим, живут только локально
 plugins_dir/*
 !plugins_dir/.gitkeep
-!plugins_dir/hello_plugin/
-!plugins_dir/hello_plugin/**
-plugins_dir/hello_plugin/__pycache__/
-!plugins_dir/nfs_dictor/
-!plugins_dir/nfs_dictor/**
-plugins_dir/nfs_dictor/__pycache__/
 
 # Черновики и эксперименты в корне (тесты живут в tests/)
 /test.py
