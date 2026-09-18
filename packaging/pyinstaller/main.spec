@@ -106,12 +106,19 @@ except Exception as _ver_exc:
     _version_file = None
 
 if _app_version:
+    # Runtime ищет quantis/version.txt рядом с version.py. datas сохраняет
+    # имя исходного файла — нельзя писать quantis_version.txt, иначе exe
+    # не найдёт штамп и подхватит stale dist-info (например 0.3.0).
+    if str(SRC) not in sys.path:
+        sys.path.insert(0, str(SRC))
+    from quantis.version import VERSION_STAMP_NAME
+
     _stamp_dir = ROOT / "build"
     _stamp_dir.mkdir(parents=True, exist_ok=True)
-    _stamp = _stamp_dir / "quantis_version.txt"
+    _stamp = _stamp_dir / VERSION_STAMP_NAME
     _stamp.write_text(_app_version + "\n", encoding="utf-8")
     datas.append((str(_stamp), "quantis"))
-    print(f"[Quantis] version {_app_version}")
+    print(f"[Quantis] version {_app_version} stamp={_stamp.name}")
 if _version_file is not None:
     print(f"[Quantis] VERSIONINFO {_version_file}")
 

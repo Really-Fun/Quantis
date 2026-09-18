@@ -9,6 +9,10 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+# PyInstaller datas сохраняет имя исходного файла. spec кладёт этот файл
+# в пакет ``quantis/``, runtime читает его рядом с ``version.py``.
+VERSION_STAMP_NAME = "version.txt"
+
 
 def project_version(root: Path | None = None) -> str:
     """Читает версию из ``pyproject.toml`` (запуск из исходников / тесты)."""
@@ -32,14 +36,25 @@ def _repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
 
+def _stamp_candidates() -> tuple[Path, ...]:
+    here = Path(__file__).with_name(VERSION_STAMP_NAME)
+    meipass = getattr(sys, "_MEIPASS", None)
+    if not meipass:
+        return (here,)
+    bundled = Path(meipass) / "quantis" / VERSION_STAMP_NAME
+    if bundled == here:
+        return (here,)
+    return (here, bundled)
+
+
 def _version_from_stamp() -> str:
     """Файл, который PyInstaller кладёт рядом с модулем при сборке exe."""
-    path = Path(__file__).with_name("version.txt")
-    try:
-        if path.is_file():
-            return path.read_text(encoding="utf-8").strip()
-    except OSError:
-        return ""
+    for path in _stamp_candidates():
+        try:
+            if path.is_file():
+                return path.read_text(encoding="utf-8").strip()
+        except OSError:
+            continue
     return ""
 
 
@@ -58,12 +73,9 @@ def get_version() -> str:
     """Runtime-версия: из исходников — pyproject, в exe — штамп сборки."""
     frozen = bool(getattr(sys, "frozen", False))
     if frozen:
-        return (
-            _version_from_stamp()
-            or _version_from_metadata()
-            or project_version()
-            or "0.0.0"
-        )
+        # Не трогаем importlib.metadata: copy_metadata("quantis") тащит
+        # dist-info от последнего ``poetry install``, а не из pyproject.toml.
+        return _version_from_stamp() or "0.0.0"
     return project_version() or _version_from_metadata() or "0.0.0"
 
 
