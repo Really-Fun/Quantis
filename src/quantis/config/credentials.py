@@ -416,6 +416,17 @@ def save_yandex_token(token: str) -> None:
     Clients().reload_yandex_client()
 
 
+def delete_yandex_token() -> None:
+    """Удаляет локальный OAuth-токен из keyring. Сам Яндекс его не отзывает."""
+    try:
+        delete_password(SERVICE_NAME_YANDEX, USER)
+    except PasswordDeleteError:
+        pass
+    except KeyringError as exc:
+        raise RuntimeError(f"Не удалось удалить токен: {exc}") from exc
+    Clients().reload_yandex_client()
+
+
 def save_youtube_cookie(cookie: str) -> None:
     value = _validate_youtube_auth(cookie)
     # Если вернули путь к существующему файлу — копируем содержимое к нам

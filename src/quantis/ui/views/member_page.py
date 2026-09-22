@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 )
 
 from quantis.config.credentials import (
+    delete_yandex_token,
     save_yandex_token,
     save_youtube_cookie,
     yandex_token,
@@ -99,8 +100,13 @@ class MemberPage(QWidget):
         self._save_token_btn.setObjectName("searchButton")
         self._save_token_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._save_token_btn.clicked.connect(self._on_save_yandex_token)
+        self._delete_token_btn = QPushButton("Удалить")
+        self._delete_token_btn.setObjectName("searchButton")
+        self._delete_token_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._delete_token_btn.clicked.connect(self._on_delete_yandex_token)
         token_row.addWidget(self._yandex_token, stretch=1)
         token_row.addWidget(self._save_token_btn)
+        token_row.addWidget(self._delete_token_btn)
         yandex_body.addLayout(token_row)
         self._token_status = QLabel()
         self._token_status.setObjectName("settingsRowDesc")
@@ -238,6 +244,18 @@ class MemberPage(QWidget):
             self.refresh_membership()
         except ValueError as exc:
             self._token_status.setText(str(exc))
+        except Exception as exc:
+            self._token_status.setText(f"Ошибка: {exc}")
+
+    def _on_delete_yandex_token(self) -> None:
+        try:
+            delete_yandex_token()
+            self._yandex_token.clear()
+            self._token_status.setText(
+                "Токен удалён с этого компьютера. "
+                "На Яндексе он ещё жив — отзовите доступ в id.yandex.ru"
+            )
+            self.refresh_membership()
         except Exception as exc:
             self._token_status.setText(f"Ошибка: {exc}")
 
