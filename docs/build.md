@@ -21,11 +21,11 @@ poetry version patch    # 0.2.1 → 0.2.2
 
 ```bat
 REM Qt (по умолчанию)
-poetry install --with dev
+poetry install --with dev,build
 poetry run python packaging/scripts/build_exe.py qt
 
 REM VLC — нужен установленный VideoLAN VLC (для libvlc.dll + plugins)
-poetry install --with dev,vlc
+poetry install --with dev,build,vlc
 set VLC_HOME=C:\Program Files\VideoLAN\VLC
 poetry run python packaging/scripts/build_exe.py vlc
 ```
@@ -100,7 +100,7 @@ poetry run python packaging/scripts/build_exe.py qt
 
 ```bash
 # нужен системный PyGObject, на Arch: pacman -S python-gobject
-poetry install --with dev
+poetry install --with dev,build
 poetry run python packaging/scripts/build_exe.py qt --mpris
 ```
 
