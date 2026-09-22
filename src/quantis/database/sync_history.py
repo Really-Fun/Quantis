@@ -19,6 +19,11 @@ _SEEK_SLACK_MS = 2_500
 # Старые записи: listen_count × duration. Миксы 12–24 ч раздували «эфир».
 _LEGACY_LISTEN_CAP_MS = 20 * 60 * 1000
 _schema_lock = threading.Lock()
+# Переход в WAL берёт эксклюзивную блокировку: параллельные подключения к
+# ещё не переведённой базе ловили «database is locked». WAL хранится в самом
+# файле, так что переключаем один раз на путь и под замком.
+_wal_lock = threading.Lock()
+_wal_ready: set[str] = set()
 
 
 @dataclass(frozen=True, slots=True)
@@ -40,10 +45,20 @@ def _connect(db_path: Path | None = None) -> sqlite3.Connection:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(db_path.as_posix())
     conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode=WAL;")
+    _ensure_wal(conn, db_path.as_posix())
     conn.execute("PRAGMA synchronous=NORMAL;")
     conn.execute("PRAGMA cache_size=-8000;")
     return conn
+
+
+def _ensure_wal(conn: sqlite3.Connection, key: str) -> None:
+    if key in _wal_ready:
+        return
+    with _wal_lock:
+        if key in _wal_ready:
+            return
+        conn.execute("PRAGMA journal_mode=WAL;")
+        _wal_ready.add(key)
 
 
 def ensure_schema(conn: sqlite3.Connection) -> None:
