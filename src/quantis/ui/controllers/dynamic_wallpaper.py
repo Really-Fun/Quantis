@@ -1,4 +1,9 @@
-"""Динамические обои: видео текущего трека, в том числе часовые миксы."""
+"""Динамические обои: видео текущего трека, в том числе часовые миксы.
+
+Контроллер выбирает источник (кадры аудиоплеера, локальный клип, отдельный
+поток, обложка) и раз в такт отдаёт позиции звука и видео ядру
+``WallpaperSync``, а его команды исполняет на ``WallpaperBackdrop``.
+"""
 
 from __future__ import annotations
 
@@ -15,22 +20,37 @@ from quantis.plugins.event_bus import EventBus
 from quantis.providers import PathProvider
 from quantis.services.music_service import MusicService
 from quantis.services.wallpaper_policy import (
-    WALLPAPER_SYNC_DRIFT_MS,
-    WALLPAPER_SYNC_INTERVAL_MS,
     should_fetch_wallpaper_now,
     should_play_local_wallpaper,
     wallpaper_decode_max_side,
-    wallpaper_next_drift_tolerance,
-    wallpaper_positions_drifted,
     wallpaper_source_has_video,
     wallpaper_source_meets_quality,
     wallpaper_stream_conflicts,
     wallpaper_url_itag,
 )
+from quantis.services.wallpaper_sync import (
+    SYNC_TICK_MS,
+    AudioState,
+    Command,
+    CommandKind,
+    WallpaperSync,
+)
 from quantis.ui.preferences import UiPreferences
 from quantis.ui.views.widgets.wallpaper_backdrop import WallpaperBackdrop
 
 logger = logging.getLogger(__name__)
+
+
+# Сводка синхронизации в лог не чаще этого.
+_REPORT_INTERVAL_S = 5.0
+# Разница длительностей больше этой — скорее всего другой монтаж клипа.
+_VERSION_GAP_MS = 1500
+# Поток встал столько раз — берём другой формат (itag может быть битым).
+_STALLS_BEFORE_NEW_FORMAT = 2
+# ...а после стольких — сдаёмся и показываем обложку до смены трека.
+_STALLS_BEFORE_COVER = 5
+# Остановки реже этого не копим: на часовом миксе редкие подвисания — норма.
+_STALL_MEMORY_S = 60.0
 
 
 def _track_key(track: Track) -> str:
@@ -63,16 +83,19 @@ class DynamicWallpaperController(QObject):
         self._reload_fails = 0
         self._last_reload_at = 0.0
         self._applied_quality: int | None = None
-        self._looping = False
         self._video_armed = False
         self._excluded_itags: frozenset[str] = frozenset()
-        self._drift_tolerance = WALLPAPER_SYNC_DRIFT_MS
 
+        self._sync = WallpaperSync()
+        self._last_report_at = 0.0
+        self._loading_key: str | None = None
+        self._stalls = 0
+        self._last_stall_at = 0.0
+        self._reported_duration_for: str | None = None
+        self._av_delay_ms = 0
         self._sync_timer = QTimer(self)
-        self._sync_timer.setInterval(WALLPAPER_SYNC_INTERVAL_MS)
-        self._sync_timer.timeout.connect(self._sync_to_audio)
-
-        backdrop.set_position_provider(self._audio_position_ms)
+        self._sync_timer.setInterval(SYNC_TICK_MS)
+        self._sync_timer.timeout.connect(self._tick)
 
         preferences.changed.connect(self._on_preferences_changed)
         event_bus.track_changed.connect(self._on_track_changed)
@@ -80,6 +103,7 @@ class DynamicWallpaperController(QObject):
         event_bus.playback_resumed.connect(self._on_audio_resumed)
         event_bus.playback_seeked.connect(self._on_audio_seeked)
         backdrop.stream_stalled.connect(self._on_stream_stalled)
+        backdrop.media_ready.connect(self._on_video_ready)
         if playback is not None:
             hook = getattr(playback.player, "on_source_changed", None)
             if callable(hook):
@@ -94,6 +118,7 @@ class DynamicWallpaperController(QObject):
             return
         self._eco = enabled
         if enabled:
+            # Ядро не гасим: после эко таймер поднимется и видео догонит звук.
             self._sync_timer.stop()
             self._backdrop.follow_media_player(None)
             if self._backdrop.is_video_playing():
@@ -118,9 +143,14 @@ class DynamicWallpaperController(QObject):
         self._applied_quality = quality
         if need_reload:
             self._shown_key = None
-            self._on_track_changed(self._track)
+            self._on_track_changed(self._track, force=True)
 
     def _apply_render_prefs(self) -> None:
+        delay = int(self._prefs.dynamic_wallpaper_av_delay_ms)
+        if delay != self._av_delay_ms:
+            self._av_delay_ms = delay
+            # Сдвиг поменялся — ядро выровняет видео заново, без ожидания.
+            self._sync.audio_jumped()
         quality = self._prefs.dynamic_wallpaper_quality
         self._backdrop.set_video_limits(
             fps=self._prefs.dynamic_wallpaper_fps,
@@ -141,7 +171,7 @@ class DynamicWallpaperController(QObject):
             self._track = None
             self._paused_for_eco = False
             self._video_armed = False
-            self._sync_timer.stop()
+            self._stop_sync()
 
     def _video_should_play(self) -> bool:
         if not self._prefs.dynamic_wallpaper_enabled or self._eco:
@@ -168,88 +198,139 @@ class DynamicWallpaperController(QObject):
             return 0
         return max(0, int(self._playback.player.time))
 
+    def _heard_position_ms(self, position_ms: int) -> int:
+        """Что сейчас реально слышно: позиция плеера минус задержка выхода."""
+        return max(0, int(position_ms) - self._av_delay_ms)
+
+    def _audio_buffering(self) -> bool:
+        if self._playback is None:
+            return False
+        return bool(self._playback.player.is_buffering())
+
     def _on_audio_paused(self) -> None:
-        self._sync_timer.stop()
-        if not self._backdrop.is_following_audio_player():
-            if self._backdrop.is_video_playing():
-                self._backdrop.pause_video()
+        self._tick()
 
     def _on_audio_resumed(self) -> None:
         if self._video_armed and self._track is not None:
             if self._try_follow_audio(self._track):
                 return
             self._start_video_load(self._track)
-        if not self._video_should_play():
-            return
-        if self._backdrop.is_following_audio_player():
-            return
-        self._backdrop.resume_video()
-        self._align_to_audio()
-        self._sync_timer.start()
+        self._tick()
 
     def _on_audio_seeked(self, position_ms: int) -> None:
-        """Перемотка трека — фон догоняет сразу, а не через такт таймера."""
-        if self._looping or not self._prefs.dynamic_wallpaper_enabled or self._eco:
-            return
-        if self._backdrop.is_following_audio_player():
-            return
-        if not self._backdrop.is_video_playing():
-            return
-        self._drift_tolerance = WALLPAPER_SYNC_DRIFT_MS
-        self._backdrop.seek_ms(max(0, int(position_ms)))
+        """Перемотка трека — видео догоняет сразу, а не через такт таймера."""
+        self._sync.audio_jumped()
+        self._tick(audio_ms=max(0, int(position_ms)))
 
-    def _align_to_audio(self) -> None:
-        if self._looping or self._backdrop.is_following_audio_player():
-            return
-        if not self._backdrop.is_video_playing():
-            return
-        audio_ms = self._audio_position_ms()
-        if audio_ms > 0:
-            self._backdrop.seek_ms(audio_ms)
+    def _start_sync(self, *, loop: bool) -> None:
+        self._sync.start(loop=loop)
+        self._sync_timer.start()
+        self._tick()
 
-    def _sync_to_audio(self) -> None:
-        if self._reload_pending or self._looping or not self._video_should_play():
+    def _stop_sync(self) -> None:
+        self._sync_timer.stop()
+        self._sync.stop()
+
+    def _tick(self, audio_ms: int | None = None) -> None:
+        """Один такт синхронизации: снимки звука и видео → команды фону."""
+        if not self._sync.active or self._reload_pending:
             return
-        if self._backdrop.is_following_audio_player():
+        video = self._backdrop.video_state()
+        if video is None:
             return
-        if not self._backdrop.is_video_playing():
-            return
-        audio_ms = self._audio_position_ms()
-        video_ms = self._backdrop.position_ms()
-        if not wallpaper_positions_drifted(
-            audio_ms, video_ms, tolerance_ms=self._drift_tolerance
-        ):
-            self._drift_tolerance = WALLPAPER_SYNC_DRIFT_MS
-            return
-        self._drift_tolerance = wallpaper_next_drift_tolerance(
-            self._drift_tolerance, video_advancing=video_ms > 500
+        playing = self._video_should_play()
+        raw_ms = self._audio_position_ms() if audio_ms is None else audio_ms
+        audio = AudioState(
+            position_ms=self._heard_position_ms(raw_ms),
+            playing=playing,
+            buffering=playing and self._audio_buffering(),
         )
-        self._backdrop.seek_ms(audio_ms)
+        commands = self._sync.tick(audio, video)
+        self._report(audio, video)
+        for command in commands:
+            self._apply_command(command)
 
-    def _on_track_changed(self, track: Track) -> None:
+    def _report(self, audio: AudioState, video) -> None:
+        """Раз в несколько секунд — сводка для диагностики рассинхрона."""
+        now = monotonic()
+        if now - self._last_report_at < _REPORT_INTERVAL_S:
+            return
+        if not audio.playing or not video.ready:
+            return
+        self._last_report_at = now
+        logger.info(
+            "Синхр. фона: звук %d, видео %d, Δ=%+d мс, скорость %.3f, "
+            "упреждение %d, задержка звука %d, буфер звук/видео %s/%s",
+            audio.position_ms,
+            video.position_ms,
+            audio.position_ms - video.position_ms,
+            self._sync.rate,
+            self._sync.lead_ms,
+            self._av_delay_ms,
+            audio.buffering,
+            video.buffering,
+        )
+
+    def _on_video_ready(self) -> None:
+        video = self._backdrop.video_state()
+        source = self._backdrop.current_video_url()
+        fresh = source != self._reported_duration_for
+        if (
+            fresh
+            and video is not None
+            and video.duration_ms > 0
+            and self._playback is not None
+        ):
+            self._reported_duration_for = source
+            audio_ms = int(self._playback.player.duration)
+            if audio_ms > 0:
+                gap = audio_ms - video.duration_ms
+                log = logger.warning if abs(gap) > _VERSION_GAP_MS else logger.info
+                log(
+                    "Синхр. фона: длительность звук %d, видео %d (разница %+d мс)%s",
+                    audio_ms,
+                    video.duration_ms,
+                    gap,
+                    " — похоже, другая версия клипа" if abs(gap) > _VERSION_GAP_MS
+                    else "",
+                )
+        self._tick()
+
+    def _apply_command(self, command: Command) -> None:
+        if command.kind is CommandKind.SEEK:
+            self._backdrop.seek_ms(int(command.value))
+        elif command.kind is CommandKind.RATE:
+            self._backdrop.set_playback_rate(command.value)
+        elif command.kind is CommandKind.PAUSE:
+            self._backdrop.pause_video()
+        elif command.kind is CommandKind.PLAY:
+            self._backdrop.resume_video()
+
+    def _on_track_changed(self, track: Track, *, force: bool = False) -> None:
         if not self._prefs.dynamic_wallpaper_enabled or self._eco:
             return
         track_key = _track_key(track)
         self._track = track
-        if track_key == self._shown_key and self._backdrop.is_video_playing():
-            if (
-                not self._looping
-                and not self._backdrop.is_following_audio_player()
-                and self._video_should_play()
-                and not self._sync_timer.isActive()
-            ):
+        # Тот же трек (рестарт потока, смена настроек, выход из эко) — фон уже
+        # есть или грузится. Сломанный поток чинит stall → reload, не мы.
+        if not force and track_key == self._pending_track_key:
+            if self._sync.active and not self._sync_timer.isActive():
                 self._sync_timer.start()
             return
+        logger.info("Динамические обои: новый трек %s", track)
         self._pending_track_key = track_key
         self._reload_fails = 0
-        self._looping = False
+        self._stalls = 0
+        self._loading_key = None
         self._excluded_itags = frozenset()
-        self._drift_tolerance = WALLPAPER_SYNC_DRIFT_MS
-        self._sync_timer.stop()
+        self._stop_sync()
         cover = self._existing_cover_path(track)
         if cover is not None:
             self._backdrop.show_still(cover)
             self._shown_key = track_key
+        else:
+            # Кадры прошлого трека под новым звуком хуже пустого фона.
+            self._backdrop.pause_video()
         self._video_armed = True
         if should_fetch_wallpaper_now(
             local=self._local_video_path(track) is not None,
@@ -261,6 +342,10 @@ class DynamicWallpaperController(QObject):
         self._video_armed = False
         if self._try_follow_audio(track):
             return
+        track_key = _track_key(track)
+        if self._loading_key == track_key:
+            return
+        self._loading_key = track_key
         self._bridge.schedule(self._load_video(track))
 
     def _on_stream_stalled(self) -> None:
@@ -269,10 +354,35 @@ class DynamicWallpaperController(QObject):
         now = monotonic()
         if now - self._last_reload_at < 3:
             return
+        if now - self._last_stall_at > _STALL_MEMORY_S:
+            self._stalls = 0
+        self._last_stall_at = now
+        self._stalls += 1
+        itag = wallpaper_url_itag(self._backdrop.current_video_url())
+        if self._stalls >= _STALLS_BEFORE_COVER:
+            logger.warning(
+                "Видео-фон: поток встаёт %d раз подряд — показываем обложку",
+                self._stalls,
+            )
+            self._stop_sync()
+            track = self._track
+            self._bridge.schedule(self._show_cover(track, _track_key(track)))
+            return
+        if self._stalls >= _STALLS_BEFORE_NEW_FORMAT and itag:
+            logger.info("Видео-фон: itag %s не тянется — пробуем другой формат", itag)
+            self._excluded_itags = self._excluded_itags | {itag}
+        self._last_reload_at = now
         self._bridge.schedule(self._reload_video(self._track))
 
     async def _load_video(self, track: Track) -> None:
         track_key = _track_key(track)
+        try:
+            await self._load_video_once(track, track_key)
+        finally:
+            if self._loading_key == track_key:
+                self._loading_key = None
+
+    async def _load_video_once(self, track: Track, track_key: str) -> None:
         if self._try_follow_audio(track):
             return
         try:
@@ -383,11 +493,10 @@ class DynamicWallpaperController(QObject):
             return False
         track_key = _track_key(track)
         self._video_armed = False
-        self._looping = False
         self._pending_track_key = track_key
+        self._stop_sync()
         self._backdrop.follow_media_player(host)
         self._shown_key = track_key
-        self._sync_timer.stop()
         logger.info("Динамические обои: кадры текущего потока, без второго URL")
         return True
 
@@ -419,23 +528,15 @@ class DynamicWallpaperController(QObject):
                 if self._track is not None:
                     self._try_follow_audio(self._track, require_quality=False)
                 return
-            self._looping = loop
             # Короткий локальный клип крутится по кругу — к позиции трека его
-            # привязывать нельзя, иначе перемотка выкинет за конец файла.
+            # не привязываем, только ставим на паузу вместе со звуком.
+            # Поток ждёт на паузе, пока ядро не перемотает его к звуку.
             self._backdrop.play_video_url(
-                url,
-                loop=loop,
-                start_ms=0 if loop else self._audio_position_ms(),
-                follow_audio=not loop,
-                hold_until_audio=not loop and not self._video_should_play(),
+                url, loop=loop, autoplay=loop and self._video_should_play()
             )
             self._shown_key = track_key
             self._reload_fails = 0
-            self._drift_tolerance = WALLPAPER_SYNC_DRIFT_MS
-            if not loop and self._video_should_play():
-                self._sync_timer.start()
-            else:
-                self._sync_timer.stop()
+            self._start_sync(loop=loop)
 
         self._bridge.invoke_main(_run)
 
@@ -443,9 +544,8 @@ class DynamicWallpaperController(QObject):
         def _run() -> None:
             if self._pending_track_key != track_key:
                 return
+            self._stop_sync()
             play()
-            self._looping = False
-            self._sync_timer.stop()
             self._shown_key = track_key
 
         self._bridge.invoke_main(_run)

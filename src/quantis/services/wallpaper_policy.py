@@ -5,16 +5,15 @@ from __future__ import annotations
 # Часовой mp4 в кэш не качаем: это сотни МБ, стрима хватает.
 WALLPAPER_CACHE_MAX_SEC = 15 * 60
 WALLPAPER_MAX_LOCAL_BYTES = 40 * 1024 * 1024
-WALLPAPER_SYNC_INTERVAL_MS = 800
-WALLPAPER_SYNC_DRIFT_MS = 1500
-WALLPAPER_SEEK_SLOP_MS = 1500
-# Если видео играет, но стабильно не догоняет, порог растёт: лучше лёгкий
-# рассинхрон, чем перемотка HTTP-потока каждую секунду.
-WALLPAPER_MAX_DRIFT_MS = 6000
 WALLPAPER_QUALITY_CHOICES = (360, 480, 720, 1080)
 WALLPAPER_FPS_CHOICES = (5, 10, 15, 24, 30, 60)
 WALLPAPER_DEFAULT_QUALITY = 360
 WALLPAPER_DEFAULT_FPS = 10
+# Звук слышно позже, чем его позиция в плеере: буфер Qt + PipeWire/WASAPI.
+# На столько видео держим позади позиции звука. Картинка такой задержки нет.
+WALLPAPER_DEFAULT_AV_DELAY_MS = 250
+WALLPAPER_AV_DELAY_MIN_MS = -500
+WALLPAPER_AV_DELAY_MAX_MS = 1000
 _DECODE_MAX_SIDE = {360: 640, 480: 854, 720: 1280, 1080: 1920}
 _FORMAT_FALLBACK_HEIGHT = {360: 480, 480: 720, 720: 1080, 1080: 1080}
 
@@ -26,23 +25,6 @@ def should_play_local_wallpaper(size_bytes: int) -> bool:
 def should_fetch_wallpaper_now(*, local: bool, audio_live: bool) -> bool:
     """Локальный клип — сразу. Remote yt-dlp не должен обгонять старт аудио."""
     return bool(local or audio_live)
-
-
-def wallpaper_positions_drifted(
-    audio_ms: int, video_ms: int, *, tolerance_ms: int = WALLPAPER_SYNC_DRIFT_MS
-) -> bool:
-    if audio_ms <= 0 or video_ms < 0:
-        return False
-    return abs(audio_ms - video_ms) > max(WALLPAPER_SYNC_DRIFT_MS, tolerance_ms)
-
-
-def wallpaper_next_drift_tolerance(
-    current_ms: int, *, video_advancing: bool = True
-) -> int:
-    """Порог не растим, пока видео ещё на нуле: иначе сдаёмся до первой перемотки."""
-    if not video_advancing:
-        return max(WALLPAPER_SYNC_DRIFT_MS, int(current_ms))
-    return min(WALLPAPER_MAX_DRIFT_MS, max(WALLPAPER_SYNC_DRIFT_MS, current_ms) * 2)
 
 
 def wallpaper_can_apply_seek(*, duration_ms: int, media_ready: bool) -> bool:
@@ -57,12 +39,6 @@ def wallpaper_seek_target(position_ms: int, duration_ms: int) -> int:
     if duration > 400:
         return min(position, max(0, duration - 400))
     return position
-
-
-def wallpaper_seek_landed(
-    position_ms: int, target_ms: int, *, slop_ms: int = WALLPAPER_SEEK_SLOP_MS
-) -> bool:
-    return abs(int(position_ms) - int(target_ms)) <= max(0, int(slop_ms))
 
 
 def wallpaper_duration_filter(info: dict, *, incomplete: bool = False) -> str | None:
@@ -83,6 +59,10 @@ def clamp_wallpaper_fps(value: int) -> int:
     if value in WALLPAPER_FPS_CHOICES:
         return value
     return min(WALLPAPER_FPS_CHOICES, key=lambda fps: abs(fps - value))
+
+
+def clamp_wallpaper_av_delay(value: int) -> int:
+    return max(WALLPAPER_AV_DELAY_MIN_MS, min(WALLPAPER_AV_DELAY_MAX_MS, int(value)))
 
 
 def wallpaper_decode_max_side(height: int) -> int:

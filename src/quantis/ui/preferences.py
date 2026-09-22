@@ -20,6 +20,7 @@ class UiPreferences(QObject):
     _KEY_DYNAMIC_WALLPAPER = "ui/dynamic_wallpaper"
     _KEY_WALLPAPER_QUALITY = "ui/dynamic_wallpaper_quality"
     _KEY_WALLPAPER_FPS = "ui/dynamic_wallpaper_fps"
+    _KEY_WALLPAPER_AV_DELAY = "ui/dynamic_wallpaper_av_delay_ms"
     _KEY_WALLPAPER = "ui/wallpaper_path"
     _KEY_WALLPAPER_ENABLED = "ui/wallpaper_enabled"
     _KEY_NOW_PLAYING = "ui/show_now_playing_panel"
@@ -159,6 +160,30 @@ class UiPreferences(QObject):
         if self.dynamic_wallpaper_fps == clamped:
             return
         self._settings.setValue(self._KEY_WALLPAPER_FPS, clamped)
+        self.changed.emit()
+
+    @property
+    def dynamic_wallpaper_av_delay_ms(self) -> int:
+        """На сколько видео-фон отстаёт от позиции звука (задержка аудиовыхода)."""
+        from quantis.services.wallpaper_policy import (
+            WALLPAPER_DEFAULT_AV_DELAY_MS,
+            clamp_wallpaper_av_delay,
+        )
+
+        raw = self._settings.value(
+            self._KEY_WALLPAPER_AV_DELAY, WALLPAPER_DEFAULT_AV_DELAY_MS
+        )
+        return clamp_wallpaper_av_delay(
+            self._read_int(raw, WALLPAPER_DEFAULT_AV_DELAY_MS)
+        )
+
+    def set_dynamic_wallpaper_av_delay_ms(self, value: int) -> None:
+        from quantis.services.wallpaper_policy import clamp_wallpaper_av_delay
+
+        clamped = clamp_wallpaper_av_delay(value)
+        if self.dynamic_wallpaper_av_delay_ms == clamped:
+            return
+        self._settings.setValue(self._KEY_WALLPAPER_AV_DELAY, clamped)
         self.changed.emit()
 
     @property

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Callable
+import logging
 from pathlib import Path
 from time import monotonic
 
@@ -21,12 +21,26 @@ from quantis.services.wallpaper_policy import (
     WALLPAPER_DEFAULT_FPS,
     wallpaper_can_apply_seek,
     wallpaper_decode_max_side,
-    wallpaper_seek_landed,
     wallpaper_seek_target,
 )
+from quantis.services.wallpaper_sync import VideoState
 from quantis.ui.views.widgets.cover_art import load_wallpaper_pixmap
 
+logger = logging.getLogger(__name__)
+
 _WALLPAPER_MAX_SIDE = 1280
+_SEEKABLE_STATUSES = (
+    QMediaPlayer.MediaStatus.LoadedMedia,
+    QMediaPlayer.MediaStatus.BufferingMedia,
+    QMediaPlayer.MediaStatus.BufferedMedia,
+)
+# BufferingMedia у Qt значит «данных хватает, докачиваем» — это не остановка.
+_STALLED_STATUSES = (
+    QMediaPlayer.MediaStatus.LoadingMedia,
+    QMediaPlayer.MediaStatus.StalledMedia,
+)
+# EndOfMedia дальше этой отметки от конца — обрыв потока, а не конец клипа.
+_TRUE_END_SLOP_MS = 1500
 
 
 def _media_url(url: str) -> QUrl:
@@ -179,9 +193,15 @@ class _VideoSurface(QWidget):
 
 
 class WallpaperBackdrop(QWidget):
-    """Слой обоев: статичный jpg или видео-клип (только в зоне контента)."""
+    """Слой обоев: статичный jpg или видео-клип (только в зоне контента).
+
+    Видео здесь только исполняет команды: когда и куда перематывать, решает
+    ``WallpaperSync`` в контроллере.
+    """
 
     stream_stalled = Signal()
+    # Длительность известна — можно перематывать и синхронизировать.
+    media_ready = Signal()
 
     def __init__(
         self,
@@ -199,14 +219,10 @@ class WallpaperBackdrop(QWidget):
         self._cache_size = (0, 0)
         self._dynamic_enabled = False
         self._video_active = False
+        self._streaming = False
         self._current_source: str | None = None
         self._loop_enabled = False
-        self._pending_start_ms = 0
-        self._follow_audio = False
-        self._hold_until_audio = False
-        self._position_provider: Callable[[], int] | None = None
         self._stall_notified = False
-        self._seeking = False
         self._host_player: QMediaPlayer | None = None
 
         self._video_surface = _VideoSurface(self)
@@ -259,9 +275,7 @@ class WallpaperBackdrop(QWidget):
             return
         self._host_player = player
         self._loop_enabled = False
-        self._follow_audio = False
-        self._hold_until_audio = False
-        self._pending_start_ms = 0
+        self._streaming = False
         self._stall_notified = False
         self._video_active = True
         self._current_source = "host-player"
@@ -309,28 +323,18 @@ class WallpaperBackdrop(QWidget):
         self._video_surface.set_cinematic(enabled)
         self.update()
 
-    def set_position_provider(self, provider: Callable[[], int] | None) -> None:
-        """Источник актуальной позиции аудио для старта видео «в ноль»."""
-        self._position_provider = provider
-
     def play_video_url(
-        self,
-        url: str,
-        *,
-        loop: bool = False,
-        start_ms: int = 0,
-        follow_audio: bool = False,
-        hold_until_audio: bool = False,
+        self, url: str, *, loop: bool = False, autoplay: bool = False
     ) -> None:
+        """Грузит видео. Без autoplay стоит на паузе, пока синхронизатор не
+        перемотает его к позиции звука — первый кадр сразу совпадает с треком."""
         if not self._dynamic_enabled or not url:
             return
         self._detach_host()
         self._loop_enabled = loop
-        self._follow_audio = follow_audio and not loop
-        self._hold_until_audio = hold_until_audio and not loop
-        self._pending_start_ms = max(0, int(start_ms))
         self._stall_notified = False
         self._video_active = True
+        self._streaming = True
         self._cached = QPixmap()
         self._cache_size = (0, 0)
         self._video_surface.show()
@@ -340,12 +344,17 @@ class WallpaperBackdrop(QWidget):
             QMediaPlayer.PlaybackState.PlayingState,
             QMediaPlayer.PlaybackState.PausedState,
         ):
-            self._apply_pending_seek()
+            if autoplay:
+                player.play()
             return
         self._current_source = url
         self._silence_video_audio()
+        player.setPlaybackRate(1.0)
         player.setSource(_media_url(url))
-        player.play()
+        if autoplay:
+            player.play()
+        else:
+            player.pause()
         self.update()
 
     def show_still(self, path: str) -> None:
@@ -367,9 +376,7 @@ class WallpaperBackdrop(QWidget):
         if image.isNull():
             return
         self._loop_enabled = False
-        self._pending_start_ms = 0
-        self._follow_audio = False
-        self._hold_until_audio = False
+        self._streaming = False
         self._stall_notified = False
         self._video_active = True
         self._current_source = path
@@ -396,48 +403,62 @@ class WallpaperBackdrop(QWidget):
             QMediaPlayer.PlaybackState.PausedState,
         )
 
-    def position_ms(self) -> int:
-        if self._video_player is None:
-            return 0
-        return max(0, int(self._video_player.position()))
+    def current_video_url(self) -> str | None:
+        return self._current_source if self._streaming else None
+
+    def video_state(self) -> VideoState | None:
+        """Снимок своего видеоплеера; None — синхронизировать нечего."""
+        player = self._video_player
+        if player is None or self._host_player is not None:
+            return None
+        if not (self._video_active and self._streaming):
+            return None
+        status = player.mediaStatus()
+        return VideoState(
+            position_ms=max(0, int(player.position())),
+            duration_ms=max(0, int(player.duration())),
+            playing=player.playbackState() == QMediaPlayer.PlaybackState.PlayingState,
+            buffering=status in _STALLED_STATUSES,
+            seekable=status in _SEEKABLE_STATUSES,
+        )
 
     def seek_ms(self, position_ms: int) -> None:
-        if self._host_player is not None:
+        player = self._streaming_player()
+        if player is None:
             return
-        if self._video_player is None or not self._video_active:
+        duration = int(player.duration())
+        if not wallpaper_can_apply_seek(duration_ms=duration, media_ready=True):
             return
-        self._pending_start_ms = max(0, int(position_ms))
-        self._follow_audio = False
-        self._hold_until_audio = False
-        self._apply_pending_seek()
+        player.setPosition(wallpaper_seek_target(position_ms, duration))
+
+    def set_playback_rate(self, rate: float) -> None:
+        player = self._streaming_player()
+        if player is not None and abs(player.playbackRate() - rate) > 1e-3:
+            player.setPlaybackRate(rate)
 
     def pause_video(self) -> None:
-        if self._host_player is not None:
-            return
-        if self._video_active and self._video_player is not None:
-            self._video_player.pause()
+        player = self._streaming_player()
+        if player is not None:
+            player.pause()
 
     def resume_video(self) -> None:
-        self._hold_until_audio = False
-        if self._host_player is not None:
-            return
-        if (
-            self._video_active
-            and self._dynamic_enabled
-            and self._video_player is not None
-        ):
-            self._video_player.play()
-            self._apply_pending_seek()
+        player = self._streaming_player()
+        if player is not None and self._dynamic_enabled:
+            player.play()
+
+    def _streaming_player(self) -> QMediaPlayer | None:
+        if self._host_player is not None or not self._video_active:
+            return None
+        if not self._streaming:
+            return None
+        return self._video_player
 
     def stop_video(self) -> None:
         self._video_active = False
+        self._streaming = False
         self._current_source = None
         self._loop_enabled = False
-        self._pending_start_ms = 0
-        self._follow_audio = False
-        self._hold_until_audio = False
         self._stall_notified = False
-        self._seeking = False
         self._detach_host()
         if self._video_player is not None:
             self._video_player.setVideoSink(self._video_surface.sink)
@@ -458,50 +479,9 @@ class WallpaperBackdrop(QWidget):
         source = self._current_source or ""
         return source.startswith(("http://", "https://"))
 
-    def _media_ready_for_seek(self) -> bool:
-        if self._video_player is None:
-            return False
-        status = self._video_player.mediaStatus()
-        return status in (
-            QMediaPlayer.MediaStatus.LoadedMedia,
-            QMediaPlayer.MediaStatus.BufferingMedia,
-            QMediaPlayer.MediaStatus.BufferedMedia,
-        )
-
-    def _apply_pending_seek(self) -> None:
-        if self._video_player is None or self._seeking:
-            return
-        if not self._follow_audio and self._pending_start_ms <= 0:
-            return
-        position = self._pending_start_ms
-        if self._follow_audio and self._position_provider is not None:
-            # Пока грузился поток, трек ушёл вперёд — берём позицию на сейчас.
-            position = max(0, int(self._position_provider()))
-        duration = int(self._video_player.duration())
-        if not wallpaper_can_apply_seek(
-            duration_ms=duration, media_ready=self._media_ready_for_seek()
-        ):
-            return
-        target = wallpaper_seek_target(position, duration)
-        self._seeking = True
-        try:
-            playing = (
-                self._video_player.playbackState()
-                == QMediaPlayer.PlaybackState.PlayingState
-            )
-            self._video_player.setPosition(target)
-            landed = wallpaper_seek_landed(self._video_player.position(), target)
-            if landed:
-                self._pending_start_ms = 0
-                self._follow_audio = False
-            if not playing and not self._hold_until_audio:
-                self._video_player.play()
-        finally:
-            self._seeking = False
-
     def _on_duration_ready(self, duration: int) -> None:
-        if duration > 0:
-            self._apply_pending_seek()
+        if duration > 0 and self._streaming:
+            self.media_ready.emit()
 
     def _notify_stall(self) -> None:
         if self._stall_notified or not self._is_http_source():
@@ -512,11 +492,9 @@ class WallpaperBackdrop(QWidget):
     def _on_video_status(self, status: QMediaPlayer.MediaStatus) -> None:
         if self._video_player is None:
             return
-        if status in (
-            QMediaPlayer.MediaStatus.LoadedMedia,
-            QMediaPlayer.MediaStatus.BufferedMedia,
-        ):
-            self._apply_pending_seek()
+        if status == QMediaPlayer.MediaStatus.LoadedMedia:
+            if self._streaming and self._video_player.duration() > 0:
+                self.media_ready.emit()
             return
         if status != QMediaPlayer.MediaStatus.EndOfMedia:
             return
@@ -525,12 +503,15 @@ class WallpaperBackdrop(QWidget):
             self._video_player.play()
             return
         self._video_player.pause()
+        duration = int(self._video_player.duration())
+        position = int(self._video_player.position())
+        # Клип честно кончился раньше трека — замираем на последнем кадре.
+        if duration > 0 and position >= duration - _TRUE_END_SLOP_MS:
+            return
         self._notify_stall()
 
     def _on_video_error(self, _error: QMediaPlayer.Error, message: str) -> None:
-        import logging
-
-        logging.getLogger(__name__).warning("Видео-фон: %s", message)
+        logger.warning("Видео-фон: %s", message)
         if self._video_player is not None:
             self._video_player.pause()
         self._notify_stall()

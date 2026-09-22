@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QPushButton,
     QScrollArea,
+    QSpinBox,
     QVBoxLayout,
     QWidget,
 )
@@ -29,6 +30,8 @@ from quantis.services.app_update import (
     is_safe_release_url,
 )
 from quantis.services.wallpaper_policy import (
+    WALLPAPER_AV_DELAY_MAX_MS,
+    WALLPAPER_AV_DELAY_MIN_MS,
     WALLPAPER_FPS_CHOICES,
     WALLPAPER_QUALITY_CHOICES,
 )
@@ -182,6 +185,24 @@ class SettingsPage(QWidget):
             self._on_wallpaper_fps_changed
         )
         video_opts.addWidget(self._wallpaper_fps_combo)
+
+        video_opts.addWidget(
+            QLabel(
+                "Задержка звука — видео спешит: больше, опаздывает: меньше",
+                objectName="settingsRowDesc",
+            )
+        )
+        self._wallpaper_av_delay_spin = QSpinBox()
+        self._wallpaper_av_delay_spin.setObjectName("settingSpin")
+        self._wallpaper_av_delay_spin.setRange(
+            WALLPAPER_AV_DELAY_MIN_MS, WALLPAPER_AV_DELAY_MAX_MS
+        )
+        self._wallpaper_av_delay_spin.setSingleStep(10)
+        self._wallpaper_av_delay_spin.setSuffix(" мс")
+        self._wallpaper_av_delay_spin.valueChanged.connect(
+            self._on_wallpaper_av_delay_changed
+        )
+        video_opts.addWidget(self._wallpaper_av_delay_spin)
         wallpaper_body.addWidget(self._wallpaper_video_opts)
         panel_layout.addWidget(wallpaper_row)
 
@@ -385,6 +406,12 @@ class SettingsPage(QWidget):
             self._wallpaper_fps_combo.setCurrentIndex(fps_index)
         self._wallpaper_fps_combo.blockSignals(False)
 
+        self._wallpaper_av_delay_spin.blockSignals(True)
+        self._wallpaper_av_delay_spin.setValue(
+            self._prefs.dynamic_wallpaper_av_delay_ms
+        )
+        self._wallpaper_av_delay_spin.blockSignals(False)
+
         self._eco_cb.blockSignals(True)
         self._eco_cb.setChecked(self._prefs.background_eco_enabled)
         self._eco_cb.blockSignals(False)
@@ -454,6 +481,9 @@ class SettingsPage(QWidget):
         fps = self._wallpaper_fps_combo.itemData(index)
         if fps is not None:
             self._prefs.set_dynamic_wallpaper_fps(int(fps))
+
+    def _on_wallpaper_av_delay_changed(self, value: int) -> None:
+        self._prefs.set_dynamic_wallpaper_av_delay_ms(int(value))
 
     def _on_eco_toggled(self, checked: bool) -> None:
         self._prefs.set_background_eco_enabled(checked)

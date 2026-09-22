@@ -68,6 +68,7 @@ QCheckBox#settingsCheck::indicator:checked {
 }
 
 QComboBox#themeCombo,
+QSpinBox#settingSpin,
 QLineEdit#settingLineEdit {
     background: rgba(0, 0, 0, 0.4);
     border: 1px solid rgba(255, 255, 255, 0.12);
@@ -79,6 +80,8 @@ QLineEdit#settingLineEdit {
 }
 
 QComboBox#themeCombo:hover,
+QSpinBox#settingSpin:hover,
+QSpinBox#settingSpin:focus,
 QLineEdit#settingLineEdit:focus {
     border-color: rgba(46, 230, 255, 0.55);
     background: rgba(0, 0, 0, 0.52);
