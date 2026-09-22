@@ -1,0 +1,64 @@
+QFrame#sideNavRail {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(20, 24, 33, 0.55);
+    border-radius: 20px;
+}
+
+QFrame#sideNavRail[expanded="true"] {
+    background: rgba(20, 24, 33, 0.72);
+    border: 1px solid rgba(0, 217, 163, 0.28);
+}
+
+QLabel#navBrandLabel {
+    color: #FFFFFF;
+    font-size: 14px;
+    font-weight: 700;
+}
+
+QToolButton#navIconButton {
+    background: transparent;
+    border: none;
+    border-radius: 14px;
+    padding: 10px 12px;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 13px;
+    font-weight: 600;
+    text-align: left;
+}
+
+QToolButton#navIconButton:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: #FFFFFF;
+}
+
+QToolButton#navIconButton:checked {
+    background: transparent;
+    color: #FFFFFF;
+}
+
+QToolButton#navIconButton:pressed {
+    background: rgba(0, 217, 163, 0.2);
+}
+
+QToolButton#navIconButton[plugin="true"] {
+    border: 1px solid rgba(255, 255, 255, 0.18);
+}
+
+QToolButton#navPinButton {
+    background: rgba(20, 24, 33, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    color: rgba(255, 255, 255, 0.65);
+    padding: 6px 10px;
+    font-size: 12px;
+    font-weight: 600;
+}
+QToolButton#navPinButton:hover {
+    background: rgba(0, 217, 163, 0.18);
+    color: #FFFFFF;
+}
+QToolButton#navPinButton:checked {
+    background: rgba(0, 217, 163, 0.28);
+    border-color: rgba(0, 217, 163, 0.5);
+    color: #FFFFFF;
+}

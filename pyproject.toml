@@ -1,6 +1,6 @@
 [project]
 name = "quantis"
-version = "0.1.1"
+version = "0.3.2"
 description = "A scalable, plugin-based async media application."
 authors = [
     {name = "ReallyFun",email = "ilyareztcov@gmail.com"}
@@ -8,7 +8,7 @@ authors = [
 license = "GPL-3.0-only"
 readme = "README.md"
 requires-python = ">=3.13, <3.15"
-packages = [{include = "src"}]
+packages = [{include = "quantis", from = "src"}]
 dependencies = [
     "yt-dlp (>=2026.6.9,<2027.0.0)",
     "yandex-music (>=3.0.0,<4.0.0)",
@@ -17,13 +17,12 @@ dependencies = [
     "qasync (>=0.28.0,<0.29.0)",
     "aiosqlite (>=0.22.1,<0.23.0)",
     "aiohttp (>=3.14.1,<4.0.0)",
-    "python-vlc (>=3.0.21203,<4.0.0)",
     "keyring (>=25.7.0,<26.0.0)",
     "aiofiles (>=25.1.0,<26.0.0)",
     "mpris-server>=0.9.6; sys_platform == 'linux'",
-    "winrt-Windows.media>=3.2.1; sys_platform == 'windows'",
-    "winrt-Windows.media.playback>=3.2.1; sys_platform == 'windows'",
-    "winrt-Windows.foundation>=3.2.1; sys_platform == 'windows'",
+    "winrt-Windows.media>=3.2.1; sys_platform == 'win32'",
+    "winrt-Windows.media.playback>=3.2.1; sys_platform == 'win32'",
+    "winrt-Windows.foundation>=3.2.1; sys_platform == 'win32'",
 ]
 
 [project.scripts]
@@ -40,9 +39,24 @@ dev = [
     "mypy (>=2.1.0,<3.0.0)",
     "pytest (>=9.1.1,<10.0.0)",
     "pytest-asyncio (>=1.4.0,<2.0.0)",
-    "pyinstaller (>=6.21.0,<7.0.0)"
+    "Pillow"
+]
+vlc = [
+    "python-vlc (>=3.0.21203,<4.0.0)",
+]
+dj = [
+    "edge-tts (>=7.0.0,<8.0.0)",
+]
+build = [
+    "pyinstaller (>=6.22.3,<7.0.0)",
+    "pefile (>=2024.8.26,<2025.0.0)",
+    "altgraph (>=0.17.5,<0.18.0)",
 ]
 
+[tool.pytest.ini_options]
+markers = [
+    "network: тесты, требующие активного интернет-соединения и интеграции с внешними API"
+]
 
 [tool.black]
 line-length = 88
@@ -54,8 +68,69 @@ target-version = "py313"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "B", "ASYNC"]
+# N802/N815 — переопределения Qt (paintEvent, resizeEvent) и Qt-свойства
+# (railWidth), их имена задаёт Qt. E501 — длинные строки режет black,
+# остаются только строковые литералы.
+ignore = ["N802", "N815", "E501"]
+
+[tool.ruff.lint.per-file-ignores]
+# Имена модулей исторические; переименование — отдельная правка импортов.
+"src/quantis/providers/PlaylistManager.py" = ["N999"]
+"src/quantis/providers/TrackManager.py" = ["N999"]
+
+[tool.ruff.lint.flake8-bugbear]
+# parent=QModelIndex() — штатная сигнатура моделей Qt, объект неизменяемый.
+extend-immutable-calls = ["PySide6.QtCore.QModelIndex"]
 
 [tool.mypy]
 python_version = "3.13"
 strict = true
 ignore_missing_imports = true
+# Ошибки показываем только в проверяемых файлах, а не во всём, что они
+# импортируют: остальной код ещё не приведён к strict.
+follow_imports = "silent"
+# Храповик: эти модули уже проходят strict, CI не даёт им испортиться.
+# Починили модуль — добавьте его сюда; новые модули — сразу сюда.
+files = [
+    "src/quantis/config/clients.py",
+    "src/quantis/config/constants.py",
+    "src/quantis/config/media_backend.py",
+    "src/quantis/controllers/playback_history_watcher.py",
+    "src/quantis/core/async_bridge.py",
+    "src/quantis/core/eco_mode.py",
+    "src/quantis/core/plugin_host.py",
+    "src/quantis/core/worker_pool.py",
+    "src/quantis/database/async_database.py",
+    "src/quantis/database/track_history_repository.py",
+    "src/quantis/models/repeat_mode.py",
+    "src/quantis/models/track.py",
+    "src/quantis/player/base.py",
+    "src/quantis/player/factory.py",
+    "src/quantis/plugins/base.py",
+    "src/quantis/plugins/installer.py",
+    "src/quantis/services/app_update.py",
+    "src/quantis/services/cover_validate.py",
+    "src/quantis/services/http_stream_proxy.py",
+    "src/quantis/services/soundcloud.py",
+    "src/quantis/services/soundcloud_finder.py",
+    "src/quantis/services/track_history.py",
+    "src/quantis/services/url_resolver.py",
+    "src/quantis/services/wallpaper_sync.py",
+    "src/quantis/services/yandex_finder.py",
+    "src/quantis/types/upgrade_cycle.py",
+    "src/quantis/ui/async_ui.py",
+    "src/quantis/ui/design_tokens.py",
+    "src/quantis/ui/resources.py",
+    "src/quantis/ui/shortcuts.py",
+    "src/quantis/ui/ui_extensions.py",
+    "src/quantis/ui/viewmodels/base_viewmodel.py",
+    "src/quantis/ui/viewmodels/player_vm.py",
+    "src/quantis/ui/views/widgets/brand_mark.py",
+    "src/quantis/ui/views/widgets/source_badge.py",
+    "src/quantis/ui/views/widgets/update_banner.py",
+    "src/quantis/ui/wallpapers.py",
+    "src/quantis/utils/app_paths.py",
+    "src/quantis/utils/get_ru_words.py",
+    "src/quantis/utils/resource_path.py",
+    "src/quantis/version.py",
+]

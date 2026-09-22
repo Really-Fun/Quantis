@@ -1,68 +1,289 @@
-/* --- Скроллбар и область прокрутки --- */
-QScrollArea { 
-    background: transparent; 
-    border: none; 
-}
-QWidget#scrollContent { 
-    background: transparent; 
-}
-QScrollBar:vertical {
-    width: 5px; 
+/* Главная — стриминговый shelf + hero */
+
+QWidget#homePage,
+QWidget#homeScrollContent,
+QWidget#homeHero,
+QWidget#homeHeroCluster,
+QWidget#libraryPage {
     background: transparent;
-}
-QScrollBar::handle:vertical {
-    background: rgba(255,255,255,120); 
-    border-radius: 2px; 
-    min-height: 30px;
-}
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { 
-    height: 0; 
 }
 
-/* --- Секции плейлистов --- */
-#sectionTitle {
-    color: #fff; 
-    font-size: 17px; 
-    font-weight: 700; 
+QScrollArea#homeScroll {
+    background: transparent;
+    border: none;
+}
+
+QWidget#playlistShelf,
+QWidget#quickPickShelf,
+QWidget#playlistShelfHost,
+QWidget#quickPickShelfHost {
     background: transparent;
 }
-#createPlaylistBtn {
-    color: white;
+
+QLabel#homeKicker {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2.4px;
+    color: rgba(46, 230, 255, 0.88);
+    background: transparent;
+    padding: 0;
+}
+
+QLabel#homeGreeting {
+    font-size: 42px;
+    font-weight: 700;
+    letter-spacing: -1.6px;
+    color: #f8fafc;
+    padding: 0;
+    background: transparent;
+}
+
+QLabel#homeGreetingSub {
+    font-size: 14px;
+    font-weight: 400;
+    color: rgba(226, 232, 240, 0.55);
+    letter-spacing: 0.15px;
+    padding: 0 0 8px 0;
+    background: transparent;
+}
+
+QWidget#homeSection {
+    background: transparent;
+}
+
+QWidget#homeSectionBody {
+    background: transparent;
+}
+
+QWidget#homeHeroCluster {
+    background: transparent;
+}
+
+QLabel#homeSectionTitle {
+    font-size: 22px;
+    font-weight: 700;
+    color: #f4f8fb;
+    letter-spacing: -0.45px;
+    background: transparent;
+}
+
+QLabel#homeSectionSubtitle {
+    font-size: 12px;
+    color: rgba(226, 232, 240, 0.45);
+    background: transparent;
+}
+
+QLabel#homeSectionBadge {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    color: rgba(226, 232, 240, 0.75);
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    min-width: 20px;
+    padding: 2px 8px;
+    max-height: 20px;
+}
+
+QLabel#homePillBadge {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.25px;
+    color: rgba(226, 232, 240, 0.82);
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 2px 8px;
+    max-height: 20px;
+}
+
+QLabel#homePillBadge[variant="wave"] {
+    color: rgba(125, 211, 252, 0.95);
+    background: rgba(46, 230, 255, 0.07);
+    border-color: rgba(46, 230, 255, 0.2);
+}
+
+QLabel#homePillBadge[variant="continue"] {
+    color: rgba(253, 186, 210, 0.95);
+    background: rgba(255, 92, 122, 0.08);
+    border-color: rgba(255, 92, 122, 0.22);
+}
+
+QLabel#homeEmptyHint {
+    font-size: 13px;
+    color: rgba(226, 232, 240, 0.42);
+    padding: 16px 4px;
+    background: transparent;
+}
+
+/* Карточки плейлистов — без тяжёлой рамки, акцент на обложке */
+QFrame#playlistCard {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+}
+
+QFrame#playlistCard[hovered="true"] QLabel#playlistCardTitle {
+    color: #2ee6ff;
+}
+
+QLabel#playlistCardTitle {
+    font-size: 13px;
+    font-weight: 650;
+    color: #f8fafc;
+    background: transparent;
+    padding: 2px 2px 0 2px;
+}
+
+/* Быстрые плитки — стекло, как «Моя волна» */
+QFrame#quickPickTile {
+    background: transparent;
+    border: none;
+    border-radius: 14px;
+}
+
+QLabel#quickPickTitle {
+    font-size: 13px;
+    font-weight: 650;
+    color: #f8fafc;
+    background: transparent;
+}
+
+QToolButton#homeSectionAction {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 12px;
+    padding: 7px 14px;
+    color: #e2e8f0;
+    font-size: 12px;
+    font-weight: 600;
+}
+QToolButton#homeSectionAction:hover {
+    background: rgba(46, 230, 255, 0.16);
+    border-color: rgba(46, 230, 255, 0.55);
+    color: #f8fafc;
+}
+
+QTableView#homeTrackList {
+    background: transparent;
+    border: none;
+    outline: none;
+}
+
+QTableView#homeTrackList::item {
+    border: none;
+    padding: 0;
+    background: transparent;
+}
+
+QTableView#homeTrackList::item:selected {
+    background: transparent;
+}
+
+QTableView#homeTrackList QScrollBar:vertical,
+QTableView#homeTrackList QScrollBar:horizontal {
+    width: 0;
+    height: 0;
+    background: transparent;
+}
+
+/* Hero featured */
+QFrame#featuredPanel {
+    background: transparent;
+    border: none;
+    border-radius: 18px;
+    min-height: 148px;
+    max-height: 168px;
+}
+
+QLabel#featuredCover {
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    color: #2ee6ff;
+    font-size: 28px;
+    font-weight: 700;
+}
+
+QLabel#featuredTitle {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    color: #f8fafc;
+    background: transparent;
+}
+
+QLabel#featuredAuthor {
+    font-size: 13px;
+    color: rgba(226, 232, 240, 0.62);
+    background: transparent;
+}
+
+QToolButton#featuredPlayBtn {
+    background: #f8fafc;
+    border: none;
+    border-radius: 22px;
+    color: #0b0d12;
     font-size: 14px;
     font-weight: 700;
+    min-width: 44px;
+    max-width: 44px;
+    min-height: 44px;
+    max-height: 44px;
+    padding: 0;
+}
+QToolButton#featuredPlayBtn:hover {
+    background: #ffffff;
+    color: #0b0d12;
+}
+QToolButton#featuredPlayBtn:disabled {
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(248, 250, 252, 0.32);
+}
+
+/* Моя волна */
+QFrame#wavePromoCard {
+    background: transparent;
     border: none;
-    border-radius: 11px;
-    background: rgba(255,255,255,18);
+    border-radius: 18px;
 }
-#createPlaylistBtn:hover {
-    background: rgba(0,220,255,55);
-}
-#systemBadge {
-    color: rgba(0,220,255,180); 
-    font-size: 10px; 
-    font-weight: 700;
-    letter-spacing: 1px; 
-    background: rgba(0,220,255,20);
-    border-radius: 6px; 
-    padding: 2px 8px;
-}
-#emptyLabel {
-    color: rgba(255,255,255,40); 
-    font-size: 13px; 
-    padding: 20px; 
+
+QLabel#wavePromoSubtitle {
+    font-size: 12px;
+    color: rgba(226, 232, 240, 0.55);
     background: transparent;
 }
 
-/* --- Шапка (Header) --- */
-#headerGreeting {
-    color: #fff; 
-    font-size: 26px; 
-    font-weight: 800; 
+QLabel#wavePromoCount {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    color: rgba(125, 211, 252, 0.9);
     background: transparent;
+    padding: 0;
 }
-#headerSub {
-    color: rgba(255,255,255,40); 
-    font-size: 13px; 
-    font-weight: 500;
-    background: transparent;
+
+QToolButton#wavePromoPlayBtn {
+    background: rgba(46, 230, 255, 0.14);
+    border: 1px solid rgba(46, 230, 255, 0.28);
+    border-radius: 22px;
+    color: #e8fcff;
+    font-size: 13px;
+    font-weight: 700;
+    min-width: 44px;
+    max-width: 44px;
+    min-height: 44px;
+    max-height: 44px;
+    padding: 0;
+}
+QToolButton#wavePromoPlayBtn:hover {
+    background: rgba(46, 230, 255, 0.28);
+    border-color: rgba(46, 230, 255, 0.5);
+    color: #ffffff;
+}
+QToolButton#wavePromoPlayBtn:disabled {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.06);
+    color: rgba(248, 250, 252, 0.28);
 }

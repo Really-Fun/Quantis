@@ -12,6 +12,8 @@ from typing import Any, Iterable
 
 import aiosqlite
 
+from quantis.utils import app_paths
+
 
 class AsyncDatabase:
     """Низкоуровневый асинхронный клиент SQLite.
@@ -22,22 +24,28 @@ class AsyncDatabase:
     - выполнять SQL-запросы асинхронно.
     """
 
-    def __init__(self, db_path: str = "player_history.db") -> None:
-        self._db_path = Path(db_path)
+    def __init__(self, db_path: str | Path | None = None) -> None:
+        self._db_path = Path(db_path) if db_path else app_paths.database_path()
         self._conn: aiosqlite.Connection | None = None
-        self._init_lock = asyncio.Lock()
         self._initialized = False
+        self._init_task: asyncio.Task[None] | None = None
 
     async def ensure_initialized(self) -> None:
         """Гарантирует создание подключения и таблиц."""
         if self._initialized:
             return
-        async with self._init_lock:
-            if self._initialized:
-                return
-            await self._connect_sync()
-            await self._init_schema_sync()
-            self._initialized = True
+        if self._init_task is None:
+            self._init_task = asyncio.create_task(self._perform_init())
+        try:
+            await self._init_task
+        except Exception:
+            self._init_task = None
+            raise
+
+    async def _perform_init(self) -> None:
+        await self._connect_sync()
+        await self._init_schema_sync()
+        self._initialized = True
 
     async def execute(self, query: str, params: Iterable[Any] = ()) -> None:
         """Выполняет SQL-запрос без возвращаемого результата."""
@@ -73,14 +81,13 @@ class AsyncDatabase:
         await self._conn.execute("PRAGMA journal_mode=WAL;")
         await self._conn.execute("PRAGMA synchronous=NORMAL;")
         await self._conn.execute("PRAGMA temp_store=MEMORY;")
-        await self._conn.execute("PRAGMA cache_size=-20000;")
+        await self._conn.execute("PRAGMA cache_size=-8000;")
         await self._conn.execute("PRAGMA foreign_keys=ON;")
         await self._conn.commit()
 
     async def _init_schema_sync(self) -> None:
         assert self._conn is not None
-        await self._conn.execute(
-            """
+        await self._conn.execute("""
             CREATE TABLE IF NOT EXISTS track_history (
                 track_key TEXT PRIMARY KEY,
                 title TEXT NOT NULL,
@@ -91,14 +98,11 @@ class AsyncDatabase:
                 listen_count INTEGER NOT NULL DEFAULT 0,
                 last_played_at INTEGER NOT NULL
             );
-            """
-        )
-        await self._conn.execute(
-            """
+            """)
+        await self._conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_track_history_last_played
             ON track_history(last_played_at DESC);
-            """
-        )
+            """)
         await self._conn.commit()
 
     async def _execute_sync(self, query: str, params: tuple[Any, ...]) -> None:

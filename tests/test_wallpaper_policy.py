@@ -1,0 +1,114 @@
+from __future__ import annotations
+
+from quantis.services.wallpaper_policy import (
+    WALLPAPER_CACHE_MAX_SEC,
+    clamp_wallpaper_fps,
+    clamp_wallpaper_quality,
+    should_fetch_wallpaper_now,
+    should_play_local_wallpaper,
+    wallpaper_cache_format,
+    wallpaper_can_apply_seek,
+    wallpaper_decode_max_side,
+    wallpaper_duration_filter,
+    wallpaper_format_quality,
+    wallpaper_muxed_height,
+    wallpaper_seek_target,
+    wallpaper_source_has_video,
+    wallpaper_source_meets_quality,
+    wallpaper_stream_conflicts,
+    wallpaper_url_itag,
+    wallpaper_yt_dlp_format,
+)
+
+
+def test_remote_wallpaper_waits_for_audio() -> None:
+    assert should_fetch_wallpaper_now(local=True, audio_live=False)
+    assert should_fetch_wallpaper_now(local=False, audio_live=True)
+    assert not should_fetch_wallpaper_now(local=False, audio_live=False)
+
+
+def test_local_short_clip_is_used() -> None:
+    assert should_play_local_wallpaper(5 * 1024 * 1024)
+    assert not should_play_local_wallpaper(80 * 1024 * 1024)
+    assert not should_play_local_wallpaper(0)
+
+
+def test_yt_dlp_skips_long_video_cache() -> None:
+    assert wallpaper_duration_filter({"duration": 240}) is None
+    assert wallpaper_duration_filter({"duration": WALLPAPER_CACHE_MAX_SEC}) is None
+    assert wallpaper_duration_filter({"duration": 3600}) is not None
+
+
+def test_wallpaper_seek_retries_without_duration() -> None:
+    assert not wallpaper_can_apply_seek(duration_ms=0, media_ready=True)
+    assert not wallpaper_can_apply_seek(duration_ms=0, media_ready=False)
+    assert wallpaper_can_apply_seek(duration_ms=120_000, media_ready=False)
+    assert wallpaper_seek_target(90_000, 120_000) == 90_000
+    assert wallpaper_seek_target(120_000, 120_000) == 119_600
+
+
+def test_quality_and_fps_are_clamped_to_choices() -> None:
+    assert clamp_wallpaper_quality(720) == 720
+    assert clamp_wallpaper_quality(1080) == 1080
+    assert clamp_wallpaper_quality(1440) == 1080
+    assert clamp_wallpaper_quality(400) == 360
+    assert clamp_wallpaper_fps(30) == 30
+    assert clamp_wallpaper_fps(12) == 10
+    assert clamp_wallpaper_fps(60) == 60
+    assert clamp_wallpaper_fps(120) == 60
+
+
+def test_yt_dlp_format_includes_requested_height() -> None:
+    assert "height<=360" in wallpaper_cache_format(360)
+    assert "height<=720" in wallpaper_cache_format(720)
+    assert "height<=1080" in wallpaper_cache_format(1080)
+    assert "height=720" in wallpaper_yt_dlp_format(720)
+    assert "height=1080" in wallpaper_yt_dlp_format(1080)
+    assert wallpaper_decode_max_side(720) > wallpaper_decode_max_side(360)
+    assert wallpaper_decode_max_side(1080) > wallpaper_decode_max_side(720)
+
+
+def test_format_quality_uses_itag_class() -> None:
+    assert wallpaper_format_quality(itag="136", width=1280, height=534) == 720
+    assert wallpaper_format_quality(itag="137", width=1920, height=802) == 1080
+    assert wallpaper_format_quality(itag="18", width=640, height=268) == 360
+    assert wallpaper_format_quality(height=720) == 720
+
+
+def test_wallpaper_stream_prefers_video_only() -> None:
+    fmt = wallpaper_yt_dlp_format(360)
+    assert fmt.startswith("bestvideo")
+    assert "acodec=none" in fmt
+    assert "vcodec^=avc1" in fmt
+    assert "protocol=https" in fmt
+    assert "/18" not in fmt
+    assert fmt.endswith("/best")
+
+
+def test_wallpaper_stream_conflicts_on_same_itag() -> None:
+    audio = "https://rr1.googlevideo.com/videoplayback?id=abc&itag=18&range=0-1"
+    video = "https://rr1.googlevideo.com/videoplayback?id=abc&itag=18&range=2-9"
+    other = "https://rr1.googlevideo.com/videoplayback?id=abc&itag=134"
+    assert wallpaper_stream_conflicts(audio, video)
+    assert not wallpaper_stream_conflicts(audio, other)
+    assert wallpaper_stream_conflicts(audio, audio)
+    assert not wallpaper_stream_conflicts("http://127.0.0.1:9/p", video)
+    assert wallpaper_url_itag(audio) == "18"
+    assert wallpaper_url_itag(other) == "134"
+    assert wallpaper_source_has_video(audio)
+    assert not wallpaper_source_has_video(
+        "https://rr.example/videoplayback?itag=140&mime=audio%2Fmp4"
+    )
+    assert wallpaper_source_has_video(
+        "https://rr.example/videoplayback?mime=video%2Fmp4&itag=18"
+    )
+    assert wallpaper_muxed_height(audio) == 360
+    assert wallpaper_muxed_height(other) is None
+    assert wallpaper_source_meets_quality(audio, 360)
+    assert not wallpaper_source_meets_quality(audio, 720)
+    assert wallpaper_source_meets_quality(
+        "https://rr1.googlevideo.com/videoplayback?id=abc&itag=22", 720
+    )
+    assert not wallpaper_source_meets_quality(
+        "https://rr1.googlevideo.com/videoplayback?id=abc&itag=22", 1080
+    )

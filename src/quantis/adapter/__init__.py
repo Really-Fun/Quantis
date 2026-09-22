@@ -1,3 +1,3 @@
-from .CleanAdapter import CleanAdapter
+from .clean_adapter import CleanAdapter
 
-__all__ = ['CleanAdapter']
+__all__ = ["CleanAdapter"]

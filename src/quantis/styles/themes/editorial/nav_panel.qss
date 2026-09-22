@@ -1,0 +1,4 @@
+QFrame#sideNavRail {
+    border-top: 2px solid rgba(0, 229, 255, 0.4);
+    border-radius: 0;
+}

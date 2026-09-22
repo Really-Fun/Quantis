@@ -12,16 +12,18 @@
 4. RecentlyPlayedPlaylist - системный плейлист недавно прослушанных
 """
 
+from __future__ import annotations
+
 import json
 import os
 from abc import ABC, abstractmethod
 from pathlib import Path
 from typing import Iterable, Tuple
 
-from quantis.models.track import Track, YandexTrack, YoutubeTrack
-from quantis.models.upgrade_cycle import UpgradeCycle
+from quantis.models.track import SoundCloudTrack, Track, YandexTrack, YoutubeTrack
 from quantis.providers import PathProvider, TrackManager
-from quantis.utils import get_asset_path
+from quantis.types.upgrade_cycle import UpgradeCycle
+from quantis.utils import app_paths, get_asset_path
 
 
 class Playlist(ABC):
@@ -32,7 +34,7 @@ class Playlist(ABC):
         self.name = name
         self.cover_path = cover_path
 
-    def move_next_track(self):
+    def move_next_track(self) -> Track:
         """Переключаемся на следующий трек
 
         Returns:
@@ -40,7 +42,7 @@ class Playlist(ABC):
         """
         return next(self.tracks)
 
-    def move_previous_track(self):
+    def move_previous_track(self) -> Track:
         """Переключаемся на предыдущий трек
 
         Returns:
@@ -48,13 +50,21 @@ class Playlist(ABC):
         """
         return self.tracks.move_previous()
 
-    def get_current_track(self):
+    def get_current_track(self) -> Track:
         """Получаем текущий трек
 
         Returns:
             Track: текущий трек
         """
         return self.tracks.peek_current()
+
+    def get_track(self, index: int) -> Track:
+        """Получаем трек по индексу
+
+        Returns:
+            Track: трек
+        """
+        return self.tracks.values[index]
 
     def delete_track(self, track: Track) -> bool:
         """Удаляем трек из плейлиста.
@@ -65,7 +75,6 @@ class Playlist(ABC):
         Returns:
             bool: ``True`` если трек найден и удален, иначе ``False``.
         """
-        print(1)
         return self.tracks.remove(track)
 
     def set_current_track(self, index: int) -> None:
@@ -80,7 +89,7 @@ class Playlist(ABC):
         self.tracks.set_index(index)
 
     @staticmethod
-    def load_playlist(playlist_path: str):
+    def load_playlist(playlist_path: str) -> tuple[str, list[Track], str | None]:
         """Загружаем плейлист из файла.
 
         Args:
@@ -91,32 +100,22 @@ class Playlist(ABC):
         """
         with open(playlist_path, encoding="utf-8") as file:
             playlist = json.load(file)
-            name = playlist["name"]
+            name = str(playlist["name"])
             cover_path = playlist.get("cover_path", None)
             track_manager = TrackManager()
             tracks = [
                 track_manager.get_track_from_playlist(
-                    *(track["id"], track["title"], track["author"])
+                    str(track["id"]),
+                    track["title"],
+                    track["author"],
+                    source=track.get("source"),
                 )
                 for track in playlist["tracks"]
             ]
         return name, tracks, cover_path
 
-    @classmethod
     @abstractmethod
-    def get_playlist_from_path(cls, path_to_playlist: str):
-        """Получаем плейлист из файла
-
-        Args:
-            path_to_playlist (str): путь к файлу плейлиста
-
-        Returns:
-            Playlist: плейлист
-        """
-        pass
-
-    @abstractmethod
-    def get_tracks(self) -> Tuple[Track]:
+    def get_tracks(self) -> Tuple[Track, ...]:
         """Получаем список треков из плейлиста
 
         Returns:
@@ -124,29 +123,60 @@ class Playlist(ABC):
         """
         pass
 
+    def __len__(self) -> int:
+        return len(self.tracks)
+
+    def __str__(self) -> str:
+        return f"{self.name} - {len(self.tracks)}"
+
+    __repr__ = __str__
+
 
 class RecommendationPlaylist(Playlist):
-    """Плейлист рекомендаций."""
+    """Плейлист рекомендаций: пачки с YouTube, очередь растёт в конце."""
 
     def __init__(
         self,
         name: str = "Рекомендации",
         tracks: Iterable[Track] | None = None,
-        cover_path: str = "playlist_covers/recomendation.'svg",
+        cover_path: str = get_asset_path("assets/icons/recomendation.svg"),
+        *,
+        seeds: Iterable[Track] | None = None,
+        infinite: bool = False,
     ) -> None:
-        super().__init__(name, tracks, cover_path)
+        super().__init__(name, tracks or (), cover_path)
+        self.seeds = tuple(seeds or ())
+        self._seed_index = 0
+        self.infinite = infinite
 
-    def get_tracks(self) -> Tuple[Track]:
+    def get_tracks(self) -> Tuple[Track, ...]:
         """Получаем список треков из плейлиста
 
         Returns:
-            Tuple[Track]: список треков
+            Tuple[Track, ...]: список треков
         """
         return tuple(self.tracks.values)
 
-    @classmethod
-    def get_playlist_from_path(cls, path_to_playlist: str) -> "RecommendationPlaylist | None":
-        return None
+    def append_tracks(self, tracks: Iterable[Track]) -> int:
+        """Добавляет новые треки в конец (без дублей). Возвращает число добавленных."""
+        existing = {(str(t.source), str(t.track_id)) for t in self.tracks.values}
+        extra = [
+            track
+            for track in tracks
+            if (str(track.source), str(track.track_id)) not in existing
+        ]
+        if not extra:
+            return 0
+        self.tracks.values = tuple(list(self.tracks.values) + extra)
+        return len(extra)
+
+    def take_seed(self, fallback: Track) -> Track:
+        """Следующий сид из истории БД, иначе текущий трек."""
+        if not self.seeds:
+            return fallback
+        seed = self.seeds[self._seed_index % len(self.seeds)]
+        self._seed_index += 1
+        return seed
 
 
 class DownloadPlaylist(Playlist):
@@ -160,7 +190,7 @@ class DownloadPlaylist(Playlist):
     ) -> None:
         super().__init__(name, tracks or (), cover_path)
 
-    def get_tracks(self) -> Tuple[Track]:
+    def get_tracks(self) -> Tuple[Track, ...]:
         """Получаем список треков из плейлиста
 
         Returns:
@@ -169,16 +199,34 @@ class DownloadPlaylist(Playlist):
         return tuple(self.tracks.values)
 
     def delete_track(self, track: Track) -> bool:
-        path = PathProvider().get_track_path(track)
+        provider = PathProvider()
+        candidates = [Path(provider.get_track_path(track))]
+        music_dir = Path(provider.music_folder())
+        prefix = f"{provider.storage_id(track)}_"
         try:
-            os.remove(path)
-            super().delete_track(track)
-        except FileNotFoundError:
-            pass
+            for extra in music_dir.glob(f"{prefix}*"):
+                if extra.suffix.lower() in {".mp3", ".m4a"}:
+                    candidates.append(extra)
         except OSError:
             pass
+        seen: set[str] = set()
+        for path in candidates:
+            key = str(path)
+            if key in seen:
+                continue
+            seen.add(key)
+            try:
+                path.unlink(missing_ok=True)
+            except OSError:
+                pass
+        super().delete_track(track)
+        try:
+            Path(provider.get_cover_path(track)).unlink(missing_ok=True)
+        except OSError:
+            pass
+        track.downloaded = False
         return True
-    
+
     @classmethod
     def get_playlist_from_path(cls, path_to_playlist: str) -> "DownloadPlaylist | None":
         """Получаем плейлист из файла
@@ -200,19 +248,31 @@ class DownloadPlaylist(Playlist):
         Returns:
             Tuple[Track]: список треков
         """
-        music_dir = Path("music")
+        music_dir = app_paths.music_dir()
         if not music_dir.is_dir():
             return ()
         tracks = []
         for track_file in os.listdir(music_dir):
             try:
                 name, ext = os.path.splitext(track_file)
-                ext = ext.replace(".", "")
+                ext = ext.replace(".", "").lower()
+                if ext not in ("mp3", "m4a"):
+                    continue
                 parts = name.split("_", 2)
                 if len(parts) < 3:
                     continue
                 track_id, track_title, track_author = parts
-                if track_id.isdigit():
+                if track_id.startswith("sc") and track_id[2:].isdigit():
+                    tracks.append(
+                        SoundCloudTrack(
+                            track_id=track_id[2:],
+                            title=track_title,
+                            author=track_author,
+                            downloaded=True,
+                            extension=ext,
+                        )
+                    )
+                elif track_id.isdigit():
                     tracks.append(
                         YandexTrack(
                             track_id=track_id,
@@ -243,11 +303,11 @@ class RecentlyPlayedPlaylist(Playlist):
         self,
         name: str = "Недавно прослушанные",
         tracks: Iterable[Track] | None = None,
-        cover_path: str = "assets/icons/recent.svg",
+        cover_path: str = get_asset_path("assets/icons/recent.svg"),
     ) -> None:
         super().__init__(name, tracks or (), cover_path)
 
-    def get_tracks(self) -> Tuple[Track]:
+    def get_tracks(self) -> Tuple[Track, ...]:
         """Возвращает треки недавно прослушанного плейлиста."""
         return tuple(self.tracks.values)
 
@@ -257,6 +317,52 @@ class RecentlyPlayedPlaylist(Playlist):
     ) -> "RecentlyPlayedPlaylist | None":
         """Плейлист строится из БД, поэтому чтение с диска не используется."""
         return None
+
+
+class LikedPlaylist(Playlist):
+    """Системный плейлист любимых треков."""
+
+    def __init__(
+        self,
+        name: str = "Любимые",
+        tracks: Iterable[Track] | None = None,
+        cover_path: str = get_asset_path("assets/icons/heart.svg"),
+    ) -> None:
+        super().__init__(name, tracks or (), cover_path)
+
+    def get_tracks(self) -> Tuple[Track, ...]:
+        return tuple(self.tracks.values)
+
+
+class WavePlaylist(Playlist):
+    """Моя волна — персональное радио (Yandex / позже YouTube)."""
+
+    def __init__(
+        self,
+        name: str = "Моя волна",
+        tracks: Iterable[Track] | None = None,
+        cover_path: str = get_asset_path("assets/icons/radio.svg"),
+        *,
+        source: str = "yandex",
+        station: str = "user:onyourwave",
+        batch_id: str | None = None,
+    ) -> None:
+        super().__init__(name, tracks or (), cover_path)
+        self.source = source
+        self.station = station
+        self.batch_id = batch_id
+
+    def get_tracks(self) -> Tuple[Track, ...]:
+        return tuple(self.tracks.values)
+
+    def append_tracks(self, tracks: Iterable[Track]) -> int:
+        """Добавляет новые треки в конец (без дублей). Возвращает число добавленных."""
+        existing = {str(t.track_id) for t in self.tracks.values}
+        extra = [t for t in tracks if str(t.track_id) not in existing]
+        if not extra:
+            return 0
+        self.tracks.values = tuple(list(self.tracks.values) + extra)
+        return len(extra)
 
 
 class UserPlaylist(Playlist):
@@ -275,10 +381,10 @@ class UserPlaylist(Playlist):
         else:
             return None
 
-    def get_tracks(self) -> Tuple[Track]:
+    def get_tracks(self) -> Tuple[Track, ...]:
         """Получаем список треков из плейлиста
 
         Returns:
-            Tuple[Track]: список треков
+            Tuple[Track, ...]: список треков
         """
         return tuple(self.tracks.values)

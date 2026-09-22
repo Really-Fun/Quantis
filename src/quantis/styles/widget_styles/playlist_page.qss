@@ -1,103 +1,129 @@
-/* --- Панели и разделители --- */
+/* Плейлист — акценты поверх surfaces.qss */
+
+QWidget#playlistPage {
+    background: transparent;
+}
+
 #TrackListPanel {
-    background: rgba(12, 14, 20, 160);
-    border-radius: 16px;
+    border-top: 1px solid rgba(46, 230, 255, 0.22);
 }
+
 #listDivider {
-    background: rgba(255,255,255,12);
-}
-
-/* --- Шапка таблицы треков --- */
-#colHeaderNum {
-    color: rgba(255,255,255,50); 
-    font-size: 12px; 
-    background: transparent;
-}
-#colHeaderTitle, #colHeaderSource {
-    color: rgba(255,255,255,50); 
-    font-size: 11px; 
-    font-weight: 600; 
-    background: transparent;
-}
-
-/* --- Список треков и скроллбар --- */
-#trackListView { 
-    background: transparent; 
-    border: none; 
-    outline: none; 
-}
-#trackListView::item:hover { 
-    background: transparent; 
-}
-#trackListView QScrollBar:vertical {
-    width: 5px; 
-    background: transparent;
-}
-#trackListView QScrollBar::handle:vertical {
-    background: rgba(255,255,255,30); 
-    border-radius: 2px; 
-    min-height: 30px;
-}
-#trackListView QScrollBar::add-line:vertical, 
-#trackListView QScrollBar::sub-line:vertical { 
-    height: 0; 
-}
-
-/* --- Элементы шапки плейлиста --- */
-#backButton {
-    color: white; 
-    font-size: 18px; 
-    font-weight: 700;
-    background: rgba(0,0,0,100); 
-    border-radius: 18px; 
+    background: rgba(255, 255, 255, 0.07);
     border: none;
+    max-height: 1px;
 }
-#backButton:hover { 
-    background: rgba(0,220,255,60); 
+
+#playlistCoverFrame {
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+}
+
+#colHeaderNum,
+#colHeaderTitle,
+#colHeaderSource {
+    color: rgba(255, 255, 255, 0.38);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.2px;
+    background: transparent;
+}
+
+QTableView#trackListView {
+    background: transparent;
+    border: none;
+    outline: none;
+}
+
+QTableView#trackListView::item {
+    border: none;
+    padding: 0;
+}
+
+QTableView#trackListView::item:selected {
+    background: transparent;
+}
+
+QTableView#trackListView QScrollBar:vertical {
+    width: 5px;
+    background: transparent;
+    margin: 4px 0;
+}
+
+QTableView#trackListView QScrollBar::handle:vertical {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+    min-height: 40px;
+}
+
+QTableView#trackListView QScrollBar::add-line:vertical,
+QTableView#trackListView QScrollBar::sub-line:vertical {
+    height: 0;
+}
+
+#backButton {
+    color: #ffffff;
+    font-size: 17px;
+    font-weight: 700;
+    background: rgba(255, 255, 255, 0.07);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+}
+
+#backButton:hover {
+    background: rgba(0, 220, 255, 0.16);
+    border-color: rgba(0, 220, 255, 0.3);
 }
 
 #playlistTag {
-    color: rgba(255,255,255,60); 
-    font-size: 11px; 
+    color: rgba(0, 220, 255, 0.75);
+    font-size: 10px;
     font-weight: 700;
-    letter-spacing: 2px; 
-    background: transparent;
-}
-#playlistName {
-    color: #fff; 
-    font-size: 28px; 
-    font-weight: 800; 
-    background: transparent;
-}
-#playlistCount {
-    color: rgba(255,255,255,80); 
-    font-size: 13px; 
+    letter-spacing: 2px;
     background: transparent;
 }
 
-/* --- Кнопки действий (Играть / Перемешать) --- */
-#actionButton[accent="true"] {
-    color: #000; 
-    font-size: 13px; 
-    font-weight: 700;
-    background: rgb(0,220,255); 
-    border: none; 
-    border-radius: 16px;
-    padding: 8px 20px;
+#playlistName {
+    color: #ffffff;
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: -0.4px;
+    background: transparent;
 }
-#actionButton[accent="true"]:hover { 
-    background: rgb(0,240,255); 
+
+#playlistCount {
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 13px;
+    background: transparent;
+}
+
+#actionButton[accent="true"] {
+    color: #001018;
+    font-size: 13px;
+    font-weight: 700;
+    background: rgb(0, 220, 255);
+    border: none;
+    border-radius: 18px;
+    padding: 9px 22px;
+    min-width: 116px;
+}
+
+#actionButton[accent="true"]:hover {
+    background: rgb(80, 235, 255);
 }
 
 #actionButton[accent="false"] {
-    color: #fff; 
-    font-size: 13px; 
+    color: #ffffff;
+    font-size: 13px;
     font-weight: 600;
-    background: rgba(255,255,255,12); 
-    border: none; 
-    border-radius: 16px;
-    padding: 8px 20px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 18px;
+    padding: 9px 22px;
+    min-width: 132px;
 }
-#actionButton[accent="false"]:hover { 
-    background: rgba(255,255,255,22); 
+
+#actionButton[accent="false"]:hover {
+    background: rgba(255, 255, 255, 0.14);
 }

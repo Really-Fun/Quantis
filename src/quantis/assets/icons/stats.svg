@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="url(#neonGradient)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <defs>
+        <linearGradient id="neonGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#ff2a7f" />
+            <stop offset="100%" stop-color="#00e5ff" />
+        </linearGradient>
+    </defs>
+    <line x1="4" y1="20" x2="20" y2="20"></line>
+    <rect x="6" y="11" width="3" height="7" rx="1"></rect>
+    <rect x="11" y="6" width="3" height="12" rx="1"></rect>
+    <rect x="16" y="13" width="3" height="5" rx="1"></rect>
+</svg>

@@ -1,0 +1,33 @@
+/* Yellow dark player */
+
+#PlayMenu {
+    background: rgba(18, 13, 6, 0.95);
+    border: none;
+    border-radius: 14px;
+}
+
+#trackTitle { color: #faf6ee; }
+#trackArtist { color: rgba(255, 170, 0, 0.65); }
+#timeLabel { color: rgba(250, 246, 238, 0.4); }
+#coverLabel { background: rgba(255, 170, 0, 0.1); border: none; }
+#volIcon { color: rgba(255, 170, 0, 0.75); }
+
+#seekSlider::groove:horizontal,
+#volSlider::groove:horizontal {
+    background: rgba(255, 255, 255, 0.1);
+}
+#seekSlider::sub-page:horizontal { background: #ffaa00; border-radius: 2px; }
+#seekSlider::handle:horizontal { background: #faf6ee; }
+#seekSlider::handle:horizontal:hover { background: #ffaa00; }
+
+#volSlider::sub-page:horizontal { background: rgba(255, 170, 0, 0.55); border-radius: 2px; }
+#volSlider::handle:horizontal { background: #faf6ee; }
+
+#controlButton { background: transparent; }
+#controlButton:hover { background: rgba(255, 170, 0, 0.1); }
+#controlButton[accent=true] {
+    background: #ffaa00;
+}
+#controlButton[accent=true]:hover {
+    background: #ffbe33;
+}

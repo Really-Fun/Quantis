@@ -1,7 +1,10 @@
 from pathlib import Path
 from typing import List
 
-from quantis.models.track import YandexTrack, YoutubeTrack
+from quantis.models.track import SoundCloudTrack, YandexTrack, YoutubeTrack
+from quantis.services.soundcloud import parse_storage_id
+from quantis.services.soundcloud import storage_id as soundcloud_storage_id
+from quantis.utils import app_paths
 
 
 class TrackManager:
@@ -12,8 +15,8 @@ class TrackManager:
             cls._instance = super().__new__(cls, *args, **kwargs)
         return cls._instance
 
-    def __init__(self, music_dir="music/"):
-        self.music_dir = Path(music_dir)
+    def __init__(self, music_dir: str | Path | None = None):
+        self.music_dir = Path(music_dir) if music_dir else app_paths.music_dir()
         self._ids_cache = None
 
     @property
@@ -43,41 +46,48 @@ class TrackManager:
                 ids.add(track_id)
         return ids
 
-    def is_downloaded(self, track_id) -> bool:
-        """Проверка, что трек скачан
-
-        Args:
-            track_id (_type_): id трека
-
-        Returns:
-            bool: True or False
-        """
-        return track_id in self.ids
+    def is_downloaded(self, track_id, source: str | None = None) -> bool:
+        """Проверка, что трек скачан."""
+        tid = str(track_id)
+        if (source or "").lower() == "soundcloud":
+            return soundcloud_storage_id(tid) in self.ids or tid in self.ids
+        return tid in self.ids
 
     def get_track_from_playlist(
-        self, track_id: str, title: str, author: str
-    ) -> YandexTrack | YoutubeTrack:
-        """Получаем трек по его id, названию и автору
-
-        Args:
-            track_id (str): id трека
-            title (str): название трека
-            author (str): автор трека
-
-        Returns:
-            YandexTrack | YoutubeTrack: трек
-        """
-        if track_id.isdigit():
-            return YandexTrack(
-                track_id=int(track_id),
+        self,
+        track_id: str,
+        title: str,
+        author: str,
+        source: str | None = None,
+    ) -> YandexTrack | YoutubeTrack | SoundCloudTrack:
+        """Получаем трек по id / названию / автору (и опционально source)."""
+        normalized_source = (source or "").lower().strip()
+        downloaded = self.is_downloaded(str(track_id), source=normalized_source or None)
+        if normalized_source in ("soundcloud", "sc"):
+            numeric = parse_storage_id(str(track_id)) or track_id
+            return SoundCloudTrack(
+                track_id=numeric,
                 title=title,
                 author=author,
-                downloaded=self.is_downloaded(track_id),
+                downloaded=downloaded,
             )
-        else:
+        if normalized_source in ("youtube", "yt"):
             return YoutubeTrack(
                 track_id=track_id,
                 title=title,
                 author=author,
-                downloaded=self.is_downloaded(track_id),
+                downloaded=downloaded,
             )
+        if normalized_source in ("yandex", "ya") or str(track_id).isdigit():
+            return YandexTrack(
+                track_id=int(track_id) if str(track_id).isdigit() else track_id,
+                title=title,
+                author=author,
+                downloaded=downloaded,
+            )
+        return YoutubeTrack(
+            track_id=track_id,
+            title=title,
+            author=author,
+            downloaded=downloaded,
+        )

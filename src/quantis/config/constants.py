@@ -1,14 +1,14 @@
 """Константы для клиентов:
 - Яндекс Музыка
 - YouTube Music
-- Last.fm
+- SoundCloud (публичные треки, без токена)
 - Spotify (TODO) - приоритет
-- SoundCloud (TODO)
 - Vk Music (TODO)
 """
 
 SERVICE_NAME_YANDEX: str = "YANDEX_TOKEN_NEON_APP"
 SERVICE_NAME_YOUTUBE: str = "YOUTUBE_TOKEN_NEON_APP"
+SERVICE_NAME_YOUTUBE_COOKIE: str = "YOUTUBE_COOKIE_NEON_APP"
 SERVICE_NAME_LASTFM_API: str = "LASTFM_API_NEON_APP"
 SERVICE_NAME_LASTFM_SECRET: str = "LASTFM_SECRET_NEON_APP"
 SERVICE_NAME_SPOTIFY: str = "SPOTIFY_TOKEN_NEON_APP"

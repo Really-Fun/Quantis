@@ -1,10 +1,6 @@
 /* =========================================
    ГЛОБАЛЬНЫЕ СТИЛИ (База и Окна)
    ========================================= */
-QWidget {
-    /* База остается прозрачной, чтобы пропускать картинку */
-    background: transparent;
-}
 #darkOverlay {
     /* Чуть более выраженное затемнение при открытых диалогах */
     background-color: rgba(0, 0, 0, 140);
@@ -62,9 +58,20 @@ QInputDialog QComboBox QAbstractItemView {
    ТИПОГРАФИКА И ТЕКСТЫ
    ========================================= */
 #headerGreeting, #playlistName, #sectionTitle, #trackTitle, #playlistTitle {
-    color: #fff;
+    color: #f8fafc;
 }
-#headerGreeting { font-size: 26px; font-weight: 800; }
+#headerGreeting {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0;
+    background: transparent;
+}
+#headerSub {
+    color: rgba(255, 255, 255, 170);
+    font-size: 13px;
+    font-weight: 500;
+    background: transparent;
+}
 #playlistName { font-size: 28px; font-weight: 800; }
 #sectionTitle { font-size: 17px; font-weight: 700; }
 #trackTitle { font-size: 14px; font-weight: 600; }
@@ -174,9 +181,8 @@ QScrollBar::handle:vertical {
 }
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
 
-/* Панель треков: добавлена благородная полупрозрачная темнота */
-#TrackListPanel { background: rgba(0, 0, 0, 130); border-radius: 16px; }
-#listDivider { background: rgba(255,255,255,40); }
+/* Панель треков — базовая поверхность в surfaces.qss */
+#listDivider { background: rgba(255, 255, 255, 0.08); }
 
 /* =========================================
    ПАНЕЛЬ НАВИГАЦИИ (ЛЕВАЯ)
@@ -189,12 +195,7 @@ QFrame#navPanel {
 /* =========================================
    НИЖНЯЯ ПАНЕЛЬ ПЛЕЕРА
    ========================================= */
-#PlayMenu {
-    /* Достаточно темная подложка, чтобы кнопки и таймлайны не терялись */
-    background-color: rgba(0, 0, 0, 160);
-    border-top: 1px solid rgba(0, 220, 255, 60);
-    border-radius: 18px;
-}
+/* Нижняя панель — базовая поверхность в surfaces.qss; акцент в theme play_menu.qss */
 QPushButton#navButton { color: #e6ffff; font-size: 16px; border-radius: 10px; background: transparent; }
 QPushButton#navButton:hover { background: rgba(0, 255, 255, 60); }
 QPushButton#navButton:pressed { background: rgba(0, 255, 255, 120); }
@@ -210,7 +211,7 @@ QPushButton#navButton:checked { background: rgba(0, 220, 255, 160); color: white
 #trackSourceBadge[source="youtube"] { background: rgba(255, 40, 40, 200); }
 #trackSourceBadge[source="default"] { background: rgba(140, 140, 140, 200); }
 
-#coverLabel { border-radius: 14px; background: rgba(255,255,255, 255); }
+#coverLabel { border-radius: 8px; background: rgba(255, 255, 255, 0.06); }
 #trackCover { background: rgba(0, 0, 0, 100); border-radius: 12px; }
 
 /* =========================================

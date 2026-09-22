@@ -1,75 +1,234 @@
-"""Общий VLC-движок.
-
-Владеет VLC Instance и двумя MediaPlayer:
-  - playback_player  — воспроизведение звука (обычный вывод)
-  - analysis_player  — захват PCM через callbacks (без вывода звука)
-
-Паттерн: Singleton
-Single Responsibility: жизненный цикл VLC-объектов + синхронизация медии.
-"""
+"""Движок воспроизведения на Qt Multimedia (FFmpeg)."""
 
 from __future__ import annotations
 
-from PySide6.QtCore import QTimer
-from vlc import Instance, Media, MediaPlayer
+import logging
+from pathlib import Path
+from typing import Callable
 
-_ANALYSIS_DELAY_MS = 1500
+from PySide6.QtCore import QUrl
+from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer, QPlaybackOptions
+
+try:
+    from PySide6.QtMultimedia import QAudioBufferOutput, QAudioFormat
+except ImportError:  # Qt < 6.8
+    QAudioBufferOutput = None  # type: ignore[misc, assignment]
+    QAudioFormat = None  # type: ignore[misc, assignment]
+
+from quantis.player.volume import output_gain
+
+logger = logging.getLogger(__name__)
 
 
-class VLCEngine:
-    """Синглтон VLC-движка с двумя плеерами."""
-
-    _instance: VLCEngine | None = None
-
-    def __new__(cls) -> VLCEngine:
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-        return cls._instance
+class QtMediaEngine:
+    """Владеет QMediaPlayer и QAudioOutput; события — через колбэки."""
 
     def __init__(self) -> None:
-        if getattr(self, "_initialized", False):
+        self._player = QMediaPlayer()
+        self._audio = QAudioOutput()
+        self._player.setAudioOutput(self._audio)
+        self._apply_playback_options()
+
+        self._playing_cbs: list[Callable[[], None]] = []
+        self._paused_cbs: list[Callable[[], None]] = []
+        self._stopped_cbs: list[Callable[[], None]] = []
+        self._ended_cbs: list[Callable[[], None]] = []
+        self._error_cbs: list[Callable[[str], None]] = []
+        self._audio_buffer_cbs: list[Callable] = []
+        self._buffer_output = None
+
+        self._pending_seek_ms = 0
+        self._volume = int(round(self._audio.volume() * 100))
+        self._duck_gain = 1.0
+        self._player.mediaStatusChanged.connect(self._on_media_status)
+        self._player.playbackStateChanged.connect(self._on_playback_state)
+        self._player.errorOccurred.connect(self._on_error)
+        self._player.durationChanged.connect(self._on_duration_changed)
+
+    def set_video_sink(self, sink) -> None:
+        """Обои читают кадры того же QMediaPlayer — без второго HTTP."""
+        self._player.setVideoSink(sink)
+
+    @property
+    def media_player(self) -> QMediaPlayer:
+        """Совместимость со старым кодом/тестами."""
+        return self._player
+
+    @property
+    def audio_output(self) -> QAudioOutput:
+        return self._audio
+
+    @staticmethod
+    def _to_url(source: str) -> QUrl:
+        if source.startswith(("http://", "https://")):
+            return QUrl(source)
+        return QUrl.fromLocalFile(str(Path(source).resolve()))
+
+    @staticmethod
+    def _apply_playback_options_to(player: QMediaPlayer) -> None:
+        options = QPlaybackOptions()
+        options.setPlaybackIntent(QPlaybackOptions.PlaybackIntent.Playback)
+        # Пока прокси переподключается к CDN, localhost-сокет Qt не должен отвалиться.
+        options.setNetworkTimeout(60_000)
+        player.setPlaybackOptions(options)
+
+    def _apply_playback_options(self) -> None:
+        try:
+            self._apply_playback_options_to(self._player)
+        except Exception:
+            logger.debug("QPlaybackOptions недоступны", exc_info=True)
+
+    def play_media(self, source: str) -> None:
+        self._pending_seek_ms = 0
+        self._player.setSource(self._to_url(source))
+        self._player.play()
+
+    def pause_media(self) -> None:
+        self._player.pause()
+
+    def resume_media(self) -> None:
+        self._player.play()
+        self._apply_pending_seek()
+
+    def stop_media(self) -> None:
+        self._pending_seek_ms = 0
+        self._player.stop()
+
+    def is_playing(self) -> bool:
+        return self._player.playbackState() == QMediaPlayer.PlaybackState.PlayingState
+
+    def is_buffering(self) -> bool:
+        status = self._player.mediaStatus()
+        return status in (
+            QMediaPlayer.MediaStatus.LoadingMedia,
+            QMediaPlayer.MediaStatus.BufferingMedia,
+            QMediaPlayer.MediaStatus.StalledMedia,
+        )
+
+    def get_position_ms(self) -> int:
+        return max(0, int(self._player.position()))
+
+    def set_position_ms(self, ms: int) -> None:
+        self._player.setPosition(max(0, int(ms)))
+
+    def request_seek(self, ms: int) -> None:
+        self._pending_seek_ms = max(0, int(ms))
+        self._apply_pending_seek()
+
+    def _apply_pending_seek(self) -> None:
+        ms = self._pending_seek_ms
+        if ms <= 0:
             return
+        duration = self.get_duration_ms()
+        status = self._player.mediaStatus()
+        ready = status in (
+            QMediaPlayer.MediaStatus.LoadedMedia,
+            QMediaPlayer.MediaStatus.BufferingMedia,
+            QMediaPlayer.MediaStatus.BufferedMedia,
+        )
+        if duration <= 0 and not ready:
+            return
+        target = ms
+        if duration > 400:
+            target = min(ms, duration - 400)
+        self._player.setPosition(target)
+        position = self.get_position_ms()
+        if duration > 0 and abs(position - target) <= 1500:
+            self._pending_seek_ms = 0
 
-        self._vlc_instance: Instance = Instance()
+    def _on_duration_changed(self, _duration: int) -> None:
+        self._apply_pending_seek()
 
-        self._playback_player: MediaPlayer = self._vlc_instance.media_player_new()
+    def get_duration_ms(self) -> int:
+        return max(0, int(self._player.duration()))
 
-        self._initialized = True
+    def get_volume(self) -> int:
+        return self._volume
 
-    @property
-    def instance(self) -> Instance:
-        return self._vlc_instance
+    def set_volume(self, value: int) -> None:
+        self._volume = max(0, min(100, int(value)))
+        self._apply_output_volume()
 
-    @property
-    def playback_player(self) -> MediaPlayer:
-        return self._playback_player
+    def get_duck_gain(self) -> float:
+        return self._duck_gain
 
-    def load_media(self, source: str) -> Media:
-        """Создаёт Media из пути или URL.
+    def set_duck_gain(self, gain: float) -> None:
+        self._duck_gain = max(0.0, min(1.0, float(gain)))
+        self._apply_output_volume()
 
-        Args:
-            source (str): Путь к медиа-файлу или URL.
+    def _apply_output_volume(self) -> None:
+        self._audio.setVolume(output_gain(self._volume, self._duck_gain))
 
-        Returns:
-            Media: Объект Media.
-        """
-        return self._vlc_instance.media_new(source)
+    def on_playing(self, callback: Callable[[], None]) -> None:
+        self._playing_cbs.append(callback)
 
-    def play_both(self, source: str) -> None:
-        """Запускает playback сразу, analysis с задержкой для синхронизации.
+    def on_paused(self, callback: Callable[[], None]) -> None:
+        self._paused_cbs.append(callback)
 
-        Args:
-            source (str): Путь к медиа-файлу или URL.
-        """
-        media_play = self.load_media(source)
-        media_analysis = self.load_media(source)
+    def on_stopped(self, callback: Callable[[], None]) -> None:
+        self._stopped_cbs.append(callback)
 
-        self._playback_player.set_media(media_play)
+    def on_ended(self, callback: Callable[[], None]) -> None:
+        self._ended_cbs.append(callback)
 
-        self._playback_player.play()
+    def on_error(self, callback: Callable[[str], None]) -> None:
+        self._error_cbs.append(callback)
 
-    def pause_both(self) -> None:
-        self._playback_player.pause()
+    def on_audio_buffer(self, callback: Callable) -> None:
+        """PCM текущего потока — для визуализатора, без второго HTTP."""
+        self._audio_buffer_cbs.append(callback)
+        self._ensure_buffer_output()
 
-    def resume_both(self) -> None:
-        self._playback_player.play()
+    def _ensure_buffer_output(self) -> None:
+        if self._buffer_output is not None or QAudioBufferOutput is None:
+            return
+        try:
+            fmt = QAudioFormat()
+            fmt.setSampleRate(22050)
+            fmt.setChannelCount(1)
+            fmt.setSampleFormat(QAudioFormat.SampleFormat.Int16)
+            output = QAudioBufferOutput(fmt)
+            output.audioBufferReceived.connect(self._emit_audio_buffer)
+            self._player.setAudioBufferOutput(output)
+            self._buffer_output = output
+        except Exception:
+            logger.debug("QAudioBufferOutput недоступен", exc_info=True)
+
+    def _emit_audio_buffer(self, buffer) -> None:
+        if not buffer.isValid():
+            return
+        for callback in self._audio_buffer_cbs:
+            callback(buffer)
+
+    def _on_media_status(self, status: QMediaPlayer.MediaStatus) -> None:
+        self._apply_pending_seek()
+        if status != QMediaPlayer.MediaStatus.EndOfMedia:
+            return
+        duration = self.get_duration_ms()
+        position = self.get_position_ms()
+        if duration > 1000 and position < duration - 1000:
+            logger.warning(
+                "Поток оборвался рано (%sms из %sms)",
+                position,
+                duration,
+            )
+        for callback in self._ended_cbs:
+            callback()
+
+    def _on_playback_state(self, state: QMediaPlayer.PlaybackState) -> None:
+        if state == QMediaPlayer.PlaybackState.PlayingState:
+            for callback in self._playing_cbs:
+                callback()
+        elif state == QMediaPlayer.PlaybackState.PausedState:
+            for callback in self._paused_cbs:
+                callback()
+        elif state == QMediaPlayer.PlaybackState.StoppedState:
+            for callback in self._stopped_cbs:
+                callback()
+
+    def _on_error(self, error: QMediaPlayer.Error, message: str) -> None:
+        if error == QMediaPlayer.Error.NoError:
+            return
+        text = message or str(error)
+        for callback in self._error_cbs:
+            callback(text)

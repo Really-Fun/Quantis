@@ -1,0 +1,46 @@
+/* Editorial player */
+
+#PlayMenu {
+    border-radius: 0;
+    border-top: 2px solid rgba(0, 229, 255, 0.45);
+}
+
+#trackTitle {
+    color: #f2f0eb;
+    font-family: Georgia, serif;
+    font-size: 13px;
+    font-weight: 400;
+}
+#trackTitle[playing="true"] { color: #00e5ff; }
+#trackArtist {
+    color: rgba(242, 240, 235, 0.45);
+    font-family: "Cascadia Mono", Consolas, monospace;
+    font-size: 9px;
+    letter-spacing: 1px;
+}
+#timeLabel {
+    color: rgba(242, 240, 235, 0.45);
+    font-family: "Cascadia Mono", Consolas, monospace;
+}
+
+#seekSlider::groove:horizontal,
+#volSlider::groove:horizontal {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 0;
+}
+#seekSlider::sub-page:horizontal {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #00e5ff, stop:1 #e63b2e);
+}
+#seekSlider::handle:horizontal,
+#volSlider::handle:horizontal {
+    background: #f2f0eb;
+    border-radius: 0;
+}
+
+#controlButton { border-radius: 0; }
+#controlButton:hover { background: rgba(0, 229, 255, 0.1); }
+#controlButton[accent=true] {
+    background: #e63b2e;
+    color: #ffffff;
+}
+#controlButton[accent=true]:hover { background: #f04a3d; }

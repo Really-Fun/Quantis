@@ -1,0 +1,189 @@
+/* Editorial — как панель «Сейчас играет»: cyan + red, Georgia, mono */
+
+QWidget {
+    color: #f2f0eb;
+    font-family: Georgia, "Segoe UI", serif;
+}
+
+QFrame#glassPanel {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+}
+
+QFrame#appHeader {
+    background: #0c0c0e;
+    border: none;
+}
+
+#headerGreeting {
+    font-family: Georgia, serif;
+    font-size: 22px;
+    font-weight: 400;
+    color: #f2f0eb;
+    letter-spacing: -0.2px;
+}
+
+QLabel#homeGreeting {
+    font-family: Georgia, serif;
+    font-size: 34px;
+    font-weight: 400;
+    color: #f2f0eb;
+    letter-spacing: -0.6px;
+}
+
+QLabel#homeSectionTitle {
+    font-family: Georgia, serif;
+    font-size: 24px;
+    font-weight: 400;
+    color: #f2f0eb;
+}
+
+QLabel#homeSectionSubtitle {
+    font-family: "Cascadia Mono", Consolas, monospace;
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: rgba(242, 240, 235, 0.45);
+    text-transform: uppercase;
+}
+
+QFrame#playlistCard {
+    background: rgba(255, 255, 255, 0.04);
+    border: none;
+    border-radius: 0;
+}
+
+QFrame#playlistCard:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+QFrame#quickPickTile {
+    background: transparent;
+    border: none;
+    border-radius: 14px;
+}
+
+QFrame#quickPickTile:hover {
+    background: transparent;
+}
+
+#sectionTitle {
+    font-family: "Cascadia Mono", Consolas, monospace;
+    font-size: 10px;
+    font-weight: 500;
+    color: #00e5ff;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+}
+
+#searchInput {
+    background: rgba(255, 255, 255, 0.04);
+    border: none;
+    border-radius: 0;
+    padding: 12px 14px;
+    font-size: 14px;
+    color: #f2f0eb;
+    font-family: Georgia, serif;
+}
+#searchInput:focus {
+    background: rgba(255, 255, 255, 0.07);
+}
+
+QPushButton#searchButton {
+    background: #e63b2e;
+    border: none;
+    border-radius: 0;
+    color: #ffffff;
+    font-family: "Cascadia Mono", Consolas, monospace;
+    font-weight: 500;
+    padding: 8px 16px;
+    letter-spacing: 1px;
+}
+QPushButton#searchButton:hover { background: #f04a3d; }
+
+#searchStatus {
+    color: rgba(242, 240, 235, 0.4);
+    font-family: "Cascadia Mono", Consolas, monospace;
+    font-size: 10px;
+    letter-spacing: 1px;
+}
+
+QLabel#settingsSectionLabel {
+    font-family: "Cascadia Mono", Consolas, monospace;
+    font-size: 9px;
+    letter-spacing: 2px;
+    color: #00e5ff;
+    text-transform: uppercase;
+}
+QLabel#settingsRowTitle {
+    color: #f2f0eb;
+    font-family: Georgia, serif;
+    font-size: 15px;
+}
+QLabel#settingsRowDesc {
+    color: rgba(242, 240, 235, 0.4);
+    font-size: 12px;
+}
+QCheckBox#settingsCheck { font-size: 13px; color: #f2f0eb; }
+
+QComboBox#themeCombo,
+QLineEdit#settingLineEdit {
+    background: rgba(255, 255, 255, 0.04);
+    border: none;
+    border-radius: 0;
+    padding: 10px 12px;
+    color: #f2f0eb;
+    font-family: Georgia, serif;
+}
+QComboBox#themeCombo:focus,
+QLineEdit#settingLineEdit:focus {
+    background: rgba(255, 255, 255, 0.07);
+}
+QComboBox#themeCombo QAbstractItemView {
+    background: #0c0c0e;
+    color: #f2f0eb;
+    border: none;
+    selection-background-color: rgba(230, 59, 46, 0.35);
+}
+
+QFrame#featuredPanel {
+    background: transparent;
+    border: none;
+}
+
+QPushButton#featuredPlayBtn,
+QToolButton#featuredPlayBtn {
+    background: #e63b2e;
+    border: none;
+    border-radius: 0;
+    color: #ffffff;
+    font-family: "Cascadia Mono", Consolas, monospace;
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 1.5px;
+    padding: 12px 22px;
+    text-transform: uppercase;
+}
+QPushButton#featuredPlayBtn:hover,
+QToolButton#featuredPlayBtn:hover { background: #f04a3d; }
+QPushButton#featuredPlayBtn:disabled,
+QToolButton#featuredPlayBtn:disabled {
+    background: rgba(230, 59, 46, 0.25);
+    color: rgba(255, 255, 255, 0.35);
+}
+
+QScrollBar:vertical { width: 3px; background: transparent; }
+QScrollBar::handle:vertical {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #00e5ff, stop:1 #e63b2e);
+    min-height: 40px;
+}
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical { height: 0; }
+
+QListView#trackList,
+QTableView#trackList,
+QTableView#homeTrackList {
+    background: transparent;
+    border: none;
+    outline: none;
+}

@@ -1,3 +1,44 @@
+# Poetry / packaging
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+
+# Coverage
+.coverage
+htmlcov/
+
+# PyInstaller
+*.spec.bak
+src/quantis/version.txt
+packaging/quantis_version_info.txt
+packaging/pyinstaller/quantis_version_info.txt
+# Vendored/wheel-extracted tree without bootloader/src — use
+# packaging/scripts/rebuild_pyi_bootloader.ps1 instead of committing this.
+/PyInstaller/
+
+# Secrets
+*.pem
+*.key
+cookies.txt
+cookie.txt
+credentials/
+src/quantis/styles/credentials/
+src/quantis/styles/covers/
+src/quantis/styles/music/
+src/quantis/styles/playlists/
+src/quantis/styles/plugins_dir/
+src/quantis/styles/player_history.db*
+
+# User config
+config.json
+settings.json
+quantis.json
+
+# IDE
+*.swp
+*~
+desktop.ini
+
 # Виртуальное окружение
 .venv/
 .env
@@ -6,6 +47,7 @@
 # IDE и редакторы
 .idea/
 .vscode/
+.cursor/
 
 # Python кэш и инструменты
 __pycache__/
@@ -32,23 +74,40 @@ player_history.db*
 player_history.db-shm*
 player_history.db-wal*
 
-# Legacy asset output dirs (if used)
-
-
 # Local playlists storage
 playlists/
 playlist_covers/
+
+# Кэш приложения (загрузки плагинов и пр.) при запуске из исходников
+cache/
+.migrated
 
 # OS files
 .DS_Store
 Thumbs.db
 
-background/*
-src/quantis/assets/background/*
-plugins_dir/*
+# Обои не храним в репозитории и не кладём в сборку
+src/quantis/assets/background/
+background/user/*
+!background/user/.gitkeep
+
+# Плагины пользователя — не в репозитории, живут только локально
+plugins_dir/
+
+# Черновики и эксперименты в корне (тесты живут в tests/)
+/test.py
+/test*.py
+/scratch*
+/tmp*
+
+# Старые каталоги в корне
+/assets/
+/ui/
 
 CleanPlayer.spec
 build.bat
 build/
 dist/
 cookie.txt
+
+wallpaper_clips/*

@@ -1,0 +1,150 @@
+/* Glass — wallpaper shines through translucent panels */
+
+QWidget {
+    color: #FFFFFF;
+}
+
+QFrame#glassPanel {
+    background: rgba(20, 24, 33, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 20px;
+}
+
+QFrame#appHeader {
+    background: rgba(20, 24, 33, 0.35);
+    border: none;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+#headerGreeting {
+    font-size: 14px;
+    font-weight: 650;
+    color: #FFFFFF;
+}
+
+#headerBrandWordmark { color: #FFFFFF; }
+
+#sectionTitle {
+    font-size: 11px;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.6);
+    letter-spacing: 1.8px;
+    text-transform: uppercase;
+}
+
+#searchInput {
+    background: rgba(20, 24, 33, 0.45);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 16px;
+    padding: 13px 16px;
+    font-size: 14px;
+    color: #FFFFFF;
+    selection-background-color: rgba(0, 217, 163, 0.35);
+}
+#searchInput:focus {
+    border-color: rgba(0, 217, 163, 0.55);
+}
+
+QPushButton#searchButton {
+    background: #00D9A3;
+    border: none;
+    border-radius: 14px;
+    color: #0B0D12;
+    font-weight: 700;
+    padding: 10px 18px;
+}
+QPushButton#searchButton:hover {
+    background: #1AE0B0;
+}
+
+#searchStatus {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 11px;
+}
+
+QToolButton#sourceFilterChip {
+    background: rgba(20, 24, 33, 0.4);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 999px;
+    color: rgba(255, 255, 255, 0.65);
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 600;
+}
+QToolButton#sourceFilterChip:checked {
+    background: rgba(0, 217, 163, 0.28);
+    border-color: rgba(0, 217, 163, 0.55);
+    color: #FFFFFF;
+}
+
+QLabel#settingsSectionLabel {
+    font-size: 11px;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.6);
+    letter-spacing: 1.8px;
+    text-transform: uppercase;
+}
+
+QLabel#settingsRowTitle { color: #FFFFFF; font-size: 14px; font-weight: 650; }
+QLabel#settingsRowDesc { color: rgba(255, 255, 255, 0.6); font-size: 12px; }
+QCheckBox#settingsCheck { font-size: 13px; color: rgba(255, 255, 255, 0.9); spacing: 8px; }
+
+QComboBox#themeCombo,
+QLineEdit#settingLineEdit {
+    background: rgba(20, 24, 33, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    padding: 10px 12px;
+    color: #FFFFFF;
+}
+QComboBox#themeCombo:hover,
+QLineEdit#settingLineEdit:focus {
+    border-color: rgba(0, 217, 163, 0.45);
+}
+QComboBox#themeCombo QAbstractItemView {
+    background: rgba(20, 24, 33, 0.95);
+    color: #FFFFFF;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    selection-background-color: rgba(0, 217, 163, 0.35);
+}
+
+QFrame#nowPlayingPanel {
+    background: rgba(20, 24, 33, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 20px;
+}
+
+#nowPlayingTitle { color: #FFFFFF; font-size: 16px; font-weight: 700; }
+#nowPlayingArtist { color: rgba(255, 255, 255, 0.6); font-size: 13px; }
+#nowPlayingSourceBtn,
+#nowPlayingStubBtn {
+    background: rgba(20, 24, 33, 0.45);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    color: #FFFFFF;
+    padding: 8px 12px;
+    font-size: 12px;
+    font-weight: 600;
+}
+#nowPlayingSourceBtn:hover,
+#nowPlayingStubBtn:hover {
+    background: rgba(0, 217, 163, 0.22);
+}
+
+QFrame#pluginCard {
+    background: rgba(20, 24, 33, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 20px;
+}
+#pluginCardTitle { color: #FFFFFF; font-size: 14px; font-weight: 700; }
+#pluginCardAuthor { color: rgba(255, 255, 255, 0.6); font-size: 12px; }
+#pluginCardDesc { color: rgba(255, 255, 255, 0.55); font-size: 12px; }
+
+QScrollBar:vertical { width: 5px; background: transparent; margin: 8px 2px; }
+QScrollBar::handle:vertical {
+    background: rgba(0, 217, 163, 0.5);
+    min-height: 48px;
+    border-radius: 3px;
+}
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical { height: 0; }

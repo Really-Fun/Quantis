@@ -1,22 +1,103 @@
-/* --- Центральный виджет и базовый фон --- */
-QWidget#central {
+/* Глобальная типографика и каркас — геометричный display + чистый UI */
+
+* {
+    font-family: "Bahnschrift", "Segoe UI Variable Display", "Segoe UI", sans-serif;
+}
+
+QWidget#appShell,
+QWidget#appContent,
+QWidget#bodyWithWallpaper,
+QWidget#bodyForeground,
+QWidget#wallpaperBackdrop,
+QWidget#backgroundLayerHost,
+QMainWindow,
+QWidget#pageStack {
     background: transparent;
 }
 
-/* Делаем виджеты прозрачными, чтобы был виден красивый фон... */
-QWidget {
+QScrollArea#settingsScroll {
+    background: transparent;
+    border: none;
+}
+
+QScrollArea#settingsScroll > QWidget > QWidget {
     background: transparent;
 }
 
-/* ...НО ЖЕСТКО ЗАПРЕЩАЕМ прозрачность для системных окон, меню и ошибок! */
-QMenu, QMessageBox, QDialog, QToolTip {
-    background-color: #161a22; /* Темно-синий/серый цвет для меню */
-    color: white;
-    border: 1px solid rgba(255, 255, 255, 30);
-    border-radius: 8px;
+QListView#trackList,
+QTableView#trackList {
+    background: transparent;
+    border: none;
+    outline: none;
 }
 
-/* --- Темное перекрытие (Overlay) поверх фона --- */
-#darkOverlay {
-    background-color: rgba(0, 0, 0, 150);
+QListView#trackList::item {
+    border: none;
+    padding: 0;
+    background: transparent;
+}
+
+QListView#trackList::item:selected {
+    background: transparent;
+}
+
+QFrame#appHeader {
+    border-top-left-radius: 12px;
+    border-top-right-radius: 12px;
+    min-height: 52px;
+}
+
+QFrame#appHeader QLabel#headerGreeting {
+    font-size: 14px;
+    font-weight: 650;
+    letter-spacing: 0.2px;
+}
+
+QLabel#headerSub {
+    font-size: 11px;
+    color: rgba(226, 232, 240, 0.45);
+    letter-spacing: 0.4px;
+}
+
+QLabel#headerBrandWordmark {
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 2.4px;
+    color: #f8fafc;
+    background: transparent;
+}
+
+QToolButton#windowHideUiBtn,
+QToolButton#windowMinBtn,
+QToolButton#windowMaxBtn,
+QToolButton#windowCloseBtn {
+    background: transparent;
+    border: none;
+    border-radius: 10px;
+    padding: 0;
+    margin: 0;
+}
+
+QToolButton#windowHideUiBtn:hover,
+QToolButton#windowMinBtn:hover,
+QToolButton#windowMaxBtn:hover {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+QToolButton#windowCloseBtn:hover {
+    background: #e81123;
+}
+
+QToolButton#windowCloseBtn:pressed {
+    background: #bf0f1d;
+}
+
+QLabel#headerBrandLogo,
+QLabel#headerBrandMark {
+    background: transparent;
+    border: none;
+}
+
+QFrame#sideNavRail QToolButton#navIconButton {
+    outline: none;
 }
