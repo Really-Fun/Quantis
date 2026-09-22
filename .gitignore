@@ -20,7 +20,14 @@ packaging/pyinstaller/quantis_version_info.txt
 *.pem
 *.key
 cookies.txt
+cookie.txt
 credentials/
+src/quantis/styles/credentials/
+src/quantis/styles/covers/
+src/quantis/styles/music/
+src/quantis/styles/playlists/
+src/quantis/styles/plugins_dir/
+src/quantis/styles/player_history.db*
 
 # User config
 config.json
@@ -79,7 +86,8 @@ cache/
 .DS_Store
 Thumbs.db
 
-# Пользовательские фоны (дефолтные ассеты в репо не игнорируем)
+# Обои не храним в репозитории и не кладём в сборку
+src/quantis/assets/background/
 background/user/*
 !background/user/.gitkeep
 
@@ -92,7 +100,7 @@ plugins_dir/
 /scratch*
 /tmp*
 
-# Каталог обоев в корне — встроенные лежат в src/quantis/assets/background
+# Старые каталоги в корне
 /assets/
 /ui/
 

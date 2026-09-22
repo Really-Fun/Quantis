@@ -19,6 +19,7 @@ Linux с MPRIS (кладёт mpris_server в бандл, Windows-сборка е
 
 from __future__ import annotations
 
+import importlib.util
 import os
 import sys
 from pathlib import Path
@@ -131,12 +132,20 @@ if BACKEND == "vlc":
     if vlc_hook.is_file():
         runtime_hooks.append(str(vlc_hook))
 
-# Ресурсы приложения
+# Ресурсы приложения. Не копируем каталог целиком: в styles/ случайно
+# оказывались credentials/, player_history.db, covers/ — и уезжали в exe.
+_collect_path = SPEC_DIR / "collect_datas.py"
+_collect_spec = importlib.util.spec_from_file_location(
+    "quantis_packaging_collect_datas", _collect_path
+)
+if _collect_spec is None or _collect_spec.loader is None:
+    raise ImportError(f"cannot load {_collect_path}")
+_collect_mod = importlib.util.module_from_spec(_collect_spec)
+_collect_spec.loader.exec_module(_collect_mod)
 if (QUANTIS / "assets").is_dir():
-    # Один раз: get_asset_path() умеет искать в quantis/assets внутри бандла
-    datas.append((str(QUANTIS / "assets"), "quantis/assets"))
+    datas += _collect_mod.collect_assets(QUANTIS / "assets")
 if (QUANTIS / "styles").is_dir():
-    datas.append((str(QUANTIS / "styles"), "quantis/styles"))
+    datas += _collect_mod.collect_styles(QUANTIS / "styles")
 
 if copy_metadata is not None:
     try:

@@ -70,7 +70,7 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
 
 [Files]
-Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs; Excludes: "credentials,*.db,cookie.txt,cookies.txt,youtube_cookies*,portable.txt"
 
 [Icons]
 Name: "{group}\{#AppName}"; Filename: "{app}\{#AppExeName}.exe"

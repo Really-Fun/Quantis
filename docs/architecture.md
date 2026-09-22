@@ -55,7 +55,7 @@ flowchart TB
 ```text
 src/quantis/
 ├── adapter/          # MPRIS (Linux), SMTC (Windows)
-├── assets/           # иконки, встроенные обои
+├── assets/           # иконки (обои в git и сборку не входят)
 ├── config/           # клиенты API, credentials, keyring
 ├── controllers/      # PlaybackController (медиатор)
 ├── core/             # bootstrap, AsyncBridge, PluginHost

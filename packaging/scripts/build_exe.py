@@ -21,6 +21,23 @@ ROOT = Path(__file__).resolve().parents[2]
 SPEC = ROOT / "packaging" / "pyinstaller" / "main.spec"
 
 
+def _leaked_user_data(root: Path) -> list[str]:
+    """Имена файлов, которые нельзя отдавать вместе с exe."""
+    sys.path.insert(0, str(ROOT / "packaging" / "pyinstaller"))
+    from collect_datas import USER_DATA_DIR_NAMES, USER_DATA_FILE_NAMES
+
+    leaked: list[str] = []
+    for path in root.rglob("*"):
+        if not path.is_file():
+            continue
+        rel = path.relative_to(root)
+        if any(part in USER_DATA_DIR_NAMES for part in rel.parts):
+            leaked.append(rel.as_posix())
+        elif path.name in USER_DATA_FILE_NAMES:
+            leaked.append(rel.as_posix())
+    return leaked
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Сборка Quantis (qt | vlc)")
     parser.add_argument(
@@ -110,6 +127,12 @@ def main() -> int:
         dist_bundle.rmdir()
     except OSError:
         pass
+    leaked = _leaked_user_data(final_dir)
+    if leaked:
+        print("ERROR: в бандл попали пользовательские данные:", file=sys.stderr)
+        for rel in leaked:
+            print(f"    {rel}", file=sys.stderr)
+        return 1
     for leftover, prune_parent in (
         (ROOT / "main" / "dist", True),
         (ROOT / "packaging" / "pyinstaller" / "dist", False),
