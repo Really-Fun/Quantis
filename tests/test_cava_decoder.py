@@ -4,7 +4,12 @@ import sys
 from array import array
 from pathlib import Path
 
+import pytest
+
 _PLUGIN = Path(__file__).resolve().parents[1] / "plugins_dir" / "cava"
+# plugins_dir не в git: плагины живут у разработчика локально.
+if not _PLUGIN.is_dir():
+    pytest.skip("нет plugins_dir/cava", allow_module_level=True)
 if str(_PLUGIN) not in sys.path:
     sys.path.insert(0, str(_PLUGIN))
 

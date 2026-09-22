@@ -19,6 +19,9 @@ from quantis.models.playlist import (
 from quantis.plugins.loader import PluginLoader, PluginMeta
 
 _PLUGIN = Path(__file__).resolve().parents[1] / "plugins_dir" / "nfs_dictor"
+# plugins_dir не в git: плагины живут у разработчика локально.
+if not _PLUGIN.is_dir():
+    pytest.skip("нет plugins_dir/nfs_dictor", allow_module_level=True)
 if str(_PLUGIN) not in sys.path:
     sys.path.insert(0, str(_PLUGIN))
 
