@@ -115,3 +115,16 @@ def test_xdg_data_home_respected(
 ) -> None:
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "share"))
     assert app_paths._platform_data_dir() == tmp_path / "share" / "quantis"
+
+
+def test_dev_app_dir_ignores_cwd(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Запуск из подкаталога не должен раскладывать данные в нём."""
+    from quantis.utils import resource_path
+
+    root = resource_path.source_root()
+    if root is None:
+        pytest.skip("пакет установлен не из исходников")
+    monkeypatch.chdir(tmp_path)
+    assert resource_path.app_dir() == root

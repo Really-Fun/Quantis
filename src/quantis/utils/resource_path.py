@@ -23,11 +23,23 @@ def package_root() -> Path:
     return Path(__file__).resolve().parent.parent
 
 
+def source_root() -> Path | None:
+    """Корень репозитория при запуске из исходников (src/quantis/...)."""
+    root = Path(__file__).resolve().parents[3]
+    if (root / "pyproject.toml").is_file() and (root / "src" / "quantis").is_dir():
+        return root
+    return None
+
+
 def app_dir() -> Path:
-    """Каталог приложения: рядом с exe или cwd при разработке."""
+    """Каталог приложения: рядом с exe или корень репозитория при разработке.
+
+    Не cwd: запуск из подкаталога (например, styles/) раскладывал там
+    credentials/, covers/ и базу истории.
+    """
     if getattr(sys, "frozen", False):
         return Path(sys.executable).resolve().parent
-    return Path.cwd()
+    return source_root() or Path.cwd()
 
 
 def get_asset_path(relative_path: str) -> str:
