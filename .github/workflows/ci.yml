@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   lint:
-    name: Lint (ruff, black, mypy)
+    name: Lint (ruff, black)
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v5
@@ -28,7 +28,7 @@ jobs:
           python-version: "3.13"
           cache: poetry
 
-      # Только dev-группа: линтерам не нужны PySide6 и PyGObject.
+      # Только dev-группа: ruff и black не нужны PySide6 и PyGObject.
       - name: Install linters
         run: poetry install --only dev --no-root --no-interaction
 
@@ -38,12 +38,8 @@ jobs:
       - name: black
         run: poetry run black --check src tests packaging
 
-      # Список модулей — [tool.mypy] files в pyproject.toml.
-      - name: mypy
-        run: poetry run mypy
-
   test:
-    name: Tests (Python ${{ matrix.python }})
+    name: Tests + mypy (Python ${{ matrix.python }})
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -73,6 +69,11 @@ jobs:
 
       - name: Install
         run: poetry install --with dev --no-interaction
+
+      # mypy здесь, а не в lint: без установленного PySide6 классы Qt для
+      # него Any, и strict падает. Список модулей — [tool.mypy] в pyproject.
+      - name: mypy
+        run: poetry run mypy
 
       - name: pytest
         run: poetry run pytest -m "not network" -q
