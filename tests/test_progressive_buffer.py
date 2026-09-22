@@ -54,9 +54,7 @@ async def _serve(payload: bytes) -> tuple[web.AppRunner, str]:
 async def stream():
     runner, url = await _serve(_PAYLOAD)
     buffer = ProgressiveStreamBuffer(AsyncMock(return_value=url))
-    track = YandexTrack(
-        track_id="1", title="T", author="A", duration_ms=_DURATION_MS
-    )
+    track = YandexTrack(track_id="1", title="T", author="A", duration_ms=_DURATION_MS)
     try:
         yield buffer, track, url
     finally:

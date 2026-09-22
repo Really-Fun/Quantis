@@ -166,9 +166,7 @@ class AsyncYoutubeStreamer(AsyncStreamerInterface):
                 "bestaudio"
             )
         )
-        android_fmt = (
-            wallpaper_yt_dlp_android_format(height) if video else fmt
-        )
+        android_fmt = wallpaper_yt_dlp_android_format(height) if video else fmt
 
         def build(
             clients: list[str],
@@ -202,9 +200,7 @@ class AsyncYoutubeStreamer(AsyncStreamerInterface):
         attempts: list[dict] = []
         if video:
             # android больше не отдаёт adaptive 720/1080 — только muxed itag 18.
-            attempts.append(
-                build(["tv_embedded"], format_id=fmt, skip_player=False)
-            )
+            attempts.append(build(["tv_embedded"], format_id=fmt, skip_player=False))
         else:
             attempts.append(build(["android"], format_id=android_fmt))
         if cookiefile:
@@ -332,9 +328,7 @@ class AsyncYoutubeStreamer(AsyncStreamerInterface):
             "height": info.get("height"),
             "width": info.get("width"),
         }
-        top_blocked = bool(
-            blocked and cls._format_itag(top_fmt) in blocked
-        )
+        top_blocked = bool(blocked and cls._format_itag(top_fmt) in blocked)
         if top_url and cls._is_playable_format(top_fmt) and not top_blocked:
             if prefer_video:
                 if cls._has_video(top_fmt) and (

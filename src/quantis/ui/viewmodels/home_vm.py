@@ -141,7 +141,9 @@ class HomeViewModel(BaseViewModel):
         try:
             recent_task = self._history.get_recent_playlist(limit=24)
             liked_task = self._liked.get_playlist()
-            downloaded_task = asyncio.to_thread(DownloadPlaylist.get_tracks_from_music_dir)
+            downloaded_task = asyncio.to_thread(
+                DownloadPlaylist.get_tracks_from_music_dir
+            )
             playlists_task = self._user_playlists.load_all(include_empty=True)
             recent, liked, downloaded, user_playlists = await asyncio.gather(
                 recent_task,
@@ -685,7 +687,9 @@ class HomeViewModel(BaseViewModel):
         if self._bridge is not None:
             self.refresh(self._bridge)
 
-    async def add_track_to_user_playlist(self, playlist_name: str, track: Track) -> bool:
+    async def add_track_to_user_playlist(
+        self, playlist_name: str, track: Track
+    ) -> bool:
         added = await self._user_playlists.add_track(playlist_name, track)
         if self._bridge is not None:
             self.refresh(self._bridge)

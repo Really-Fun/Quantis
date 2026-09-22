@@ -158,11 +158,15 @@ class BackgroundFrame(QFrame):
             glow = QRadialGradient(cx, cy, w * (0.42 + 0.04 * pulse))
             glow.setColorAt(
                 0.0,
-                QColor(accent.red(), accent.green(), accent.blue(), int(36 + 16 * pulse)),
+                QColor(
+                    accent.red(), accent.green(), accent.blue(), int(36 + 16 * pulse)
+                ),
             )
             glow.setColorAt(
                 0.45,
-                QColor(accent.red(), accent.green(), accent.blue(), int(12 + 6 * pulse)),
+                QColor(
+                    accent.red(), accent.green(), accent.blue(), int(12 + 6 * pulse)
+                ),
             )
             glow.setColorAt(1.0, QColor(accent.red(), accent.green(), accent.blue(), 0))
             painter.fillRect(rect, glow)
@@ -184,8 +188,12 @@ class BackgroundFrame(QFrame):
                     int(24 + 10 * pulse2),
                 ),
             )
-            coral.setColorAt(0.5, QColor(secondary.red(), secondary.green(), secondary.blue(), 8))
-            coral.setColorAt(1.0, QColor(secondary.red(), secondary.green(), secondary.blue(), 0))
+            coral.setColorAt(
+                0.5, QColor(secondary.red(), secondary.green(), secondary.blue(), 8)
+            )
+            coral.setColorAt(
+                1.0, QColor(secondary.red(), secondary.green(), secondary.blue(), 0)
+            )
             painter.fillRect(rect, coral)
 
         elif self._variant == "yellow_dark":

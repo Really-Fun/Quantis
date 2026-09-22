@@ -240,9 +240,13 @@ class PlayerBar(QFrame):
         body.setColumnStretch(0, 0)
         body.setColumnStretch(1, 1)
         body.setColumnStretch(2, 0)
-        body.addWidget(left, 0, 0, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        body.addWidget(
+            left, 0, 0, Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+        )
         body.addWidget(center, 0, 1, Qt.AlignmentFlag.AlignVCenter)
-        body.addWidget(right, 0, 2, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        body.addWidget(
+            right, 0, 2, Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
+        )
 
         card_layout.addLayout(body)
         dock.addWidget(card)

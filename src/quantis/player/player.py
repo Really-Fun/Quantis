@@ -29,9 +29,10 @@ def resolve_playback_duration(engine_ms: int, catalog_ms: int) -> int:
     if catalog_ms <= engine_ms <= catalog_ms + slack:
         return engine_ms
     if engine_ms < catalog_ms:
-        wild_catalog = catalog_ms >= max(
-            engine_ms * 2, engine_ms + 30 * 60 * 1000
-        ) and engine_ms >= 30_000
+        wild_catalog = (
+            catalog_ms >= max(engine_ms * 2, engine_ms + 30 * 60 * 1000)
+            and engine_ms >= 30_000
+        )
         return engine_ms if wild_catalog else catalog_ms
     return catalog_ms
 
@@ -242,7 +243,11 @@ class Player:
         if self._finish_emitted:
             return
         # EndReached предыдущего источника при set_media — Playing ещё не было.
-        if self._loading_source and not self._was_playing and self._last_known_ms < 1000:
+        if (
+            self._loading_source
+            and not self._was_playing
+            and self._last_known_ms < 1000
+        ):
             return
         duration = self.duration
         position = self.time

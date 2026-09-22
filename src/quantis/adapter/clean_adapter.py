@@ -1,7 +1,8 @@
-'''Определяет и подключает подходящий к операционной системе Remote Control API (Media Control API)
+"""Определяет и подключает подходящий к операционной системе Remote Control API (Media Control API)
 Linux - MPRIS
 Windows - SMTC
-'''
+"""
+
 from __future__ import annotations
 
 import logging

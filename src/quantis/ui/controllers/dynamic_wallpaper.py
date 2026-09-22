@@ -291,8 +291,11 @@ class DynamicWallpaperController(QObject):
                     audio_ms,
                     video.duration_ms,
                     gap,
-                    " — похоже, другая версия клипа" if abs(gap) > _VERSION_GAP_MS
-                    else "",
+                    (
+                        " — похоже, другая версия клипа"
+                        if abs(gap) > _VERSION_GAP_MS
+                        else ""
+                    ),
                 )
         self._tick()
 
@@ -408,9 +411,7 @@ class DynamicWallpaperController(QObject):
         if self._pending_track_key != track_key:
             return
         if url:
-            logger.info(
-                "Динамические обои: стрим %ss для %s", duration or "?", track
-            )
+            logger.info("Динамические обои: стрим %ss для %s", duration or "?", track)
             self._play_stream(track_key, url, loop=False)
             return
 

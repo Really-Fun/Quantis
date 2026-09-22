@@ -555,7 +555,11 @@ class WallpaperBackdrop(QWidget):
         if self._cached.isNull() and self._wallpaper_path and not self._dynamic_enabled:
             self._rebuild_cache(force=True)
 
-        if self._dynamic_enabled or self._variant == "editorial" or self._cached.isNull():
+        if (
+            self._dynamic_enabled
+            or self._variant == "editorial"
+            or self._cached.isNull()
+        ):
             return
 
         painter = QPainter(self)

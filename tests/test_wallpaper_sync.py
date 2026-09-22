@@ -238,9 +238,7 @@ def test_clip_shorter_than_track_freezes_on_last_frame() -> None:
     sync = WallpaperSync(FakeClock())
     sync.start()
     video = _video(118_000, duration_ms=120_000)
-    assert _kinds(sync.tick(AudioState(150_000, True), video)) == [
-        CommandKind.PAUSE
-    ]
+    assert _kinds(sync.tick(AudioState(150_000, True), video)) == [CommandKind.PAUSE]
     # Возврат звука в пределы клипа — видео снова идёт
     commands = sync.tick(
         AudioState(60_000, True), _video(120_000 - END_GUARD_MS, playing=False)

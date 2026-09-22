@@ -131,9 +131,8 @@ class AppHeader(QFrame):
         return True
 
     def mousePressEvent(self, event) -> None:
-        if (
-            event.button() == Qt.MouseButton.LeftButton
-            and self._can_drag(event.position().toPoint())
+        if event.button() == Qt.MouseButton.LeftButton and self._can_drag(
+            event.position().toPoint()
         ):
             window = self.window()
             if window is not None and not window.isMaximized():
@@ -170,9 +169,8 @@ class AppHeader(QFrame):
         super().mouseReleaseEvent(event)
 
     def mouseDoubleClickEvent(self, event) -> None:
-        if (
-            event.button() == Qt.MouseButton.LeftButton
-            and self._can_drag(event.position().toPoint())
+        if event.button() == Qt.MouseButton.LeftButton and self._can_drag(
+            event.position().toPoint()
         ):
             self.maximize_requested.emit()
             event.accept()

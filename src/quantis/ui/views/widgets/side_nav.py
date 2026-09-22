@@ -231,9 +231,7 @@ class SideNavRail(QFrame):
             else Qt.ToolButtonStyle.ToolButtonIconOnly
         )
         align = (
-            Qt.AlignmentFlag.AlignLeft
-            if expanded
-            else Qt.AlignmentFlag.AlignHCenter
+            Qt.AlignmentFlag.AlignLeft if expanded else Qt.AlignmentFlag.AlignHCenter
         )
         for button in self._buttons.values():
             button.set_expanded(expanded)

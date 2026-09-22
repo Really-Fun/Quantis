@@ -101,9 +101,7 @@ class LibraryPage(QWidget):
         menu.setObjectName("playlistPickMenu")
         add_action = QAction("Добавить в плейлист…", menu)
         add_action.triggered.connect(
-            lambda: show_add_to_playlist_menu(
-                track, bridge=self._bridge, parent=self
-            )
+            lambda: show_add_to_playlist_menu(track, bridge=self._bridge, parent=self)
         )
         menu.addAction(add_action)
         menu.addSeparator()

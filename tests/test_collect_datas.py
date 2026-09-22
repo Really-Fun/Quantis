@@ -29,10 +29,14 @@ def test_collect_styles_skips_user_data(tmp_path: Path, collect_mod) -> None:
     (styles / "themes" / "neon").mkdir(parents=True)
     (styles / "credentials").mkdir()
     (styles / "covers").mkdir()
-    (styles / "themes" / "neon" / "design.qss").write_text("QWidget {}", encoding="utf-8")
+    (styles / "themes" / "neon" / "design.qss").write_text(
+        "QWidget {}", encoding="utf-8"
+    )
     (styles / "light.qss").write_text("QWidget {}", encoding="utf-8")
     (styles / "player_history.db").write_bytes(b"sqlite")
-    (styles / "credentials" / "youtube_cookies.txt").write_text("secret", encoding="utf-8")
+    (styles / "credentials" / "youtube_cookies.txt").write_text(
+        "secret", encoding="utf-8"
+    )
     (styles / "covers" / "a.jpg").write_bytes(b"x")
 
     items = collect_mod.collect_styles(styles)
@@ -69,10 +73,7 @@ def test_collect_assets_skips_wallpapers(tmp_path: Path, collect_mod) -> None:
 
 def test_spec_uses_collect_helper() -> None:
     spec = (
-        Path(__file__).resolve().parents[1]
-        / "packaging"
-        / "pyinstaller"
-        / "main.spec"
+        Path(__file__).resolve().parents[1] / "packaging" / "pyinstaller" / "main.spec"
     ).read_text(encoding="utf-8")
     assert "collect_styles" in spec
     assert 'datas.append((str(QUANTIS / "styles"), "quantis/styles"))' not in spec

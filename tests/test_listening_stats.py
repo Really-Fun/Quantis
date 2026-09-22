@@ -196,7 +196,9 @@ def test_zero_duration_does_not_wipe_known_length(tmp_path: Path) -> None:
     assert rows[0]["duration_ms"] == 180_000
 
 
-def test_legacy_schema_migration_is_idempotent_under_concurrency(tmp_path: Path) -> None:
+def test_legacy_schema_migration_is_idempotent_under_concurrency(
+    tmp_path: Path,
+) -> None:
     import sqlite3
     from concurrent.futures import ThreadPoolExecutor, as_completed
 
@@ -321,54 +323,72 @@ def test_wall_clock_counts_when_duration_and_position_are_zero(tmp_path: Path) -
 
 
 def test_listen_delta_normal_playback_takes_agreed_progress() -> None:
-    assert listen_delta_ms(
-        wall_ms=5_000,
-        position_ms=15_000,
-        last_position_ms=10_000,
-        duration_ms=180_000,
-    ) == 5_000
-    assert listen_delta_ms(
-        wall_ms=5_000,
-        position_ms=16_000,
-        last_position_ms=10_000,
-        duration_ms=180_000,
-    ) == 6_000
+    assert (
+        listen_delta_ms(
+            wall_ms=5_000,
+            position_ms=15_000,
+            last_position_ms=10_000,
+            duration_ms=180_000,
+        )
+        == 5_000
+    )
+    assert (
+        listen_delta_ms(
+            wall_ms=5_000,
+            position_ms=16_000,
+            last_position_ms=10_000,
+            duration_ms=180_000,
+        )
+        == 6_000
+    )
 
 
 def test_listen_delta_stuck_slider_uses_wall_clock() -> None:
-    assert listen_delta_ms(
-        wall_ms=5_000,
-        position_ms=0,
-        last_position_ms=0,
-        duration_ms=0,
-    ) == 5_000
+    assert (
+        listen_delta_ms(
+            wall_ms=5_000,
+            position_ms=0,
+            last_position_ms=0,
+            duration_ms=0,
+        )
+        == 5_000
+    )
 
 
 def test_listen_delta_seek_to_end_of_long_mix_uses_wall_only() -> None:
-    assert listen_delta_ms(
-        wall_ms=2_000,
-        position_ms=3_600_000,
-        last_position_ms=10_000,
-        duration_ms=3_600_000,
-    ) == 2_000
+    assert (
+        listen_delta_ms(
+            wall_ms=2_000,
+            position_ms=3_600_000,
+            last_position_ms=10_000,
+            duration_ms=3_600_000,
+        )
+        == 2_000
+    )
 
 
 def test_listen_delta_seek_backward_uses_wall_only() -> None:
-    assert listen_delta_ms(
-        wall_ms=5_000,
-        position_ms=1_000,
-        last_position_ms=50_000,
-        duration_ms=180_000,
-    ) == 5_000
+    assert (
+        listen_delta_ms(
+            wall_ms=5_000,
+            position_ms=1_000,
+            last_position_ms=50_000,
+            duration_ms=180_000,
+        )
+        == 5_000
+    )
 
 
 def test_listen_delta_paused_does_not_count_slider_moves() -> None:
-    assert listen_delta_ms(
-        wall_ms=0,
-        position_ms=15_000,
-        last_position_ms=10_000,
-        duration_ms=180_000,
-    ) == 0
+    assert (
+        listen_delta_ms(
+            wall_ms=0,
+            position_ms=15_000,
+            last_position_ms=10_000,
+            duration_ms=180_000,
+        )
+        == 0
+    )
 
 
 def test_catalog_duration_is_kept_when_player_reports_zero(tmp_path: Path) -> None:

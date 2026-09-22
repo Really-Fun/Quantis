@@ -87,8 +87,7 @@ class AsyncDatabase:
 
     async def _init_schema_sync(self) -> None:
         assert self._conn is not None
-        await self._conn.execute(
-            """
+        await self._conn.execute("""
             CREATE TABLE IF NOT EXISTS track_history (
                 track_key TEXT PRIMARY KEY,
                 title TEXT NOT NULL,
@@ -99,14 +98,11 @@ class AsyncDatabase:
                 listen_count INTEGER NOT NULL DEFAULT 0,
                 last_played_at INTEGER NOT NULL
             );
-            """
-        )
-        await self._conn.execute(
-            """
+            """)
+        await self._conn.execute("""
             CREATE INDEX IF NOT EXISTS idx_track_history_last_played
             ON track_history(last_played_at DESC);
-            """
-        )
+            """)
         await self._conn.commit()
 
     async def _execute_sync(self, query: str, params: tuple[Any, ...]) -> None:

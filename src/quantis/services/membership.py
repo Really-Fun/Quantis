@@ -105,9 +105,7 @@ async def _fetch_yandex() -> YandexMembershipInfo:
         until = _plus_until_from_status(status) if has_plus else None
         if has_plus:
             detail = (
-                f"Яндекс Плюс активен до {until}"
-                if until
-                else "Яндекс Плюс активен"
+                f"Яндекс Плюс активен до {until}" if until else "Яндекс Плюс активен"
             )
         else:
             detail = "Яндекс Плюс на аккаунте не найден"

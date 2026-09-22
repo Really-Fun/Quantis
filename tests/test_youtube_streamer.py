@@ -298,9 +298,7 @@ def test_sync_video_does_not_reuse_muxed_audio_cache() -> None:
         ],
     }
     assert (
-        AsyncYoutubeStreamer._pick_stream_url(
-            muxed, prefer_video=True, video_only=True
-        )
+        AsyncYoutubeStreamer._pick_stream_url(muxed, prefer_video=True, video_only=True)
         is None
     )
     streamer = AsyncYoutubeStreamer(None)  # type: ignore[arg-type]
@@ -336,9 +334,7 @@ def test_sync_video_excludes_audio_itag() -> None:
     }
     streamer = AsyncYoutubeStreamer(None)  # type: ignore[arg-type]
     streamer._store_info("dQw4w9WgXcQ", info)
-    url, _duration = streamer.sync_video_stream(
-        "dQw4w9WgXcQ", 360, frozenset({"18"})
-    )
+    url, _duration = streamer.sync_video_stream("dQw4w9WgXcQ", 360, frozenset({"18"}))
     assert url == "https://rr.example/videoplayback?id=abc&itag=134"
 
 
@@ -498,4 +494,3 @@ def test_picks_itag_quality_class_not_raw_pixels() -> None:
         )
         == "https://rr.example/137.mp4"
     )
-

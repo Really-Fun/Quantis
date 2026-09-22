@@ -101,9 +101,7 @@ async def _create_async(
         if track is not None:
             await service.add_track(name, track)
         else:
-            bridge.invoke_main(
-                lambda: QMessageBox.warning(parent, "Плейлист", message)
-            )
+            bridge.invoke_main(lambda: QMessageBox.warning(parent, "Плейлист", message))
             return
     except Exception as err:
         message = str(err)

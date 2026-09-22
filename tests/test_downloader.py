@@ -92,7 +92,9 @@ async def test_ensure_cover_redownloads_truncated_file(tmp_path: Path) -> None:
             "get_cover_path",
             return_value=str(dest),
         ),
-        patch.object(downloader, "download_cover", new=AsyncMock(side_effect=fake_download)),
+        patch.object(
+            downloader, "download_cover", new=AsyncMock(side_effect=fake_download)
+        ),
     ):
         assert await downloader.ensure_cover(track) is True
 

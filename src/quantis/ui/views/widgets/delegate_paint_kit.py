@@ -94,6 +94,7 @@ def paint_colors(theme_id: str | None = None) -> PaintColors:
         return LIGHT_PAINT
     return DARK_PAINT
 
+
 _UI = "Bahnschrift"
 FONT_TITLE = QFont(_UI, 10, QFont.Weight.DemiBold)
 FONT_AUTHOR = QFont(_UI, 9)

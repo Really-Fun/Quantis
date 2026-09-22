@@ -409,9 +409,7 @@ class ProgressiveStreamBuffer:
                         return written
                     if upstream.status >= 400:
                         text = await upstream.text()
-                        raise RuntimeError(
-                            f"upstream {upstream.status}: {text[:200]}"
-                        )
+                        raise RuntimeError(f"upstream {upstream.status}: {text[:200]}")
                     if upstream.status != 206 and start > 0:
                         # CDN проигнорировал Range — дописывать нельзя, иначе
                         # файл склеится из кусков не с тех позиций.

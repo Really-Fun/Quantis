@@ -147,7 +147,11 @@ class NowPlayingPanel(QFrame):
         self._title.setText(track.title)
         self._artist.setText(track.author)
         source = str(getattr(track, "source", "") or "")
-        label = "YouTube" if source.lower() == "youtube" else "Яндекс" if source.lower() == "yandex" else "Источник"
+        label = (
+            "YouTube"
+            if source.lower() == "youtube"
+            else "Яндекс" if source.lower() == "yandex" else "Источник"
+        )
         self._source_btn.setText(f"Источник · {label}")
         self._apply_cover(track)
         if self._bridge is not None and self._music is not None:

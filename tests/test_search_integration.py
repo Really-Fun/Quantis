@@ -1,4 +1,5 @@
 """Интеграционный тест поиска через SearchViewModel + AsyncBridge."""
+
 from __future__ import annotations
 
 import sys

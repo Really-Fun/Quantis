@@ -80,7 +80,9 @@ class PluginRegistry(QObject):
             if meta.plugin_id in enabled_ids:
                 await self._do_enable(meta.plugin_id)
 
-        logger.info("Найдено плагинов: %s, включено: %s", len(self._infos), len(self._active))
+        logger.info(
+            "Найдено плагинов: %s, включено: %s", len(self._infos), len(self._active)
+        )
 
     async def enable(self, plugin_id: str) -> bool:
         """Включает плагин: загружает, вызывает ``on_load()``, сохраняет в настройки.

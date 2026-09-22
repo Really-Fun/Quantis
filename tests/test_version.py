@@ -22,10 +22,7 @@ def test_stamp_name_is_version_txt() -> None:
 
 def test_spec_writes_stamp_with_runtime_filename() -> None:
     spec = (
-        Path(__file__).resolve().parents[1]
-        / "packaging"
-        / "pyinstaller"
-        / "main.spec"
+        Path(__file__).resolve().parents[1] / "packaging" / "pyinstaller" / "main.spec"
     ).read_text(encoding="utf-8")
     assert "_stamp = _stamp_dir / VERSION_STAMP_NAME" in spec
     assert '_stamp_dir / "quantis_version.txt"' not in spec
@@ -65,6 +62,8 @@ def test_version_from_stamp_reads_meipass(
     bundled = tmp_path / "quantis"
     bundled.mkdir()
     (bundled / VERSION_STAMP_NAME).write_text("1.2.3\n", encoding="utf-8")
-    monkeypatch.setattr(version_mod, "__file__", str(tmp_path / "elsewhere" / "version.py"))
+    monkeypatch.setattr(
+        version_mod, "__file__", str(tmp_path / "elsewhere" / "version.py")
+    )
     monkeypatch.setattr(version_mod.sys, "_MEIPASS", str(tmp_path), raising=False)
     assert version_mod._version_from_stamp() == "1.2.3"

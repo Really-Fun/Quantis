@@ -94,12 +94,16 @@ class PlaybackController:
         position = max(0, int(self.player.time), int(paused_at), int(known))
         self.request_playback_recovery(position, reason=message)
 
-    def request_playback_recovery(self, position_ms: int, *, reason: str = "stall") -> None:
+    def request_playback_recovery(
+        self, position_ms: int, *, reason: str = "stall"
+    ) -> None:
         if self._stream_retry_pending or self._bridge is None:
             return
         self._bridge.schedule(self.recover_playback(position_ms, reason=reason))
 
-    async def recover_playback(self, position_ms: int, *, reason: str = "stall") -> None:
+    async def recover_playback(
+        self, position_ms: int, *, reason: str = "stall"
+    ) -> None:
         """Обновляет источник и продолжает с текущей позиции (signed URL / обрыв CDN)."""
         if self._stream_retry_pending:
             return
@@ -222,12 +226,8 @@ class PlaybackController:
             return
         self._bridge.schedule(self._seek_buffered(track, position, seq))
 
-    async def _seek_buffered(
-        self, track: Track, position_ms: int, seq: int
-    ) -> None:
-        ready = await self._prepare_seek(
-            track, position_ms, self.player.current_source
-        )
+    async def _seek_buffered(self, track: Track, position_ms: int, seq: int) -> None:
+        ready = await self._prepare_seek(track, position_ms, self.player.current_source)
         if seq != self._seek_seq or self._current_track is not track:
             return
         if not ready:
@@ -366,10 +366,7 @@ class PlaybackController:
             start_playback()
 
         playlist = self.playlist_manager.current_playlist
-        if (
-            isinstance(playlist, WavePlaylist)
-            and not self._wave_skip_start_feedback
-        ):
+        if isinstance(playlist, WavePlaylist) and not self._wave_skip_start_feedback:
             try:
                 await self.music.wave.notify_track_started(track, playlist)
             except Exception:
@@ -466,4 +463,3 @@ class PlaybackController:
     async def generate_radio(self, track: Track | None):
         if track:
             return await self.music.recommendation.generate_radio_from_track(track)
-

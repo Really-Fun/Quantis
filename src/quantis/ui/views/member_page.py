@@ -182,7 +182,9 @@ class MemberPage(QWidget):
         if yotube_cookie():
             self._cookie_status.setText("Cookies сохранены")
         else:
-            self._cookie_status.setText("Без cookies — ограниченный доступ к YouTube Music")
+            self._cookie_status.setText(
+                "Без cookies — ограниченный доступ к YouTube Music"
+            )
 
     def refresh_membership(self) -> None:
         if self._bridge is None or self._loading:

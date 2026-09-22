@@ -3,11 +3,14 @@
 Паттерн Итератор: ✓
 Single Responsibility: ✓ — только навигация по коллекции
 """
+
 from __future__ import annotations
 
 from typing import Iterable, Iterator, TypeVar
 
 TrackType = TypeVar("TrackType")
+
+
 class UpgradeCycle(Iterator[TrackType]):
     """Продвинутый цикл.
 
@@ -33,7 +36,7 @@ class UpgradeCycle(Iterator[TrackType]):
         Returns:
             Optional[TrackType]: следующее значение
         """
-            
+
         self._index = (self._index + 1) % len(self.values)
         return self.values[self._index]
 

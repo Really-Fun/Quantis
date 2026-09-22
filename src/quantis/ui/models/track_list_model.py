@@ -44,7 +44,9 @@ class TrackListModel(QAbstractTableModel):
             return 0
         return 1
 
-    def data(self, index: QModelIndex, role: int = Qt.ItemDataRole.DisplayRole) -> object:
+    def data(
+        self, index: QModelIndex, role: int = Qt.ItemDataRole.DisplayRole
+    ) -> object:
         if not index.isValid() or not (0 <= index.row() < self._loaded_count):
             return None
 

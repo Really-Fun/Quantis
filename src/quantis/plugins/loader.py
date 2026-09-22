@@ -16,6 +16,7 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+
 def resolve_plugins_dir() -> Path:
     """Записываемый каталог плагинов в данных пользователя."""
     from quantis.utils import app_paths

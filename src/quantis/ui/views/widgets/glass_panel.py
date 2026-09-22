@@ -37,5 +37,7 @@ class GlassPanel(QFrame):
 
         painter.fillRect(rect, QColor(12, 12, 14, 200))
         painter.fillRect(rect.left(), rect.top() + 16, 3, 40, QColor(0, 229, 255, 180))
-        painter.fillRect(rect.left() + 3, rect.top() + 16, 2, 40, QColor(230, 59, 46, 160))
+        painter.fillRect(
+            rect.left() + 3, rect.top() + 16, 2, 40, QColor(230, 59, 46, 160)
+        )
         painter.end()

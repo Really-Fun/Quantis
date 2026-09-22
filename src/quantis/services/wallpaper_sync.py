@@ -235,9 +235,7 @@ class WallpaperSync:
         return commands
 
     def _seek(self, audio_ms: int, video: VideoState) -> list[Command]:
-        target = min(
-            audio_ms + int(self._lead_ms), video.duration_ms - END_GUARD_MS
-        )
+        target = min(audio_ms + int(self._lead_ms), video.duration_ms - END_GUARD_MS)
         target = max(0, target)
         self._pending = _PendingSeek(target_ms=target, started_at=self._now())
         logger.info(
