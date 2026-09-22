@@ -219,7 +219,8 @@ class ProgressiveStreamBuffer:
         track: Track,
         *,
         extra_bytes: int = _RECOVERY_EXTRA_BYTES,
-        timeout: float = _RECOVERY_WAIT_SEC,
+        # Дедлайн нужен внутри цикла опроса, asyncio.timeout снаружи не подходит
+        timeout: float = _RECOVERY_WAIT_SEC,  # noqa: ASYNC109
     ) -> bool:
         """Ждёт ещё префикс после раннего EOF, не переигрывая те же 2 секунды."""
         if self._track_key != _track_key(track):

@@ -64,7 +64,6 @@ class BasePlugin:
             if bridge is not None:
                 bridge.schedule(coro)
             else:
-                import asyncio
                 import logging
 
                 logging.getLogger(__name__).warning(

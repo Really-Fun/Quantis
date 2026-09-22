@@ -8,10 +8,10 @@ import pytest
 
 from quantis.controllers.playback_controller import PlaybackController
 from quantis.models import YandexTrack
+from quantis.models.playlist import UserPlaylist
 from quantis.models.repeat_mode import RepeatMode
 from quantis.plugins.event_bus import EventBus
 from quantis.providers import PlaylistManager
-from quantis.models.playlist import UserPlaylist
 
 
 @pytest.mark.asyncio

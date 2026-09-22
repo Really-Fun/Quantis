@@ -68,8 +68,69 @@ target-version = "py313"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "B", "ASYNC"]
+# N802/N815 — переопределения Qt (paintEvent, resizeEvent) и Qt-свойства
+# (railWidth), их имена задаёт Qt. E501 — длинные строки режет black,
+# остаются только строковые литералы.
+ignore = ["N802", "N815", "E501"]
+
+[tool.ruff.lint.per-file-ignores]
+# Имена модулей исторические; переименование — отдельная правка импортов.
+"src/quantis/providers/PlaylistManager.py" = ["N999"]
+"src/quantis/providers/TrackManager.py" = ["N999"]
+
+[tool.ruff.lint.flake8-bugbear]
+# parent=QModelIndex() — штатная сигнатура моделей Qt, объект неизменяемый.
+extend-immutable-calls = ["PySide6.QtCore.QModelIndex"]
 
 [tool.mypy]
 python_version = "3.13"
 strict = true
 ignore_missing_imports = true
+# Ошибки показываем только в проверяемых файлах, а не во всём, что они
+# импортируют: остальной код ещё не приведён к strict.
+follow_imports = "silent"
+# Храповик: эти модули уже проходят strict, CI не даёт им испортиться.
+# Починили модуль — добавьте его сюда; новые модули — сразу сюда.
+files = [
+    "src/quantis/config/clients.py",
+    "src/quantis/config/constants.py",
+    "src/quantis/config/media_backend.py",
+    "src/quantis/controllers/playback_history_watcher.py",
+    "src/quantis/core/async_bridge.py",
+    "src/quantis/core/eco_mode.py",
+    "src/quantis/core/plugin_host.py",
+    "src/quantis/core/worker_pool.py",
+    "src/quantis/database/async_database.py",
+    "src/quantis/database/track_history_repository.py",
+    "src/quantis/models/repeat_mode.py",
+    "src/quantis/models/track.py",
+    "src/quantis/player/base.py",
+    "src/quantis/player/factory.py",
+    "src/quantis/plugins/base.py",
+    "src/quantis/plugins/installer.py",
+    "src/quantis/services/app_update.py",
+    "src/quantis/services/cover_validate.py",
+    "src/quantis/services/http_stream_proxy.py",
+    "src/quantis/services/soundcloud.py",
+    "src/quantis/services/soundcloud_finder.py",
+    "src/quantis/services/track_history.py",
+    "src/quantis/services/url_resolver.py",
+    "src/quantis/services/wallpaper_sync.py",
+    "src/quantis/services/yandex_finder.py",
+    "src/quantis/types/upgrade_cycle.py",
+    "src/quantis/ui/async_ui.py",
+    "src/quantis/ui/design_tokens.py",
+    "src/quantis/ui/resources.py",
+    "src/quantis/ui/shortcuts.py",
+    "src/quantis/ui/ui_extensions.py",
+    "src/quantis/ui/viewmodels/base_viewmodel.py",
+    "src/quantis/ui/viewmodels/player_vm.py",
+    "src/quantis/ui/views/widgets/brand_mark.py",
+    "src/quantis/ui/views/widgets/source_badge.py",
+    "src/quantis/ui/views/widgets/update_banner.py",
+    "src/quantis/ui/wallpapers.py",
+    "src/quantis/utils/app_paths.py",
+    "src/quantis/utils/get_ru_words.py",
+    "src/quantis/utils/resource_path.py",
+    "src/quantis/version.py",
+]

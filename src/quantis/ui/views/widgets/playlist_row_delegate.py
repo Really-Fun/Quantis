@@ -10,7 +10,11 @@ from quantis.models.playlist import Playlist
 from quantis.ui.models.playlist_list_model import PlaylistListModel
 from quantis.ui.preferences import UiPreferences
 from quantis.ui.views.widgets.cover_art import load_cover_pixmap, playlist_cover_path
-from quantis.ui.views.widgets.delegate_paint_kit import FONT_AUTHOR, FONT_TITLE, paint_colors
+from quantis.ui.views.widgets.delegate_paint_kit import (
+    FONT_AUTHOR,
+    FONT_TITLE,
+    paint_colors,
+)
 from quantis.ui.views.widgets.playlist_card import playlist_tracks_label
 
 

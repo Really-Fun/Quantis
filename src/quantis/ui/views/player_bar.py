@@ -17,8 +17,8 @@ from PySide6.QtWidgets import (
 )
 
 from quantis.core.async_bridge import AsyncBridge
-from quantis.models.track import Track
 from quantis.models.repeat_mode import RepeatMode
+from quantis.models.track import Track
 from quantis.providers.path_provider import PathProvider
 from quantis.services.liked_tracks import LikedTracksService
 from quantis.services.music_service import MusicService

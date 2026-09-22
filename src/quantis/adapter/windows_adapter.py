@@ -5,11 +5,11 @@ try:
         SystemMediaTransportControlsButton,
     )
     from winrt.windows.media.playback import MediaPlayer
-except ImportError:
+except ImportError as exc:
     raise ImportError(
         "Для работы с Windows SMTC необходимо установить пакет winrt: "
         '"pip install winrt-Windows.media winrt-Windows.media.playback winrt-Windows.foundation"'
-    )
+    ) from exc
 
 from quantis.core.async_bridge import AsyncBridge
 from quantis.models import Track

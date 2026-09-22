@@ -467,9 +467,10 @@ class AsyncDownloader(AsyncDownloaderInterface):
         cover_path = Path(self._yandex_downloader.path_provider.get_cover_path(track))
         if cover_file_ok(cover_path):
             return True
-        if cover_path.is_file():
+        # Локальная обложка: stat/unlink быстрее, чем прыжок в поток
+        if cover_path.is_file():  # noqa: ASYNC240
             try:
-                cover_path.unlink()
+                cover_path.unlink()  # noqa: ASYNC240
             except OSError:
                 logger.debug("Не удалось удалить битую обложку %s", cover_path)
         await self.download_cover(track)

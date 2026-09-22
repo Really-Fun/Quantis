@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 from PySide6.QtCore import (
-    QEasingCurve,
     Property,
+    QEasingCurve,
     QPropertyAnimation,
     QRect,
     QSize,
     Qt,
-    Signal,
     QTimer,
+    Signal,
 )
 from PySide6.QtGui import QColor, QPainter, QPainterPath
 from PySide6.QtWidgets import (

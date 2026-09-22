@@ -6,6 +6,7 @@ import logging
 from dataclasses import dataclass
 
 from quantis.controllers.playback_controller import PlaybackController
+from quantis.controllers.playback_history_watcher import PlaybackHistoryWatcher
 from quantis.core.async_bridge import AsyncBridge
 from quantis.core.plugin_host import PluginHost
 from quantis.player.factory import create_media_engine
@@ -13,7 +14,6 @@ from quantis.player.player import Player
 from quantis.plugins.event_bus import EventBus
 from quantis.providers import PlaylistManager
 from quantis.services.music_service import MusicService
-from quantis.controllers.playback_history_watcher import PlaybackHistoryWatcher
 from quantis.services.track_history import TrackHistoryService
 
 logger = logging.getLogger(__name__)

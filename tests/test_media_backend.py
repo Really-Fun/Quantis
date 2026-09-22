@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import os
-
 from quantis.config.media_backend import backend_display_name, resolve_media_backend
 
 

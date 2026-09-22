@@ -8,7 +8,6 @@ import logging
 import platform
 
 from quantis.core.async_bridge import AsyncBridge
-
 from quantis.player.player import Player
 from quantis.plugins.event_bus import EventBus
 from quantis.providers.path_provider import PathProvider

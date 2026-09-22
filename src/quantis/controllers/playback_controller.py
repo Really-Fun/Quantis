@@ -110,7 +110,8 @@ class PlaybackController:
         source = self.player.current_source
         if source and not str(source).startswith(("http://", "https://")):
             path = Path(str(source))
-            if track.downloaded and path.is_file():
+            # stat локального файла — микросекунды, в поток не выносим
+            if track.downloaded and path.is_file():  # noqa: ASYNC240
                 return
 
         track_key = f"{track.source}:{track.track_id}"
