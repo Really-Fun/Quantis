@@ -23,6 +23,8 @@ def qapp():
     yield app
 
 
+# Настоящий поиск по API Яндекса/YouTube: без сети и токена модель пуста.
+@pytest.mark.network
 def test_search_vm_populates_model(qapp):
     bridge = AsyncBridge()
     bridge.setParent(qapp)
