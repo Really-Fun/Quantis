@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="142" viewBox="0 0 1200 142" font-family="'Segoe UI', Inter, 'Helvetica Neue', Ubuntu, 'Noto Sans', Arial, sans-serif">
+<style>
+    .num { font-size: 46px; font-weight: 800; fill: url(#ring); letter-spacing: -1px; }
+    .lbl { font-size: 16px; fill: #8A92A6; }
+    .tile { fill: #0E1119; stroke: #ffffff; stroke-opacity: .07; }
+    .under { animation: under 5s ease-in-out infinite alternate; transform-box: fill-box; transform-origin: center; }
+    @keyframes under { from { transform: scaleX(.3); opacity: .5; } to { transform: scaleX(1); opacity: 1; } }
+    </style>
+<defs><linearGradient id="ring" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#2EE6FF"/><stop offset=".5" stop-color="#6C5CE7"/><stop offset="1" stop-color="#FF4FD8"/></linearGradient></defs>
+<rect class="tile" x="24.0" y="12.0" width="276.0" height="118" rx="18"/><text class="num" x="162.0" y="72.0" text-anchor="middle">3</text><text class="lbl" x="162.0" y="102.0" text-anchor="middle">музыкальных сервиса</text><rect class="under" style="animation-delay:0.0s" x="122.0" y="127.0" width="80" height="3" rx="1.5" fill="url(#ring)"/><rect class="tile" x="316.0" y="12.0" width="276.0" height="118" rx="18"/><text class="num" x="454.0" y="72.0" text-anchor="middle">6</text><text class="lbl" x="454.0" y="102.0" text-anchor="middle">тем оформления</text><rect class="under" style="animation-delay:-1.2s" x="414.0" y="127.0" width="80" height="3" rx="1.5" fill="url(#ring)"/><rect class="tile" x="608.0" y="12.0" width="276.0" height="118" rx="18"/><text class="num" x="746.0" y="72.0" text-anchor="middle">287</text><text class="lbl" x="746.0" y="102.0" text-anchor="middle">автотестов</text><rect class="under" style="animation-delay:-2.4s" x="706.0" y="127.0" width="80" height="3" rx="1.5" fill="url(#ring)"/><rect class="tile" x="900.0" y="12.0" width="276.0" height="118" rx="18"/><text class="num" x="1038.0" y="72.0" text-anchor="middle">0</text><text class="lbl" x="1038.0" y="102.0" text-anchor="middle">рекламы и трекинга</text><rect class="under" style="animation-delay:-3.6s" x="998.0" y="127.0" width="80" height="3" rx="1.5" fill="url(#ring)"/>
+</svg>

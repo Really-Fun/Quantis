@@ -1,0 +1,121 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="708" viewBox="0 0 1200 708" font-family="'Segoe UI', Inter, 'Helvetica Neue', Ubuntu, 'Noto Sans', Arial, sans-serif">
+<style>
+    .card { fill: #0E1119; stroke: #ffffff; stroke-opacity: .07; }
+    .edge { fill: none; stroke: url(#ring); stroke-width: 1.5; opacity: 0;
+             animation: edge 8s ease-in-out infinite; }
+    @keyframes edge { 0%, 100% { opacity: 0; } 12%, 22% { opacity: .9; } 40% { opacity: 0; } }
+    .shine { animation: sweep 8s ease-in-out infinite; }
+    @keyframes sweep { 0% { transform: translateX(-300px); } 35%, 100% { transform: translateX(866px); } }
+    .badge-glow { animation: pulse 4s ease-in-out infinite alternate; }
+    @keyframes pulse { from { opacity: .25; } to { opacity: .7; } }
+    .icon { fill: none; stroke: #F2F4F8; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+    .title { font-size: 23px; font-weight: 700; fill: #F2F4F8; }
+    .desc { font-size: 16.5px; fill: #8A92A6; }
+    </style>
+<defs><linearGradient id="ring" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#2EE6FF"/><stop offset=".5" stop-color="#6C5CE7"/><stop offset="1" stop-color="#FF4FD8"/></linearGradient><linearGradient id="shineG" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".5" stop-color="#fff" stop-opacity=".07"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient><filter id="badgeBlur" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="10"/></filter><clipPath id="c0"><rect x="24.0" y="24" width="566.0" height="150" rx="20"/></clipPath><clipPath id="c1"><rect x="610.0" y="24" width="566.0" height="150" rx="20"/></clipPath><clipPath id="c2"><rect x="24.0" y="194" width="566.0" height="150" rx="20"/></clipPath><clipPath id="c3"><rect x="610.0" y="194" width="566.0" height="150" rx="20"/></clipPath><clipPath id="c4"><rect x="24.0" y="364" width="566.0" height="150" rx="20"/></clipPath><clipPath id="c5"><rect x="610.0" y="364" width="566.0" height="150" rx="20"/></clipPath><clipPath id="c6"><rect x="24.0" y="534" width="566.0" height="150" rx="20"/></clipPath><clipPath id="c7"><rect x="610.0" y="534" width="566.0" height="150" rx="20"/></clipPath></defs>
+
+    <g>
+      <rect class="card" x="24.0" y="24" width="566.0" height="150" rx="20"/>
+      <g clip-path="url(#c0)"><g transform="translate(24.0 24)">
+        <rect class="shine" style="animation-delay:0.0s" x="0" y="-40" width="220" height="230" fill="url(#shineG)" transform-origin="0 0"/>
+      </g></g>
+      <rect class="edge" style="animation-delay:0.0s" x="24.0" y="24" width="566.0" height="150" rx="20"/>
+      <rect class="badge-glow" style="animation-delay:0.0s" x="52.0" y="67.0" width="64" height="64" rx="18" fill="url(#ring)" filter="url(#badgeBlur)"/>
+      <rect x="52.0" y="67.0" width="64" height="64" rx="18" fill="url(#ring)"/>
+      <g class="icon" transform="translate(66.0 81.0) scale(1.5)"><circle cx="11" cy="11" r="7"/><path d="M20.5 20.5 16 16"/></g>
+      <text class="title" x="140.0" y="80">Один поиск на всё</text>
+      <text class="desc" x="140.0" y="112">Яндекс.Музыка, YouTube и SoundCloud в одной</text>
+      <text class="desc" x="140.0" y="136">выдаче. Или просто вставь ссылку на трек.</text>
+    </g>
+    <g>
+      <rect class="card" x="610.0" y="24" width="566.0" height="150" rx="20"/>
+      <g clip-path="url(#c1)"><g transform="translate(610.0 24)">
+        <rect class="shine" style="animation-delay:0.9s" x="0" y="-40" width="220" height="230" fill="url(#shineG)" transform-origin="0 0"/>
+      </g></g>
+      <rect class="edge" style="animation-delay:0.9s" x="610.0" y="24" width="566.0" height="150" rx="20"/>
+      <rect class="badge-glow" style="animation-delay:0.9s" x="638.0" y="67.0" width="64" height="64" rx="18" fill="url(#ring)" filter="url(#badgeBlur)"/>
+      <rect x="638.0" y="67.0" width="64" height="64" rx="18" fill="url(#ring)"/>
+      <g class="icon" transform="translate(652.0 81.0) scale(1.5)"><path d="M2 12c2.5-5 5-5 7.5 0s5 5 7.5 0 3.5-3 5-2"/><path d="M2 17c2.5-3 5-3 7.5 0s5 3 7.5 0" opacity=".55"/><path d="M2 7c2.5-3 5-3 7.5 0s5 3 7.5 0" opacity=".55"/></g>
+      <text class="title" x="726.0" y="80">Моя волна и радио</text>
+      <text class="desc" x="726.0" y="112">«Моя волна» Яндекса и бесконечное радио</text>
+      <text class="desc" x="726.0" y="136">от любого трека.</text>
+    </g>
+    <g>
+      <rect class="card" x="24.0" y="194" width="566.0" height="150" rx="20"/>
+      <g clip-path="url(#c2)"><g transform="translate(24.0 194)">
+        <rect class="shine" style="animation-delay:1.8s" x="0" y="-40" width="220" height="230" fill="url(#shineG)" transform-origin="0 0"/>
+      </g></g>
+      <rect class="edge" style="animation-delay:1.8s" x="24.0" y="194" width="566.0" height="150" rx="20"/>
+      <rect class="badge-glow" style="animation-delay:1.8s" x="52.0" y="237.0" width="64" height="64" rx="18" fill="url(#ring)" filter="url(#badgeBlur)"/>
+      <rect x="52.0" y="237.0" width="64" height="64" rx="18" fill="url(#ring)"/>
+      <g class="icon" transform="translate(66.0 251.0) scale(1.5)"><rect x="2.5" y="4.5" width="19" height="15" rx="3"/><path d="m10 9 5 3-5 3z"/></g>
+      <text class="title" x="140.0" y="250">Живые обои</text>
+      <text class="desc" x="140.0" y="282">Клип трека играет фоном точно в такт</text>
+      <text class="desc" x="140.0" y="306">со звуком, даже на часовых миксах.</text>
+    </g>
+    <g>
+      <rect class="card" x="610.0" y="194" width="566.0" height="150" rx="20"/>
+      <g clip-path="url(#c3)"><g transform="translate(610.0 194)">
+        <rect class="shine" style="animation-delay:2.7s" x="0" y="-40" width="220" height="230" fill="url(#shineG)" transform-origin="0 0"/>
+      </g></g>
+      <rect class="edge" style="animation-delay:2.7s" x="610.0" y="194" width="566.0" height="150" rx="20"/>
+      <rect class="badge-glow" style="animation-delay:2.7s" x="638.0" y="237.0" width="64" height="64" rx="18" fill="url(#ring)" filter="url(#badgeBlur)"/>
+      <rect x="638.0" y="237.0" width="64" height="64" rx="18" fill="url(#ring)"/>
+      <g class="icon" transform="translate(652.0 251.0) scale(1.5)"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M5 20h14"/></g>
+      <text class="title" x="726.0" y="250">Офлайн</text>
+      <text class="desc" x="726.0" y="282">Скачивай треки вместе с обложками</text>
+      <text class="desc" x="726.0" y="306">и слушай без интернета.</text>
+    </g>
+    <g>
+      <rect class="card" x="24.0" y="364" width="566.0" height="150" rx="20"/>
+      <g clip-path="url(#c4)"><g transform="translate(24.0 364)">
+        <rect class="shine" style="animation-delay:3.6s" x="0" y="-40" width="220" height="230" fill="url(#shineG)" transform-origin="0 0"/>
+      </g></g>
+      <rect class="edge" style="animation-delay:3.6s" x="24.0" y="364" width="566.0" height="150" rx="20"/>
+      <rect class="badge-glow" style="animation-delay:3.6s" x="52.0" y="407.0" width="64" height="64" rx="18" fill="url(#ring)" filter="url(#badgeBlur)"/>
+      <rect x="52.0" y="407.0" width="64" height="64" rx="18" fill="url(#ring)"/>
+      <g class="icon" transform="translate(66.0 421.0) scale(1.5)"><path d="M12 21a9 9 0 1 1 9-9c0 2.5-2 3.5-3.6 3.5H15.6a1.8 1.8 0 0 0-1.3 3.1c.6.7.1 2.4-2.3 2.4z"/><circle cx="7.5" cy="11" r="1.2"/><circle cx="10.5" cy="7" r="1.2"/><circle cx="15" cy="7.5" r="1.2"/></g>
+      <text class="title" x="140.0" y="420">Шесть тем</text>
+      <text class="desc" x="140.0" y="452">Акцентный цвет подстраивается</text>
+      <text class="desc" x="140.0" y="476">под обложку того, что играет.</text>
+    </g>
+    <g>
+      <rect class="card" x="610.0" y="364" width="566.0" height="150" rx="20"/>
+      <g clip-path="url(#c5)"><g transform="translate(610.0 364)">
+        <rect class="shine" style="animation-delay:4.5s" x="0" y="-40" width="220" height="230" fill="url(#shineG)" transform-origin="0 0"/>
+      </g></g>
+      <rect class="edge" style="animation-delay:4.5s" x="610.0" y="364" width="566.0" height="150" rx="20"/>
+      <rect class="badge-glow" style="animation-delay:4.5s" x="638.0" y="407.0" width="64" height="64" rx="18" fill="url(#ring)" filter="url(#badgeBlur)"/>
+      <rect x="638.0" y="407.0" width="64" height="64" rx="18" fill="url(#ring)"/>
+      <g class="icon" transform="translate(652.0 421.0) scale(1.5)"><path d="M3 3v18h18"/><path d="M8 16v-4"/><path d="M12.5 16V8"/><path d="M17 16v-6"/></g>
+      <text class="title" x="726.0" y="420">Статистика</text>
+      <text class="desc" x="726.0" y="452">Часы прослушивания, любимый исполнитель,</text>
+      <text class="desc" x="726.0" y="476">самые заслушанные треки.</text>
+    </g>
+    <g>
+      <rect class="card" x="24.0" y="534" width="566.0" height="150" rx="20"/>
+      <g clip-path="url(#c6)"><g transform="translate(24.0 534)">
+        <rect class="shine" style="animation-delay:5.4s" x="0" y="-40" width="220" height="230" fill="url(#shineG)" transform-origin="0 0"/>
+      </g></g>
+      <rect class="edge" style="animation-delay:5.4s" x="24.0" y="534" width="566.0" height="150" rx="20"/>
+      <rect class="badge-glow" style="animation-delay:5.4s" x="52.0" y="577.0" width="64" height="64" rx="18" fill="url(#ring)" filter="url(#badgeBlur)"/>
+      <rect x="52.0" y="577.0" width="64" height="64" rx="18" fill="url(#ring)"/>
+      <g class="icon" transform="translate(66.0 591.0) scale(1.5)"><rect x="2" y="6" width="20" height="12" rx="2.5"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></g>
+      <text class="title" x="140.0" y="590">Клавиатура и медиа-клавиши</text>
+      <text class="desc" x="140.0" y="622">Горячие клавиши, SMTC на Windows</text>
+      <text class="desc" x="140.0" y="646">и MPRIS на Linux.</text>
+    </g>
+    <g>
+      <rect class="card" x="610.0" y="534" width="566.0" height="150" rx="20"/>
+      <g clip-path="url(#c7)"><g transform="translate(610.0 534)">
+        <rect class="shine" style="animation-delay:6.3s" x="0" y="-40" width="220" height="230" fill="url(#shineG)" transform-origin="0 0"/>
+      </g></g>
+      <rect class="edge" style="animation-delay:6.3s" x="610.0" y="534" width="566.0" height="150" rx="20"/>
+      <rect class="badge-glow" style="animation-delay:6.3s" x="638.0" y="577.0" width="64" height="64" rx="18" fill="url(#ring)" filter="url(#badgeBlur)"/>
+      <rect x="638.0" y="577.0" width="64" height="64" rx="18" fill="url(#ring)"/>
+      <g class="icon" transform="translate(652.0 591.0) scale(1.5)"><rect x="3" y="3" width="7.5" height="7.5" rx="2"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="2"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="2"/><path d="M17.25 14v6.5M14 17.25h6.5"/></g>
+      <text class="title" x="726.0" y="590">Плагины</text>
+      <text class="desc" x="726.0" y="622">Ставятся из .zip или по ссылке и умеют</text>
+      <text class="desc" x="726.0" y="646">добавлять в интерфейс свои страницы.</text>
+    </g>
+</svg>
