@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import re
 from dataclasses import fields
 from pathlib import Path
 
@@ -132,3 +133,30 @@ def test_settings_combo_lists_all_themes(qapp) -> None:
     combo = page._theme_combo
     listed = [combo.itemData(i) for i in range(combo.count())]
     assert listed == list(registry.ids())
+
+
+_PURPLE = re.compile(r"108,\s*92,\s*231|#6C5CE7", re.I)
+
+
+def test_no_hardcoded_purple_outside_theme_colors() -> None:
+    """Фиолетовый — значение темы (ThemeColors), а не литерал в QSS и виджетах."""
+    offenders = []
+    for path in sorted(SRC.rglob("*")):
+        if path.suffix not in {".py", ".qss"} or path.name == "design_tokens.py":
+            continue
+        text = path.read_text(encoding="utf-8")
+        if path.parent == THEMES_DIR:
+            # в модуле темы фиолетовый допустим только в ThemeColors(...)
+            text = text.partition("THEME = ")[0]
+        if _PURPLE.search(text):
+            offenders.append(str(path.relative_to(SRC)))
+    assert offenders == []
+
+
+def test_no_cover_accent_follows_theme(qapp, tmp_path) -> None:
+    from quantis.ui.cover_accent import accent_from_cover_path, fallback_accent
+
+    assert not accent_from_cover_path(None).isValid()
+    assert not accent_from_cover_path(tmp_path / "missing.jpg").isValid()
+    yellow = registry.get("yellow_dark")
+    assert fallback_accent(yellow).name().upper() == yellow.colors.accent_fallback

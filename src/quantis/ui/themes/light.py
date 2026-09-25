@@ -33,26 +33,26 @@ QInputDialog QLabel {
 }
 
 QMessageBox QPushButton {
-    border: 1px solid rgba(108, 92, 231, 0.28);
+    border: 1px solid rgba(${tint_rgb}, 0.28);
     border-radius: 10px;
     font-weight: 700;
 }
 
 QInputDialog QPushButton {
-    border: 1px solid rgba(108, 92, 231, 0.28);
+    border: 1px solid rgba(${tint_rgb}, 0.28);
     border-radius: 10px;
     font-weight: 700;
 }
 
 QMessageBox QPushButton:hover {
-    background-color: #6C5CE7;
-    border-color: #6C5CE7;
+    background-color: ${tint};
+    border-color: ${tint};
     color: #FFFFFF;
 }
 
 QInputDialog QPushButton:hover {
-    background-color: #6C5CE7;
-    border-color: #6C5CE7;
+    background-color: ${tint};
+    border-color: ${tint};
     color: #FFFFFF;
 }
 
@@ -64,7 +64,7 @@ QInputDialog QComboBox {
 
 QInputDialog QComboBox QAbstractItemView {
     border: 1px solid rgba(27, 32, 48, 0.10);
-    selection-background-color: rgba(108, 92, 231, 0.18);
+    selection-background-color: rgba(${tint_rgb}, 0.18);
 }
 
 #headerGreeting {
@@ -84,7 +84,7 @@ QInputDialog QComboBox QAbstractItemView {
 }
 
 #volSlider::handle:horizontal {
-    border: 2px solid #6C5CE7;
+    border: 2px solid ${tint};
 }
 
 #seekSlider::handle:horizontal:hover {
@@ -92,7 +92,7 @@ QInputDialog QComboBox QAbstractItemView {
 }
 
 QScrollBar::handle:vertical {
-    background: rgba(108, 92, 231, 0.42);
+    background: rgba(${tint_rgb}, 0.42);
     min-height: 48px;
 }
 
@@ -108,7 +108,7 @@ QScrollBar::handle:vertical {
 #searchInput {
     border-radius: 14px;
     padding: 13px 16px;
-    selection-background-color: rgba(108, 92, 231, 0.22);
+    selection-background-color: rgba(${tint_rgb}, 0.22);
 }
 
 #searchInput::placeholder {
@@ -117,7 +117,7 @@ QScrollBar::handle:vertical {
 
 QFrame#TrackListPanel {
     border-radius: 16px;
-    border-top: 1px solid rgba(108, 92, 231, 0.14);
+    border-top: 1px solid rgba(${tint_rgb}, 0.14);
 }
 
 QFrame#glassPanel {
@@ -129,7 +129,7 @@ QToolButton#sourceFilterChip {
 }
 
 QToolButton#sourceFilterChip:checked {
-    border-color: rgba(108, 92, 231, 0.45);
+    border-color: rgba(${tint_rgb}, 0.45);
 }
 
 #pluginCardDesc {
@@ -141,7 +141,7 @@ QToolButton#navPinButton {
 }
 
 QToolButton#navPinButton:checked {
-    border-color: rgba(108, 92, 231, 0.40);
+    border-color: rgba(${tint_rgb}, 0.40);
 }
 
 QToolButton#advancedToggle {
@@ -150,7 +150,7 @@ QToolButton#advancedToggle {
 }
 
 QToolButton#advancedToggle:checked {
-    border-color: rgba(108, 92, 231, 0.45);
+    border-color: rgba(${tint_rgb}, 0.45);
 }
 
 QLabel#homeSectionBadge {
@@ -170,7 +170,7 @@ QToolButton#homeSectionAction {
 }
 
 QToolButton#homeSectionAction:hover {
-    border-color: rgba(108, 92, 231, 0.40);
+    border-color: rgba(${tint_rgb}, 0.40);
 }
 
 QToolButton#featuredPlayBtn {
@@ -194,7 +194,7 @@ QToolButton#wavePromoPlayBtn {
 }
 
 QToolButton#wavePromoPlayBtn:hover {
-    border-color: #6C5CE7;
+    border-color: ${tint};
 }
 
 #searchStatus {
@@ -215,20 +215,20 @@ QCheckBox#settingsCheck {
 }
 
 QComboBox#themeCombo:hover {
-    border-color: rgba(108, 92, 231, 0.45);
+    border-color: rgba(${tint_rgb}, 0.45);
 }
 
 QLineEdit#settingLineEdit:focus {
-    border-color: rgba(108, 92, 231, 0.45);
+    border-color: rgba(${tint_rgb}, 0.45);
 }
 
 QComboBox#themeCombo QAbstractItemView {
     background: #FFFFFF;
-    selection-background-color: rgba(108, 92, 231, 0.16);
+    selection-background-color: rgba(${tint_rgb}, 0.16);
 }
 
 QFrame#sideNavRail[expanded="true"] {
-    border: 1px solid rgba(108, 92, 231, 0.22);
+    border: 1px solid rgba(${tint_rgb}, 0.22);
 }
 
 QToolButton#navIconButton[plugin="true"] {
@@ -253,7 +253,7 @@ QPushButton#settingsButton {
 }
 
 QPushButton#settingsButton:hover {
-    border-color: rgba(108, 92, 231, 0.40);
+    border-color: rgba(${tint_rgb}, 0.40);
 }
 
 QPushButton#updateBannerButton {
@@ -261,7 +261,7 @@ QPushButton#updateBannerButton {
 }
 
 QPushButton#updateBannerButton:hover {
-    border-color: rgba(108, 92, 231, 0.40);
+    border-color: rgba(${tint_rgb}, 0.40);
 }
 
 #PlayMenu {
@@ -269,7 +269,7 @@ QPushButton#updateBannerButton:hover {
 }
 
 #settingsScroll QScrollBar::handle:vertical:hover {
-    background: rgba(108, 92, 231, 0.55);
+    background: rgba(${tint_rgb}, 0.55);
 }
 """
 

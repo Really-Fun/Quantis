@@ -27,14 +27,14 @@ EXTRA_QSS = """
 }
 
 QScrollBar::handle:vertical {
-    background: rgba(108, 92, 231, 0.55);
+    background: rgba(${tint_rgb}, 0.55);
     min-height: 48px;
 }
 
 #searchInput {
     border-radius: 14px;
     padding: 13px 16px;
-    selection-background-color: rgba(108, 92, 231, 0.35);
+    selection-background-color: rgba(${tint_rgb}, 0.35);
 }
 
 QFrame#glassPanel {
@@ -58,7 +58,7 @@ QToolButton#navPinButton {
 }
 
 QToolButton#navPinButton:checked {
-    border-color: rgba(108, 92, 231, 0.45);
+    border-color: rgba(${tint_rgb}, 0.45);
     color: #F2F4F8;
 }
 
@@ -71,7 +71,7 @@ QToolButton#advancedToggle:checked {
 }
 
 QFrame#sideNavRail[expanded="true"] {
-    border: 1px solid rgba(108, 92, 231, 0.22);
+    border: 1px solid rgba(${tint_rgb}, 0.22);
 }
 
 QToolButton#navIconButton:hover {

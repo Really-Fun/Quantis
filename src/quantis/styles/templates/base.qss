@@ -224,7 +224,7 @@ QInputDialog QComboBox QAbstractItemView {
     height: 12px;
     margin: -5px 0;
     border-radius: 6px;
-    border: 2px solid rgb(108, 92, 231);
+    border: 2px solid rgb(${accent_fallback_rgb});
 }
 
 #volSlider::handle:horizontal {

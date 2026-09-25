@@ -27,7 +27,7 @@ QPushButton#searchButton:hover {
 }
 
 #sideNavRail {
-    border-color: rgba(108, 92, 231, 36);
+    border-color: rgba(${accent_fallback_rgb}, 36);
 }
 
 QPushButton#featuredPlayBtn {

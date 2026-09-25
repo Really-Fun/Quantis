@@ -20,6 +20,8 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from quantis.ui.preferences import UiPreferences
+from quantis.ui.themes.spec import qcolor
 from quantis.ui.views.widgets.home_pill_badge import HomePillBadge
 
 
@@ -38,12 +40,18 @@ class _WaveMark(QWidget):
         path = QPainterPath()
         path.addEllipse(rect)
 
+        colors = UiPreferences().theme.colors
+        hl = qcolor(colors.hl_rgb)
+        hl.setAlpha(70)
+        accent = qcolor(colors.accent_fallback)
+        accent.setAlpha(50)
         fill = QLinearGradient(rect.topLeft(), rect.bottomRight())
-        fill.setColorAt(0.0, QColor(46, 230, 255, 70))
-        fill.setColorAt(1.0, QColor(108, 92, 231, 50))
+        fill.setColorAt(0.0, hl)
+        fill.setColorAt(1.0, accent)
         painter.fillPath(path, fill)
 
-        pen = QPen(QColor(46, 230, 255, 90))
+        hl.setAlpha(90)
+        pen = QPen(hl)
         pen.setWidthF(1.0)
         painter.setPen(pen)
         painter.drawPath(path)

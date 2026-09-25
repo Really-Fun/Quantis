@@ -31,5 +31,5 @@ QWidget#playerRight {
 }
 
 #controlButton[accent=true]:hover {
-    background: rgba(108, 92, 231, 102);
+    background: rgba(${accent_fallback_rgb}, 102);
 }

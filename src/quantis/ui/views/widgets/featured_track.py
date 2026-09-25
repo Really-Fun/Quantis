@@ -12,8 +12,7 @@ from PySide6.QtWidgets import (
 )
 
 from quantis.models import Track
-from quantis.ui.cover_accent import accent_from_cover_path
-from quantis.ui.design_tokens import ACCENT_FALLBACK
+from quantis.ui.cover_accent import accent_from_cover_path, fallback_accent
 from quantis.ui.views.widgets.cover_art import load_track_cover, track_cover_file
 from quantis.ui.views.widgets.home_pill_badge import HomePillBadge
 from quantis.ui.views.widgets.playlist_card import GradientCover
@@ -36,7 +35,7 @@ class FeaturedTrackPanel(QFrame):
         self._index = 0
         self._is_playing = False
         self._hovered = False
-        self._accent = QColor(ACCENT_FALLBACK)
+        self._accent = fallback_accent()
 
         root = QHBoxLayout(self)
         root.setContentsMargins(14, 14, 16, 14)
@@ -93,7 +92,7 @@ class FeaturedTrackPanel(QFrame):
             self._title.setText("Готов к сессии")
             self._author.setText("Открой поиск или плейлист")
             self._cover.set_content("Quantis", None, source_key="")
-            self._accent = QColor(ACCENT_FALLBACK)
+            self._accent = fallback_accent()
         else:
             self._title.setText(track.title)
             self._author.setText(track.author)
@@ -101,6 +100,8 @@ class FeaturedTrackPanel(QFrame):
             load_track_cover(track, 124)
             self._cover.set_content(track.title, path, source_key=str(track.source))
             self._accent = accent_from_cover_path(path)
+            if not self._accent.isValid():
+                self._accent = fallback_accent()
         self._cover.set_play_overlay(self._hovered and not playing)
         self.update()
 

@@ -26,8 +26,7 @@ from quantis.core.eco_mode import EcoMode
 from quantis.ui import resources
 from quantis.ui.accent import AccentStyles
 from quantis.ui.controllers.dynamic_wallpaper import DynamicWallpaperController
-from quantis.ui.cover_accent import accent_from_cover_path
-from quantis.ui.design_tokens import ACCENT_FALLBACK
+from quantis.ui.cover_accent import accent_from_cover_path, fallback_accent
 from quantis.ui.preferences import UiPreferences
 from quantis.ui.shortcuts import (
     ALT_PAGE_IDS,
@@ -111,7 +110,9 @@ class QuantisMainWindow(QMainWindow):
         self._restore_window_geometry()
         self._resize_grips = WindowResizeGrips(self)
         self._current_page = -1
-        self._accent = QColor(ACCENT_FALLBACK)
+        self._accent = fallback_accent(self._ui_prefs.theme)
+        self._cover_accent = QColor()
+        """Акцент обложки текущего трека; невалидный — обложки нет, акцент от темы."""
 
         self._player_vm = PlayerViewModel(
             bundle.playback,
@@ -506,6 +507,7 @@ class QuantisMainWindow(QMainWindow):
     def _ensure_stats_page(self) -> StatsPage:
         if self._stats_page is None:
             self._stats_page = StatsPage(self._stats_vm, self._bridge)
+            self._stats_page.set_accent(self._accent)
             self._replace_stack_page(self.PAGE_STATS, self._stats_page)
         return self._stats_page
 
@@ -709,7 +711,11 @@ class QuantisMainWindow(QMainWindow):
         if self._eco.active:
             return
         path = Path(self._bundle.music.provider.get_cover_path(track))
-        self.apply_accent(accent_from_cover_path(path if path.is_file() else None))
+        self._cover_accent = accent_from_cover_path(path if path.is_file() else None)
+        if self._cover_accent.isValid():
+            self.apply_accent(self._cover_accent)
+        else:
+            self.apply_accent(fallback_accent(registry.get(self._applied_theme)))
 
     def apply_accent(self, color: QColor) -> None:
         """Акцент из обложки: фон, меню и акцентные виджеты, без перестилизации окна."""
@@ -790,8 +796,10 @@ class QuantisMainWindow(QMainWindow):
 
     def _apply_ui_theme(self, theme_id: str) -> None:
         self._applied_theme = theme_id
-        self.setStyleSheet(resources.load_stylesheet(theme_id, accent=self._accent))
         theme = registry.get(theme_id)
+        if not self._cover_accent.isValid():
+            self.apply_accent(fallback_accent(theme))
+        self.setStyleSheet(resources.load_stylesheet(theme_id, accent=self._accent))
         self._shell.set_theme(theme)
         self._body_shell.set_theme(theme)
         self._player_bar.refresh_theme()

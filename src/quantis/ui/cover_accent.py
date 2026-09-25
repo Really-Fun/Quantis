@@ -7,15 +7,28 @@ from pathlib import Path
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QColor, QImage, QImageReader
 
-from quantis.ui.design_tokens import ACCENT_FALLBACK
+from quantis.ui.themes.spec import ThemeSpec, qcolor
 
-_FALLBACK = QColor(ACCENT_FALLBACK)
+_NONE = QColor()
+
+
+def fallback_accent(theme: ThemeSpec | None = None) -> QColor:
+    """Акцент темы, пока нет обложки (``ThemeColors.accent_fallback``)."""
+    if theme is None:
+        from quantis.ui.preferences import UiPreferences
+
+        theme = UiPreferences().theme
+    return qcolor(theme.colors.accent_fallback)
 
 
 def accent_from_image(image: QImage | None) -> QColor:
-    """Грубый histogram dominant color; пропускает слишком тёмные/светлые."""
+    """Грубый histogram dominant color; пропускает слишком тёмные/светлые.
+
+    Не нашлось цвета — невалидный ``QColor``: запасной акцент выбирает вызывающий
+    (см. ``fallback_accent``), он зависит от темы.
+    """
     if image is None or image.isNull():
-        return QColor(_FALLBACK)
+        return QColor(_NONE)
 
     scaled = image
     if image.width() > 64 or image.height() > 64:
@@ -36,7 +49,7 @@ def accent_from_image(image: QImage | None) -> QColor:
             buckets[key] = buckets.get(key, 0) + 1
 
     if not buckets:
-        return QColor(_FALLBACK)
+        return QColor(_NONE)
 
     r, g, b = max(buckets.items(), key=lambda item: item[1])[0]
     color = QColor(r, g, b)
@@ -48,12 +61,12 @@ def accent_from_image(image: QImage | None) -> QColor:
 
 def accent_from_cover_path(path: str | Path | None) -> QColor:
     if not path:
-        return QColor(_FALLBACK)
+        return QColor(_NONE)
     file_path = Path(path)
     if not file_path.is_file():
-        return QColor(_FALLBACK)
+        return QColor(_NONE)
     if file_path.suffix.lower() == ".svg":
-        return QColor(_FALLBACK)
+        return QColor(_NONE)
 
     reader = QImageReader(str(file_path))
     reader.setAutoTransform(True)
