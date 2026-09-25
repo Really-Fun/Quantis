@@ -1,7 +1,7 @@
 QFrame#PlayMenu {
     background-color: ${panel_bg};
     border: 1px solid rgba(${ink_rgb}, 0.08);
-    border-radius: ${radius};
+    border-radius: ${radius_capsule};
 }
 
 QFrame#TrackListPanel {

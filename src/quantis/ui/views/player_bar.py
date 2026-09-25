@@ -3,8 +3,15 @@ from __future__ import annotations
 from collections.abc import Callable
 from pathlib import Path
 
-from PySide6.QtCore import QSize, Qt, Signal
-from PySide6.QtGui import QColor, QLinearGradient, QPainter, QPainterPath, QPixmap
+from PySide6.QtCore import QPointF, QSize, Qt, Signal
+from PySide6.QtGui import (
+    QColor,
+    QLinearGradient,
+    QPainter,
+    QPainterPath,
+    QPixmap,
+    QRadialGradient,
+)
 from PySide6.QtWidgets import (
     QFrame,
     QGridLayout,
@@ -24,7 +31,9 @@ from quantis.services.liked_tracks import LikedTracksService
 from quantis.services.music_service import MusicService
 from quantis.ui import resources
 from quantis.ui.accent import AccentStyles
+from quantis.ui.cover_accent import CoverPalette
 from quantis.ui.cover_prefetch import schedule_cover_prefetch
+from quantis.ui.live_palette import LivePalette
 from quantis.ui.playlist_actions import show_add_to_playlist_menu
 from quantis.ui.preferences import UiPreferences
 from quantis.ui.ui_extensions import UiExtensionHost
@@ -32,6 +41,7 @@ from quantis.ui.viewmodels.player_vm import PlayerViewModel
 from quantis.ui.views.widgets.cover_art import load_cover_pixmap
 from quantis.ui.views.widgets.glass import install_glass
 from quantis.ui.views.widgets.source_badge import paint_source_badge
+from quantis.ui.views.widgets.waveform_seek import WaveformSeekSlider
 
 
 class _PlayerCover(QLabel):
@@ -105,13 +115,18 @@ class PlayerBar(QFrame):
         dock.setContentsMargins(10, 4, 10, 10)
         dock.setSpacing(0)
 
+        # Плавающая стеклянная капсула: отсвет акцента слева и ореол Play
+        # рисуются поверх стекла (без QGraphicsDropShadowEffect — капсула
+        # перерисовывается вместе с фоном на каждом кадре клипа).
         card = QFrame()
         card.setObjectName("PlayMenu")
-        install_glass(card, "QFrame#PlayMenu")
+        install_glass(card, "QFrame#PlayMenu", overlay=self._paint_capsule)
         self._card = card
+        self._palette = LivePalette.instance().current
+        LivePalette.instance().palette_changed.connect(self._on_palette)
 
         card_layout = QVBoxLayout(card)
-        card_layout.setContentsMargins(16, 10, 16, 10)
+        card_layout.setContentsMargins(14, 8, 20, 8)
         card_layout.setSpacing(6)
 
         # Left: cover + meta
@@ -147,7 +162,7 @@ class PlayerBar(QFrame):
             object_name="repeatButton",
         )
         self._repeat_btn.clicked.connect(self._vm.cycle_repeat_mode)
-        self._play_btn = self._make_button("play.svg", "Play", accent=True, size=40)
+        self._play_btn = self._make_button("play.svg", "Play", accent=True, size=44)
         self._refresh_play_icon()
         self._next_btn = self._make_button("next.svg", "Далее", size=40)
         self._prev_btn.clicked.connect(self._vm.play_previous)
@@ -155,7 +170,7 @@ class PlayerBar(QFrame):
         self._next_btn.clicked.connect(self._vm.play_next)
 
         transport_host = QWidget()
-        transport_host.setFixedHeight(40)
+        transport_host.setFixedHeight(48)
         transport = QHBoxLayout(transport_host)
         transport.setContentsMargins(0, 0, 0, 0)
         transport.setSpacing(10)
@@ -175,11 +190,9 @@ class PlayerBar(QFrame):
         self._elapsed.setAlignment(
             Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter
         )
-        self._position = QSlider(Qt.Orientation.Horizontal)
-        self._position.setObjectName("seekSlider")
+        self._position = WaveformSeekSlider()
         self._position.setRange(0, 0)
-        self._position.setFixedHeight(14)
-        AccentStyles.instance().bind(self._position, resources.ACCENT_SEEK_SLIDER_QSS)
+        self._position.setFixedHeight(30)
         AccentStyles.instance().accent_changed.connect(self._refresh_play_icon)
         self._position.sliderPressed.connect(self._on_seek_start)
         self._position.sliderReleased.connect(self._on_seek_end)
@@ -190,14 +203,15 @@ class PlayerBar(QFrame):
         seek_row.addWidget(self._position, stretch=1)
         seek_row.addWidget(self._duration_label)
 
+        # одна строка, как в капсуле референса: кнопки, время, волна, время
         center = QWidget()
         center.setObjectName("playerCenter")
-        center_layout = QVBoxLayout(center)
+        center_layout = QHBoxLayout(center)
         center_layout.setContentsMargins(0, 0, 0, 0)
-        center_layout.setSpacing(4)
+        center_layout.setSpacing(14)
         center_layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
-        center_layout.addWidget(transport_host, 0, Qt.AlignmentFlag.AlignHCenter)
-        center_layout.addLayout(seek_row)
+        center_layout.addWidget(transport_host, 0, Qt.AlignmentFlag.AlignVCenter)
+        center_layout.addLayout(seek_row, 1)
 
         # Right: actions
         self._like_btn = self._make_button("heart.svg", "В любимые", size=32)
@@ -371,6 +385,7 @@ class PlayerBar(QFrame):
 
     def _on_track_changed(self, track) -> None:
         self._current_track = track
+        self._position.set_seed(repr(track))
         self._title.setText(track.title)
         self._author.setText(track.author)
         self._author.setVisible(bool(track.author))
@@ -505,6 +520,39 @@ class PlayerBar(QFrame):
         fade.setColorAt(1.0, QColor(0, 0, 0, 175))
         painter.fillRect(rect, fade)
         painter.end()
+
+    def _on_palette(self, palette: CoverPalette) -> None:
+        self._palette = palette
+        self._card.update()
+
+    def _paint_capsule(self, painter: QPainter, path: QPainterPath) -> None:
+        """Поверх стекла капсулы: отсвет акцента слева и ореол вокруг Play."""
+        accent = self._palette.accent
+        bounds = path.boundingRect()
+        painter.save()
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        tint = QLinearGradient(bounds.left(), 0, bounds.right(), 0)
+        start, end = QColor(accent), QColor(accent)
+        start.setAlpha(0 if self._cinematic else 34)
+        end.setAlpha(0)
+        tint.setColorAt(0, start)
+        tint.setColorAt(0.5, end)
+        painter.fillPath(path, tint)
+        if self._play_btn.isVisible():
+            center = QPointF(
+                self._play_btn.mapTo(self._card, self._play_btn.rect().center())
+            )
+            halo = QRadialGradient(center, 38)
+            glow, clear = QColor(accent), QColor(accent)
+            glow.setAlpha(120)
+            clear.setAlpha(0)
+            halo.setColorAt(0.45, glow)
+            halo.setColorAt(1.0, clear)
+            painter.setClipPath(path)
+            painter.setPen(Qt.PenStyle.NoPen)
+            painter.setBrush(halo)
+            painter.drawEllipse(center, 38, 38)
+        painter.restore()
 
     def _refresh_play_icon(self, *_: object) -> None:
         """Play/пауза на заливке акцентом: сплошной значок, контрастный акценту."""

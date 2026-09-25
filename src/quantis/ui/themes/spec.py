@@ -172,6 +172,8 @@ class ThemeSpec:
         for role in ("ui", "display", "mono", "label"):
             values[f"font_{role}"] = self.fonts.css(role)
         values["radius"] = f"{self.radius}px"
+        # плеер-капсула: круглые торцы, если у темы вообще есть скругления
+        values["radius_capsule"] = "26px" if self.radius > 0 else "0px"
         # фон стеклянных панелей: стекло рисуют сами панели, QSS — только рамку
         values["panel_bg"] = "transparent" if self.has_glass else self.colors.surface
         values["radius_control"] = f"{self.radius_control}px"

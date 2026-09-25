@@ -240,10 +240,6 @@ QPushButton#updateBannerButton:hover {
     border-color: rgba(${tint_rgb}, 0.40);
 }
 
-#PlayMenu {
-    border-radius: 18px;
-}
-
 #settingsScroll QScrollBar::handle:vertical:hover {
     background: rgba(${tint_rgb}, 0.55);
 }

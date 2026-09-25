@@ -1,38 +1,73 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QLinearGradient, QPainter, QRadialGradient
-from PySide6.QtWidgets import QSlider, QStyle, QStyleOptionSlider
+import math
+import random
+
+from PySide6.QtCore import QRectF, Qt
+from PySide6.QtGui import QBrush, QLinearGradient, QPainter, QPaintEvent
+from PySide6.QtWidgets import QSlider, QStyle, QStyleOptionSlider, QWidget
+
+from quantis.ui.cover_accent import CoverPalette
+from quantis.ui.live_palette import LivePalette
+from quantis.ui.preferences import UiPreferences
+from quantis.ui.themes.spec import qcolor
 
 
 class WaveformSeekSlider(QSlider):
-    """Waveform-seek с неоновым градиентом прогресса."""
+    """Перемотка по «форме волны»: сыгранное — градиентом цветов трека
+    (``accent2 → accent``), остальное — полупрозрачными «чернилами» темы.
 
-    def __init__(self, orientation=Qt.Orientation.Horizontal, parent=None) -> None:
+    Пока нет настоящей огибающей трека, форма волны своя у каждого трека
+    (зерно — ключ трека), чтобы треки не выглядели одинаково.
+    """
+
+    STEP, BAR = 4, 2.4
+
+    def __init__(
+        self,
+        orientation: Qt.Orientation = Qt.Orientation.Horizontal,
+        parent: QWidget | None = None,
+    ) -> None:
         super().__init__(orientation, parent)
         self.setObjectName("waveformSeek")
-        self._bars = self._generate_bars(112)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._palette = LivePalette.instance().current
+        self._peaks: list[float] = []
+        self._prefs = UiPreferences()
+        self._prefs.theme_changed.connect(self._on_theme)
+        self._on_theme()
+        self.set_seed("")
+        LivePalette.instance().palette_changed.connect(self._on_palette)
 
-    @staticmethod
-    def _generate_bars(count: int) -> list[float]:
-        import math
+    def _on_theme(self) -> None:
+        colors = self._prefs.theme.colors
+        self._rest = qcolor(colors.ink_rgb)
+        self._rest.setAlpha(52)
+        self._handle = qcolor(colors.handle)
+        self.update()
 
-        bars: list[float] = []
-        for i in range(count):
-            t = i / max(count - 1, 1)
-            v = (
-                0.32
-                + 0.28 * math.sin(t * math.pi * 5.2)
-                + 0.2 * math.sin(t * math.pi * 11.7 + 0.4)
-                + 0.14 * math.cos(t * math.pi * 2.1)
-            )
-            bars.append(max(0.14, min(1.0, v)))
-        return bars
+    def set_seed(self, key: str) -> None:
+        rnd = random.Random(key)
+        raw = [rnd.random() for _ in range(400)]
+        smooth = []
+        for i in range(len(raw)):
+            window = raw[max(0, i - 2) : i + 3]
+            smooth.append(sum(window) / len(window))
+        self._peaks = [
+            0.18
+            + 0.82
+            * math.pow(v, 1.4)
+            * (0.55 + 0.45 * math.sin(i / 400 * math.pi * 3 + 1) ** 2)
+            for i, v in enumerate(smooth)
+        ]
+        self.update()
 
-    def paintEvent(self, event) -> None:
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    def _on_palette(self, palette: CoverPalette) -> None:
+        self._palette = palette
+        if self.isVisible():
+            self.update()
 
+    def paintEvent(self, event: QPaintEvent) -> None:
         opt = QStyleOptionSlider()
         self.initStyleOption(opt)
         groove = self.style().subControlRect(
@@ -42,40 +77,27 @@ class WaveformSeekSlider(QSlider):
             self,
         )
         if groove.width() <= 0:
-            painter.end()
-            return
-
-        max_val = max(self.maximum(), 1)
-        progress = self.value() / max_val
-        bar_count = len(self._bars)
-        gap = 2
-        bar_w = max(2, (groove.width() - gap * (bar_count - 1)) // bar_count)
-        base_y = groove.center().y()
-        max_h = groove.height() + 16
-
-        for i, amp in enumerate(self._bars):
-            x = groove.left() + i * (bar_w + gap)
-            h = int(max_h * amp)
-            top = base_y - h // 2
-            filled = (i / bar_count) <= progress
-
-            if filled:
-                grad = QLinearGradient(x, top, x + bar_w, top + h)
-                grad.setColorAt(0.0, QColor(255, 42, 127, 230))
-                grad.setColorAt(0.55, QColor(230, 59, 46, 240))
-                grad.setColorAt(1.0, QColor(0, 229, 255, 220))
-                painter.fillRect(x, top, bar_w, h, grad)
-            else:
-                painter.fillRect(x, top, bar_w, h, QColor(0, 229, 255, 22))
-
-        handle_x = groove.left() + int(groove.width() * progress)
-        glow = QRadialGradient(handle_x, base_y, 12)
-        glow.setColorAt(0.0, QColor(0, 229, 255, 90))
-        glow.setColorAt(1.0, QColor(0, 229, 255, 0))
-        painter.setBrush(glow)
+            groove = self.rect()
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.drawEllipse(handle_x - 12, base_y - 12, 24, 24)
-
-        painter.setBrush(QColor(242, 240, 235))
-        painter.drawEllipse(handle_x - 6, base_y - 6, 12, 12)
+        span = max(1, self.maximum() - self.minimum())
+        progress = (self.value() - self.minimum()) / span if self.maximum() > 0 else 0.0
+        left, width, h = groove.left(), groove.width(), self.height()
+        head = left + width * progress
+        gradient = QLinearGradient(left, 0, max(left + 1.0, head), 0)
+        gradient.setColorAt(0, self._palette.accent2)
+        gradient.setColorAt(1, self._palette.accent)
+        played, rest = QBrush(gradient), QBrush(self._rest)
+        count = max(1, int(width // self.STEP))
+        for i in range(count):
+            peak = self._peaks[int(i / count * len(self._peaks))]
+            bar_h = max(2.0, (h - 4) * peak)
+            x = left + i * self.STEP
+            painter.setBrush(played if x < head else rest)
+            painter.drawRoundedRect(
+                QRectF(x, (h - bar_h) / 2, self.BAR, bar_h), 1.2, 1.2
+            )
+        painter.setBrush(self._handle)
+        painter.drawRoundedRect(QRectF(head - 1, 0, 2, h), 1, 1)
         painter.end()

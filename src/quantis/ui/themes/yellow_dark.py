@@ -132,10 +132,6 @@ QToolButton#navIconButton {
     color: rgba(250, 246, 238, 0.72);
 }
 
-#PlayMenu {
-    border-radius: 18px;
-}
-
 #seekSlider::sub-page:horizontal:hover {
     background: rgb(255, 170, 0);
 }

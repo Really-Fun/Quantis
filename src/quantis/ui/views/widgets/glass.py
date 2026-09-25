@@ -13,6 +13,8 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from PySide6.QtCore import QEvent, QObject, QPoint, QRectF
 from PySide6.QtGui import (
     QBrush,
@@ -112,21 +114,31 @@ def _tinted(glass: QImage, tint: QColor) -> QImage:
     return image
 
 
+Overlay = Callable[[QPainter, QPainterPath], None]
+
+
 class _GlassFilter(QObject):
-    def __init__(self, widget: QWidget, selector: str) -> None:
+    def __init__(self, widget: QWidget, selector: str, overlay: Overlay | None) -> None:
         super().__init__(widget)
         self._selector = selector
+        self._overlay = overlay
         widget.installEventFilter(self)
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:
         if event.type() == QEvent.Type.Paint and isinstance(watched, QWidget):
             painter = QPainter(watched)
-            paint_glass(watched, painter, glass_path(watched, self._selector))
+            path = glass_path(watched, self._selector)
+            paint_glass(watched, painter, path)
+            if self._overlay is not None:
+                self._overlay(painter, path)
             painter.end()
         return False
 
 
-def install_glass(widget: QWidget, selector: str) -> None:
+def install_glass(
+    widget: QWidget, selector: str, overlay: Overlay | None = None
+) -> None:
     """Стекло под виджетом; ``selector`` — его правило в QSS темы
-    (например ``"QFrame#nowPlayingPanel"``)."""
-    _GlassFilter(widget, selector)
+    (например ``"QFrame#nowPlayingPanel"``). ``overlay(painter, path)`` рисует
+    поверх стекла, но под содержимым виджета (отсветы, ореолы)."""
+    _GlassFilter(widget, selector, overlay)

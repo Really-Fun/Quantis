@@ -134,6 +134,7 @@ files = [
     "src/quantis/ui/views/widgets/glass.py",
     "src/quantis/ui/views/widgets/now_playing_stage.py",
     "src/quantis/ui/views/widgets/source_badge.py",
+    "src/quantis/ui/views/widgets/waveform_seek.py",
     "src/quantis/ui/views/widgets/update_banner.py",
     "src/quantis/ui/wallpapers.py",
     "src/quantis/utils/app_paths.py",
