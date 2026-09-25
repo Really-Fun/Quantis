@@ -27,11 +27,12 @@ from PySide6.QtGui import (
 )
 
 from quantis.ui.cover_accent import CoverPalette, fallback_palette
-from quantis.ui.image_fx import blur_image, fill_crop
+from quantis.ui.image_fx import blur_image, fill_crop, mean_luma
 from quantis.ui.themes import registry
 from quantis.ui.themes.spec import GlowSpec, ThemeSpec, qcolor
 
-VIDEO_OPACITY = 0.28
+LUMA_SMOOTHING = 0.2
+"""Доля нового кадра в сглаженной яркости клипа: автозатемнение без мигания."""
 GLASS_MIN_INTERVAL = 0.1
 """Без видео стекло пересчитывается не чаще 10 раз в секунду: свечение и
 переход палитры медленные, под размытием разница не видна."""
@@ -60,6 +61,12 @@ class BackdropCompositor(QObject):
         self._video_active = False
         self._video = QImage()
         self._video_fit = QImage()
+        # читаемость картинки/клипа
+        self._dim = 0.3
+        self._blur = 0.1
+        self._luma: float | None = None
+        self._media = QImage()
+        self._media_key: tuple[object, ...] = ()
         # кэши
         self._soft = QImage()
         self._soft_dirty = True
@@ -90,8 +97,14 @@ class BackdropCompositor(QObject):
         return self._cinematic
 
     @property
-    def video_opacity(self) -> float:
-        return 1.0 if self._cinematic else VIDEO_OPACITY
+    def look(self) -> tuple[float, float]:
+        """(затемнение, размытие) картинки/клипа."""
+        return self._dim, self._blur
+
+    def set_look(self, dim: float, blur: float) -> None:
+        if (dim, blur) != (self._dim, self._blur):
+            self._dim, self._blur = dim, blur
+            self._invalidate()
 
     def set_size(self, size: QSize, dpr: float = 1.0) -> None:
         if size == self._size and dpr == self._dpr:
@@ -158,6 +171,7 @@ class BackdropCompositor(QObject):
     def set_video_active(self, active: bool) -> None:
         if active != self._video_active:
             self._video_active = active
+            self._luma = None  # новый клип — яркость считаем заново
             self._invalidate()
 
     def set_video_frame(self, image: QImage | None) -> None:
@@ -205,13 +219,75 @@ class BackdropCompositor(QObject):
             return image
 
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
-        painter.drawImage(rect, self._soft_layer())
         if self.has_video_frame():
-            self._paint_video(painter, rect)
-            _paint_video_dim(painter, rect)
-        elif not self._dynamic:
-            self._paint_wallpaper(painter, rect)
+            painter.drawImage(rect, self._media_layer(self._video, smooth_luma=True))
+        else:
+            painter.drawImage(rect, self._soft_layer())
+            if not self._dynamic:
+                self._paint_wallpaper(painter, rect)
         painter.end()
+        return image
+
+    # --- картинка/клип под интерфейсом -----------------------------------
+
+    def _blur_amount(self, scale: float) -> float:
+        """Ползунок «Размытие» → ``blur_image``: 0 — резко, 0.1 — ~1.8×, 1 — 25×
+        (относительно полного разрешения; ``scale`` — масштаб холста)."""
+        factor = (1 + 24 * math.pow(self._blur, 1.5)) * scale
+        return max(0.0, (factor - 1) / 39)
+
+    def _media_layer(self, source: QImage, *, smooth_luma: bool) -> QImage:
+        """Картинка или кадр клипа во всю силу + затемнение для читаемости.
+
+        Затемнение — цветом фона темы (в светлой теме это осветление): доля от
+        ползунка плюс автоматическая добавка, если кадр слишком яркий для текста.
+        У клипа яркость сглажена по кадрам, чтобы затемнение не мигало."""
+        size = self._device_size(0.5)
+        key = (
+            source.cacheKey(),
+            size.width(),
+            size.height(),
+            self._dim,
+            self._blur,
+            self._palette.accent.rgba(),
+            self._theme.id,
+        )
+        if key == self._media_key and not self._media.isNull():
+            return self._media
+        image = blur_image(fill_crop(source, size), self._blur_amount(0.5))
+        if image.format() != QImage.Format.Format_RGB32:
+            image = image.convertToFormat(QImage.Format.Format_RGB32)
+        luma = mean_luma(image)
+        if self._theme.is_light:
+            luma = 1 - luma  # на светлой теме мешает тёмный кадр
+        if smooth_luma and self._luma is not None:
+            luma = (1 - LUMA_SMOOTHING) * self._luma + LUMA_SMOOTHING * luma
+        self._luma = luma
+
+        base = qcolor(self._theme.colors.bg)
+        base.setAlpha(255)
+        w, h = image.width(), image.height()
+        painter = QPainter(image)
+        alpha = 0.1 + self._dim * 0.7
+        need = 1 - 0.3 / max(0.3, luma * (1 - alpha))
+        alpha = min(0.9, alpha + max(0.0, need) * (1 - alpha))
+        painter.fillRect(0, 0, w, h, _with_alpha(base, 255 * alpha))
+        accent = self._palette.accent
+        tint = QRadialGradient(w * 0.2, h * 0.3, w * 0.6)
+        tint.setColorAt(0, _with_alpha(accent, 40))
+        tint.setColorAt(1, _with_alpha(accent, 0))
+        painter.fillRect(0, 0, w, h, tint)
+        side = QLinearGradient(0, 0, w * 0.55, 0)
+        side.setColorAt(0, _with_alpha(base, 110))
+        side.setColorAt(1, _with_alpha(base, 0))
+        painter.fillRect(0, 0, w, h, side)
+        veil = QLinearGradient(0, 0, 0, h)
+        veil.setColorAt(0, _with_alpha(base, 70))
+        veil.setColorAt(0.55, _with_alpha(base, 40))
+        veil.setColorAt(1, _with_alpha(base, 150))
+        painter.fillRect(0, 0, w, h, veil)
+        painter.end()
+        self._media, self._media_key = image, key
         return image
 
     def _paint_video(self, painter: QPainter, rect: QRect) -> None:
@@ -228,7 +304,6 @@ class BackdropCompositor(QObject):
         y = rect.y() + (rect.height() - fit.height() / self._dpr) / 2
         painter.save()
         painter.setClipRect(rect)
-        painter.setOpacity(self.video_opacity)
         painter.drawImage(QPoint(round(x), round(y)), fit)
         painter.restore()
 
@@ -343,11 +418,10 @@ class BackdropCompositor(QObject):
         painter.fillRect(0, 0, w, h, coral)
 
 
-def _paint_video_dim(painter: QPainter, rect: QRect) -> None:
-    vignette = QRadialGradient(rect.center(), max(rect.width(), rect.height()) * 0.7)
-    vignette.setColorAt(0.4, QColor(0, 0, 0, 0))
-    vignette.setColorAt(1.0, QColor(0, 0, 0, 140))
-    painter.fillRect(rect, vignette)
+def _with_alpha(color: QColor, alpha: float) -> QColor:
+    out = QColor(color)
+    out.setAlpha(max(0, min(255, int(alpha))))
+    return out
 
 
 def _paint_cinematic_dim(painter: QPainter, rect: QRect) -> None:

@@ -56,7 +56,6 @@ def test_cinematic_keeps_video_inside_content(qapp) -> None:
     frame = comp.frame()
     assert frame.pixelColor(100, 5) == QColor(0, 0, 0)  # шапка — чёрная
     assert frame.pixelColor(100, 50).lightness() > 150  # контент — видео
-    assert comp.video_opacity == 1.0
 
 
 def test_body_reports_content_rect_to_shared_compositor(qapp) -> None:
@@ -131,3 +130,66 @@ def test_glass_panel_paints_blurred_backdrop(qapp) -> None:
         red = shell.grab().toImage().pixelColor(100, 90).red()
         bg = comp.frame().pixelColor(100, 90).red()
         assert (red != bg) is expect  # стекло с тонировкой отличается от фона
+
+
+def _video_luma(comp: BackdropCompositor, color: str) -> float:
+    comp.set_video_frame(_solid(color))
+    comp.set_video_active(True)
+    return mean_luma(comp.frame())
+
+
+def test_bright_clip_gets_extra_dim_and_dark_clip_stays_visible(qapp) -> None:
+    comp, _ = _compositor()
+    comp.set_look(dim=0.0, blur=0.0)
+    white = _video_luma(comp, "#ffffff")
+    comp.set_video_active(False)
+    grey = _video_luma(comp, "#606060")
+    # белый кадр затемнён до читаемого уровня, а не остался белым
+    assert white < 0.45
+    # тёмный кадр не «съеден» затемнением: разница с белым меньше исходной
+    assert abs(white - grey) < 1 - mean_luma(_solid("#606060"))
+
+
+def test_dim_slider_darkens(qapp) -> None:
+    comp, _ = _compositor()
+    comp.set_look(dim=0.0, blur=0.0)
+    light = _video_luma(comp, "#3070a0")
+    comp.set_look(dim=1.0, blur=0.0)
+    assert mean_luma(comp.frame()) < light
+
+
+def test_clip_luma_is_smoothed_between_frames(qapp) -> None:
+    comp, _ = _compositor()
+    comp.set_look(dim=0.0, blur=0.0)
+    _video_luma(comp, "#101010")
+    jump = _video_luma(comp, "#ffffff")  # один яркий кадр после тёмных
+    comp.set_video_active(False)
+    settled = _video_luma(comp, "#ffffff")  # клип сразу яркий
+    assert jump > settled  # автозатемнение догоняет плавно, без мигания
+
+
+def test_light_theme_lightens_instead_of_darkening(qapp) -> None:
+    comp = BackdropCompositor(registry.get("light"))
+    comp.set_size(QSize(200, 120))
+    comp.set_look(dim=0.5, blur=0.0)
+    assert _video_luma(comp, "#202020") > mean_luma(_solid("#202020"))
+
+
+def test_no_glass_in_theater_mode(qapp) -> None:
+    from PySide6.QtGui import QPainter, QPainterPath
+
+    from quantis.ui.views.widgets.background_frame import BackgroundFrame
+    from quantis.ui.views.widgets.glass import paint_glass
+
+    shell = BackgroundFrame(theme=registry.get("neon"))
+    shell.resize(300, 200)
+    panel = QWidget(shell.content_host())
+    panel.setGeometry(10, 10, 50, 50)
+    path = QPainterPath()
+    path.addRect(0, 0, 50, 50)
+    target = QImage(50, 50, QImage.Format.Format_RGB32)
+    painter = QPainter(target)
+    assert paint_glass(panel, painter, path) is True
+    shell.set_cinematic(True)
+    assert paint_glass(panel, painter, path) is False
+    painter.end()

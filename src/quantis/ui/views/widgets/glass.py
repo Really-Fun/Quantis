@@ -69,8 +69,8 @@ def paint_glass(
         return False
     compositor, host = found
     theme = compositor.theme
-    if not theme.has_glass:
-        return False
+    if not theme.has_glass or compositor.cinematic:
+        return False  # театральный режим — как раньше: без стекла поверх клипа
     glass = _tinted(
         compositor.glass(), tint if tint is not None else theme.glass_tint_color()
     )

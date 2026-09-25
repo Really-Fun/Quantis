@@ -38,6 +38,8 @@ class UiPreferences(QObject):
     _KEY_WALLPAPER_AV_DELAY = "ui/dynamic_wallpaper_av_delay_ms"
     _KEY_WALLPAPER = "ui/wallpaper_path"
     _KEY_WALLPAPER_ENABLED = "ui/wallpaper_enabled"
+    _KEY_BACKDROP_DIM = "ui/backdrop_dim"
+    _KEY_BACKDROP_BLUR = "ui/backdrop_blur"
     _KEY_NOW_PLAYING = "ui/show_now_playing_panel"
     _KEY_BACKGROUND_ECO = "ui/background_eco"
     _KEY_VOLUME = "playback/volume"
@@ -233,6 +235,33 @@ class UiPreferences(QObject):
         if self.wallpaper_enabled == value:
             return
         self._settings.setValue(self._KEY_WALLPAPER_ENABLED, value)
+        self._emit(self.wallpaper_changed)
+
+    @property
+    def backdrop_dim(self) -> float:
+        """Затемнение картинки/клипа под интерфейсом, 0..1 (к нему фон добавляет
+        автоматическое, если кадр слишком светлый)."""
+        raw = self._read_float(self._settings.value(self._KEY_BACKDROP_DIM, 0.3), 0.3)
+        return max(0.0, min(1.0, raw))
+
+    def set_backdrop_dim(self, value: float) -> None:
+        clamped = round(max(0.0, min(1.0, float(value))), 3)
+        if self.backdrop_dim == clamped:
+            return
+        self._settings.setValue(self._KEY_BACKDROP_DIM, clamped)
+        self._emit(self.wallpaper_changed)
+
+    @property
+    def backdrop_blur(self) -> float:
+        """Размытие картинки/клипа под интерфейсом, 0..1."""
+        raw = self._read_float(self._settings.value(self._KEY_BACKDROP_BLUR, 0.1), 0.1)
+        return max(0.0, min(1.0, raw))
+
+    def set_backdrop_blur(self, value: float) -> None:
+        clamped = round(max(0.0, min(1.0, float(value))), 3)
+        if self.backdrop_blur == clamped:
+            return
+        self._settings.setValue(self._KEY_BACKDROP_BLUR, clamped)
         self._emit(self.wallpaper_changed)
 
     @property

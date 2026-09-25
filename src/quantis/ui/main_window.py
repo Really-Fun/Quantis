@@ -283,6 +283,11 @@ class QuantisMainWindow(QMainWindow):
         self._playlist_vm.tracks_mutated.connect(self._on_playlist_tracks_mutated)
         self._ui_prefs.theme_changed.connect(self._on_theme_changed)
         self._ui_prefs.wallpaper_changed.connect(self._on_wallpaper_changed)
+        self._wallpaper_source = (
+            resources.wallpaper_path(),
+            self._ui_prefs.dynamic_wallpaper_enabled,
+        )
+        self._apply_backdrop_look()
         self._ui_prefs.layout_changed.connect(self._sync_now_playing_visibility)
         self._ui_prefs.eco_changed.connect(self._on_eco_pref_changed)
         self._dynamic_wallpaper = DynamicWallpaperController(
@@ -797,11 +802,21 @@ class QuantisMainWindow(QMainWindow):
             self._apply_ui_theme(theme)
 
     def _on_wallpaper_changed(self) -> None:
+        self._apply_backdrop_look()
+        source = (resources.wallpaper_path(), self._ui_prefs.dynamic_wallpaper_enabled)
+        if source == self._wallpaper_source:
+            return  # двигают ползунки затемнения/размытия — видео не трогаем
+        self._wallpaper_source = source
         self._apply_wallpaper()
         if self._ui_prefs.dynamic_wallpaper_enabled and not self._eco.active:
             self._dynamic_wallpaper.refresh_for_track(
                 self._bundle.playback.current_track
             )
+
+    def _apply_backdrop_look(self) -> None:
+        self._shell.compositor.set_look(
+            self._ui_prefs.backdrop_dim, self._ui_prefs.backdrop_blur
+        )
 
     def _apply_wallpaper(self) -> None:
         path = resources.wallpaper_path()

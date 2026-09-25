@@ -64,6 +64,8 @@ def test_silent_settings(prefs: UiPreferences, emitted: Counter[str]) -> None:
         (lambda p: p.set_wallpaper_path("/tmp/wall.png"), "wallpaper_changed"),
         (lambda p: p.set_dynamic_wallpaper_enabled(True), "wallpaper_changed"),
         (lambda p: p.set_dynamic_wallpaper_fps(15), "wallpaper_changed"),
+        (lambda p: p.set_backdrop_dim(0.6), "wallpaper_changed"),
+        (lambda p: p.set_backdrop_blur(0.4), "wallpaper_changed"),
         (lambda p: p.set_show_now_playing_panel(False), "layout_changed"),
         (lambda p: p.set_show_home_featured_panel(False), "layout_changed"),
         (lambda p: p.set_background_eco_enabled(False), "eco_changed"),

@@ -59,9 +59,7 @@ def test_theater_mode_keeps_foreground(qapp) -> None:
     assert not body._foreground.isHidden()
     assert not body._layer_host.isHidden()
     assert body.backdrop.compositor.cinematic is True
-    assert body.backdrop.compositor.video_opacity == 1.0
     body.set_theater_mode(False)
     assert not body._foreground.isHidden()
     assert not body._layer_host.isHidden()
     assert body.backdrop.compositor.cinematic is False
-    assert body.backdrop.compositor.video_opacity == 0.28
