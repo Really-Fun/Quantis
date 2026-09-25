@@ -5,7 +5,6 @@ from typing import Callable
 from PySide6.QtCore import QEvent, QRect, QSize, Qt
 from PySide6.QtGui import (
     QColor,
-    QFontMetrics,
     QLinearGradient,
     QPainter,
     QPainterPath,
@@ -18,15 +17,9 @@ from quantis.ui.models import TrackListModel
 from quantis.ui.preferences import UiPreferences
 from quantis.ui.views.widgets.cover_art import load_track_cover, paint_rounded_cover
 from quantis.ui.views.widgets.delegate_paint_kit import (
-    FONT_ACTION,
-    FONT_AUTHOR,
-    FONT_COVER,
-    FONT_EDITORIAL_AUTHOR,
-    FONT_EDITORIAL_INDEX,
-    FONT_EDITORIAL_TITLE,
-    FONT_TITLE,
     SOURCE_LABELS,
     paint_colors,
+    paint_fonts,
 )
 
 
@@ -54,10 +47,6 @@ class TrackCardDelegate(QStyledItemDelegate):
         self._prefs = UiPreferences()
         self._editorial = self._prefs.theme.card_style == "magazine"
         self._prefs.theme_changed.connect(self._on_theme_changed)
-        self._fm_title = QFontMetrics(FONT_TITLE)
-        self._fm_author = QFontMetrics(FONT_AUTHOR)
-        self._fm_editorial_title = QFontMetrics(FONT_EDITORIAL_TITLE)
-        self._fm_editorial_author = QFontMetrics(FONT_EDITORIAL_AUTHOR)
 
     def _on_theme_changed(self) -> None:
         self._editorial = self._prefs.theme.card_style == "magazine"
@@ -119,13 +108,14 @@ class TrackCardDelegate(QStyledItemDelegate):
         if self._on_download is None:
             return
 
+        fonts = paint_fonts(self._prefs.theme)
         action_rect = self._action_rect(option.rect)
         if track.downloaded:
             painter.setBrush(self._C_DL_OK_BG)
             painter.setPen(QPen(self._C_DL_OK_PEN, 1))
             painter.drawEllipse(action_rect)
             painter.setPen(QColor(255, 255, 255))
-            painter.setFont(FONT_ACTION)
+            painter.setFont(fonts.action)
             painter.drawText(action_rect, Qt.AlignmentFlag.AlignCenter, "✓")
         elif hovered:
             colors = paint_colors(self._prefs.theme)
@@ -133,7 +123,7 @@ class TrackCardDelegate(QStyledItemDelegate):
             painter.setPen(QPen(colors.dl_hover_pen, 1))
             painter.drawEllipse(action_rect)
             painter.setPen(colors.dl_hover_text)
-            painter.setFont(FONT_ACTION)
+            painter.setFont(fonts.action)
             painter.drawText(action_rect, Qt.AlignmentFlag.AlignCenter, "↓")
 
     def _paint_default(
@@ -147,6 +137,7 @@ class TrackCardDelegate(QStyledItemDelegate):
     ) -> None:
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         colors = paint_colors(self._prefs.theme)
+        fonts = paint_fonts(self._prefs.theme)
 
         if is_playing:
             painter.setBrush(colors.bg_playing)
@@ -183,7 +174,7 @@ class TrackCardDelegate(QStyledItemDelegate):
             overlay.addRoundedRect(cover_rect, 8, 8)
             painter.fillPath(overlay, QColor(0, 0, 0, 118))
             painter.setPen(QColor(255, 255, 255))
-            painter.setFont(FONT_COVER)
+            painter.setFont(fonts.cover)
             painter.drawText(cover_rect, Qt.AlignmentFlag.AlignCenter, "▶")
 
         action_w = self.ACTION_SIZE + 16 if self._on_download else 8
@@ -194,11 +185,11 @@ class TrackCardDelegate(QStyledItemDelegate):
         author_rect = QRect(text_left, rect.top() + 28, text_w, 16)
 
         painter.setPen(colors.title_playing if is_playing else colors.title)
-        painter.setFont(FONT_TITLE)
+        painter.setFont(fonts.title)
         painter.drawText(
             title_rect,
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-            self._fm_title.elidedText(track.title, Qt.TextElideMode.ElideRight, text_w),
+            fonts.fm_title.elidedText(track.title, Qt.TextElideMode.ElideRight, text_w),
         )
 
         source_key = str(track.source).lower()
@@ -208,11 +199,11 @@ class TrackCardDelegate(QStyledItemDelegate):
             subtitle = f"{subtitle} · {badge}" if subtitle else badge
 
         painter.setPen(colors.subtitle)
-        painter.setFont(FONT_AUTHOR)
+        painter.setFont(fonts.author)
         painter.drawText(
             author_rect,
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-            self._fm_author.elidedText(subtitle, Qt.TextElideMode.ElideRight, text_w),
+            fonts.fm_author.elidedText(subtitle, Qt.TextElideMode.ElideRight, text_w),
         )
 
     def _paint_editorial(
@@ -227,6 +218,7 @@ class TrackCardDelegate(QStyledItemDelegate):
     ) -> None:
         inner = rect.adjusted(1, 1, -1, -1)
         painter.fillRect(inner, self._C_EDITORIAL_BG)
+        fonts = paint_fonts(self._prefs.theme)
 
         if is_playing:
             glow = QLinearGradient(inner.topLeft(), inner.bottomRight())
@@ -253,7 +245,7 @@ class TrackCardDelegate(QStyledItemDelegate):
                 QColor(230, 59, 46, 200),
             )
 
-        painter.setFont(FONT_EDITORIAL_INDEX)
+        painter.setFont(fonts.editorial_index)
         painter.setPen(self._C_EDITORIAL_IDX)
         painter.drawText(
             inner.adjusted(0, 0, -12, 0),
@@ -273,21 +265,21 @@ class TrackCardDelegate(QStyledItemDelegate):
             if is_playing
             else self._C_EDITORIAL_TITLE
         )
-        painter.setFont(FONT_EDITORIAL_TITLE)
+        painter.setFont(fonts.editorial_title)
         painter.drawText(
             title_rect,
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-            self._fm_editorial_title.elidedText(
+            fonts.fm_editorial_title.elidedText(
                 track.title, Qt.TextElideMode.ElideRight, text_w
             ),
         )
 
-        painter.setFont(FONT_EDITORIAL_AUTHOR)
+        painter.setFont(fonts.editorial_author)
         painter.setPen(self._C_EDITORIAL_AUTHOR)
         painter.drawText(
             author_rect,
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-            self._fm_editorial_author.elidedText(
+            fonts.fm_editorial_author.elidedText(
                 track.author.upper(), Qt.TextElideMode.ElideRight, text_w
             ),
         )

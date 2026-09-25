@@ -6,7 +6,6 @@ from PySide6.QtCore import QEvent, QPropertyAnimation, QRect, Qt, QUrl
 from PySide6.QtGui import (
     QColor,
     QDesktopServices,
-    QFont,
     QGuiApplication,
     QKeySequence,
     QShortcut,
@@ -27,6 +26,7 @@ from quantis.ui import resources
 from quantis.ui.accent import AccentStyles
 from quantis.ui.controllers.dynamic_wallpaper import DynamicWallpaperController
 from quantis.ui.cover_accent import accent_from_cover_path, fallback_accent
+from quantis.ui.fonts import register_bundled_fonts, theme_font
 from quantis.ui.preferences import UiPreferences
 from quantis.ui.shortcuts import (
     ALT_PAGE_IDS,
@@ -94,12 +94,7 @@ class QuantisMainWindow(QMainWindow):
     def __init__(self, bundle: ApplicationBundle, parent=None) -> None:
         super().__init__(parent)
 
-        app_font = QFont("Bahnschrift", 10)
-        if not app_font.exactMatch():
-            app_font = QFont("Segoe UI Variable Display", 10)
-        if not app_font.exactMatch():
-            app_font = QFont("Segoe UI", 10)
-        QApplication.setFont(app_font)
+        register_bundled_fonts()
 
         self._bundle = bundle
         self._bridge = bundle.async_bridge
@@ -797,6 +792,7 @@ class QuantisMainWindow(QMainWindow):
     def _apply_ui_theme(self, theme_id: str) -> None:
         self._applied_theme = theme_id
         theme = registry.get(theme_id)
+        QApplication.setFont(theme_font(theme, "ui", 10))
         if not self._cover_accent.isValid():
             self.apply_accent(fallback_accent(theme))
         self.setStyleSheet(resources.load_stylesheet(theme_id, accent=self._accent))

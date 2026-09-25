@@ -77,3 +77,9 @@ def test_spec_uses_collect_helper() -> None:
     ).read_text(encoding="utf-8")
     assert "collect_styles" in spec
     assert 'datas.append((str(QUANTIS / "styles"), "quantis/styles"))' not in spec
+
+
+def test_collect_assets_includes_fonts(collect_mod) -> None:
+    assets = Path(__file__).resolve().parents[1] / "src" / "quantis" / "assets"
+    dests = {Path(src).name for src, _ in collect_mod.collect_assets(assets)}
+    assert {"Manrope-Regular.ttf", "Unbounded-Bold.ttf", "OFL-Manrope.txt"} <= dests

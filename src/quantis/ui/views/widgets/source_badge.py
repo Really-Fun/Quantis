@@ -12,13 +12,13 @@ from quantis.ui.design_tokens import (
     BADGE_YOUTUBE,
     SURFACE,
 )
+from quantis.ui.fonts import app_font
 
 BADGE_SIZE = 16
 _BORDER = QColor(SURFACE)
 _YT = QColor(BADGE_YOUTUBE)
 _YA = QColor(BADGE_YANDEX)
 _SC = QColor(BADGE_SOUNDCLOUD)
-_FONT = QFont("Bahnschrift", 6, QFont.Weight.Bold)
 
 
 def source_badge_color(source: str | None) -> QColor:
@@ -69,7 +69,7 @@ def paint_source_badge(
         if source_badge_letter(source) == "Я"
         else QColor(255, 255, 255)
     )
-    painter.setFont(_FONT)
+    painter.setFont(app_font(6, QFont.Weight.Bold))
     painter.drawText(badge, Qt.AlignmentFlag.AlignCenter, source_badge_letter(source))
     painter.restore()
     return badge

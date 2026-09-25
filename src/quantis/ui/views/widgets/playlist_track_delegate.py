@@ -1,7 +1,7 @@
 """Делегат строки плейлиста: # / обложка+badge / название · источник."""
 
 from PySide6.QtCore import QRect, QSize, Qt
-from PySide6.QtGui import QColor, QFontMetrics, QPainter
+from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import QStyle, QStyledItemDelegate
 
 from quantis.models.track import Track
@@ -9,11 +9,9 @@ from quantis.ui.models import TrackListModel
 from quantis.ui.preferences import UiPreferences
 from quantis.ui.views.widgets.cover_art import load_track_cover, paint_rounded_cover
 from quantis.ui.views.widgets.delegate_paint_kit import (
-    FONT_AUTHOR,
-    FONT_INDEX,
-    FONT_TITLE,
     SOURCE_LABELS,
     paint_colors,
+    paint_fonts,
 )
 
 
@@ -24,8 +22,6 @@ class PlaylistTrackDelegate(QStyledItemDelegate):
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
-        self._fm_title = QFontMetrics(FONT_TITLE)
-        self._fm_author = QFontMetrics(FONT_AUTHOR)
         self._prefs = UiPreferences()
         self._prefs.theme_changed.connect(self._on_theme_changed)
 
@@ -62,6 +58,7 @@ class PlaylistTrackDelegate(QStyledItemDelegate):
         rect = option.rect
 
         colors = paint_colors(self._prefs.theme)
+        fonts = paint_fonts(self._prefs.theme)
         if is_playing:
             painter.fillRect(rect, colors.bg_playing)
         elif hovered or selected:
@@ -86,7 +83,7 @@ class PlaylistTrackDelegate(QStyledItemDelegate):
         text_left = cover_rect.right() + 12
         text_w = max(0, inner.right() - text_left)
 
-        painter.setFont(FONT_INDEX)
+        painter.setFont(fonts.index)
         painter.setPen(colors.index_playing if is_playing else colors.index)
         painter.drawText(idx_rect, Qt.AlignmentFlag.AlignCenter, f"{row + 1}")
 
@@ -107,12 +104,12 @@ class PlaylistTrackDelegate(QStyledItemDelegate):
         title_rect = QRect(text_left, inner.top() + 11, text_w, 20)
         author_rect = QRect(text_left, inner.top() + 30, text_w, 16)
 
-        painter.setFont(FONT_TITLE)
+        painter.setFont(fonts.title)
         painter.setPen(colors.title_playing if is_playing else colors.title)
         painter.drawText(
             title_rect,
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-            self._fm_title.elidedText(
+            fonts.fm_title.elidedText(
                 track.title or "—",
                 Qt.TextElideMode.ElideRight,
                 text_w,
@@ -125,11 +122,11 @@ class PlaylistTrackDelegate(QStyledItemDelegate):
         if badge:
             subtitle = f"{subtitle} · {badge}"
 
-        painter.setFont(FONT_AUTHOR)
+        painter.setFont(fonts.author)
         painter.setPen(colors.subtitle)
         painter.drawText(
             author_rect,
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
-            self._fm_author.elidedText(subtitle, Qt.TextElideMode.ElideRight, text_w),
+            fonts.fm_author.elidedText(subtitle, Qt.TextElideMode.ElideRight, text_w),
         )
         painter.restore()

@@ -22,6 +22,7 @@ from quantis.models.track import Track
 from quantis.providers.path_provider import PathProvider
 from quantis.services.cover_validate import cover_file_ok
 from quantis.ui.design_tokens import BADGE_SOUNDCLOUD, BADGE_YANDEX, BADGE_YOUTUBE
+from quantis.ui.fonts import app_font
 
 _GRAD_YT = (QColor(BADGE_YOUTUBE), QColor(140, 30, 30))
 _GRAD_YA = (QColor(BADGE_YANDEX), QColor(180, 140, 20))
@@ -229,7 +230,7 @@ def paint_rounded_cover(
         painter.drawRoundedRect(rect, radius, radius)
         initial = (label[:1] or "?").upper()
         painter.setPen(QColor(255, 255, 255, 230))
-        painter.setFont(QFont("Segoe UI", max(9, rect.width() // 4), QFont.Weight.Bold))
+        painter.setFont(app_font(max(9, rect.width() // 4), QFont.Weight.Bold))
         painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, initial)
 
     if with_badge and source_key:

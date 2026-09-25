@@ -8,8 +8,21 @@ from quantis.ui.themes.spec import (
     ThemeSpec,
 )
 
-UI_FONTS = ("Bahnschrift", "Segoe UI Variable Display", "Segoe UI", "sans-serif")
-MONO_FONTS = ("Cascadia Mono", "Consolas", "Bahnschrift", "monospace")
+# Bahnschrift — Windows; Manrope встроен (assets/fonts), он и будет на Linux.
+UI_FONTS = (
+    "Bahnschrift",
+    "Manrope",
+    "Segoe UI Variable Display",
+    "Segoe UI",
+    "sans-serif",
+)
+MONO_FONTS = (
+    "Cascadia Mono",
+    "JetBrains Mono",
+    "Consolas",
+    "DejaVu Sans Mono",
+    "monospace",
+)
 
 DARK_DEPTH = (
     (0.0, "rgba(20, 28, 48, 40)"),

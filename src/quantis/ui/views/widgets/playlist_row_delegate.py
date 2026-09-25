@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QRect, QSize, Qt
-from PySide6.QtGui import QFontMetrics, QPainter, QPainterPath, QPen
+from PySide6.QtGui import QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QStyle, QStyledItemDelegate
 
 from quantis.models.playlist import Playlist
@@ -11,9 +11,8 @@ from quantis.ui.models.playlist_list_model import PlaylistListModel
 from quantis.ui.preferences import UiPreferences
 from quantis.ui.views.widgets.cover_art import load_cover_pixmap, playlist_cover_path
 from quantis.ui.views.widgets.delegate_paint_kit import (
-    FONT_AUTHOR,
-    FONT_TITLE,
     paint_colors,
+    paint_fonts,
 )
 from quantis.ui.views.widgets.playlist_card import playlist_tracks_label
 
@@ -47,6 +46,7 @@ class PlaylistRowDelegate(QStyledItemDelegate):
             return
 
         colors = paint_colors(self._prefs.theme)
+        fonts = paint_fonts(self._prefs.theme)
         hovered = bool(option.state & QStyle.StateFlag.State_MouseOver)
         selected = bool(option.state & QStyle.StateFlag.State_Selected)
         rect = option.rect.adjusted(0, 2, 0, -2)
@@ -88,16 +88,16 @@ class PlaylistRowDelegate(QStyledItemDelegate):
         meta_rect = QRect(text_left, title_rect.bottom() - 2, title_rect.width(), 18)
 
         painter.setPen(colors.title)
-        painter.setFont(FONT_TITLE)
+        painter.setFont(fonts.title)
         painter.drawText(
             title_rect,
             Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
-            QFontMetrics(FONT_TITLE).elidedText(
+            fonts.fm_title.elidedText(
                 playlist.name, Qt.TextElideMode.ElideRight, title_rect.width()
             ),
         )
         painter.setPen(colors.meta)
-        painter.setFont(FONT_AUTHOR)
+        painter.setFont(fonts.author)
         painter.drawText(
             meta_rect,
             Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,

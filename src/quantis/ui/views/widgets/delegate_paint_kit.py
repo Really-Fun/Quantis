@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import NamedTuple
 
-from PySide6.QtGui import QColor, QFont
+from PySide6.QtGui import QColor, QFont, QFontMetrics
 
 from quantis.ui.themes.spec import ThemeSpec, qcolor
 
@@ -88,16 +88,61 @@ def paint_colors(theme: ThemeSpec | None = None) -> PaintColors:
     return cached
 
 
-_UI = "Bahnschrift"
-FONT_TITLE = QFont(_UI, 10, QFont.Weight.DemiBold)
-FONT_AUTHOR = QFont(_UI, 9)
-FONT_INDEX = QFont(_UI, 11, QFont.Weight.Medium)
-FONT_PILL = QFont(_UI, 8, QFont.Weight.Bold)
-FONT_COVER = QFont(_UI, 11, QFont.Weight.Bold)
-FONT_ACTION = QFont(_UI, 10, QFont.Weight.Bold)
-FONT_EDITORIAL_TITLE = QFont("Georgia", 12)
-FONT_EDITORIAL_AUTHOR = QFont("Cascadia Mono", 8, QFont.Weight.Medium)
-FONT_EDITORIAL_INDEX = QFont("Georgia", 28, QFont.Weight.Light)
+class PaintFonts(NamedTuple):
+    title: QFont
+    author: QFont
+    index: QFont
+    cover: QFont
+    action: QFont
+    editorial_title: QFont
+    editorial_author: QFont
+    editorial_index: QFont
+    fm_title: QFontMetrics
+    fm_author: QFontMetrics
+    fm_editorial_title: QFontMetrics
+    fm_editorial_author: QFontMetrics
+
+
+def build_paint_fonts(theme: ThemeSpec) -> PaintFonts:
+    """Шрифты делегатов из ``ThemeFonts``: списки с запасными, а не имя из Windows."""
+    from quantis.ui.fonts import theme_font
+
+    w = QFont.Weight
+    title = theme_font(theme, "ui", 10, w.DemiBold)
+    author = theme_font(theme, "ui", 9)
+    editorial_title = theme_font(theme, "display", 12)
+    editorial_author = theme_font(theme, "label", 8, w.Medium)
+    return PaintFonts(
+        title=title,
+        author=author,
+        index=theme_font(theme, "ui", 11, w.Medium),
+        cover=theme_font(theme, "ui", 11, w.Bold),
+        action=theme_font(theme, "ui", 10, w.Bold),
+        editorial_title=editorial_title,
+        editorial_author=editorial_author,
+        editorial_index=theme_font(theme, "display", 28, w.Light),
+        fm_title=QFontMetrics(title),
+        fm_author=QFontMetrics(author),
+        fm_editorial_title=QFontMetrics(editorial_title),
+        fm_editorial_author=QFontMetrics(editorial_author),
+    )
+
+
+_FONT_CACHE: dict[str, PaintFonts] = {}
+
+
+def paint_fonts(theme: ThemeSpec | None = None) -> PaintFonts:
+    """Шрифты текущей темы (или ``theme``); кэш по id темы."""
+    if theme is None:
+        from quantis.ui.preferences import UiPreferences
+
+        theme = UiPreferences().theme
+    cached = _FONT_CACHE.get(theme.id)
+    if cached is None:
+        cached = build_paint_fonts(theme)
+        _FONT_CACHE[theme.id] = cached
+    return cached
+
 
 SOURCE_LABELS = {
     "youtube": "YT",

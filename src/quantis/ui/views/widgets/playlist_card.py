@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 )
 
 from quantis.models.playlist import Playlist
+from quantis.ui.fonts import app_font
 from quantis.ui.views.widgets.cover_art import (
     load_cover_pixmap,
     paint_rounded_cover,
@@ -130,7 +131,7 @@ class GradientCover(QWidget):
             painter.setBrush(QColor(248, 250, 252, 235))
             painter.drawEllipse(play)
             painter.setPen(QColor(11, 13, 18))
-            font = QFont("Bahnschrift", max(9, size // 3), QFont.Weight.Bold)
+            font = app_font(max(9, size // 3), QFont.Weight.Bold)
             painter.setFont(font)
             painter.drawText(
                 play.adjusted(1, 0, 1, 0),

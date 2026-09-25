@@ -3,8 +3,8 @@
 from quantis.ui.themes.neon import DARK_DEPTH
 from quantis.ui.themes.spec import BackdropSpec, ThemeColors, ThemeFonts, ThemeSpec
 
-SERIF = ("Georgia", "Segoe UI", "serif")
-MONO = ("Cascadia Mono", "Consolas", "monospace")
+SERIF = ("Georgia", "Noto Serif", "DejaVu Serif", "serif")
+MONO = ("Cascadia Mono", "JetBrains Mono", "DejaVu Sans Mono", "monospace")
 
 EXTRA_QSS = """
 /* Журнальная вёрстка: прямые углы, тонкие начертания, метки капсом. */
