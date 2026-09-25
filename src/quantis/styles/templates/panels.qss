@@ -19,7 +19,7 @@ QToolButton#sourceFilterChip:checked {
 }
 
 QFrame#nowPlayingPanel {
-    background: rgba(20, 24, 33, 0.92);
+    background: ${surface};
     border: 1px solid rgba(${ink_rgb}, 0.06);
     border-radius: 16px;
 }
@@ -52,7 +52,7 @@ QFrame#nowPlayingPanel {
 }
 
 QFrame#pluginCard {
-    background: rgba(28, 33, 45, 0.95);
+    background: ${surface};
     border: 1px solid rgba(${ink_rgb}, 0.06);
     border-radius: 16px;
 }
@@ -102,7 +102,7 @@ QToolButton#navPinButton:checked {
 
 QToolButton#advancedToggle {
     background: transparent;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(${ink_rgb}, 0.1);
     border-radius: 14px;
     color: rgba(${ink_rgb}, 0.6);
     padding: 6px 14px;
@@ -111,7 +111,7 @@ QToolButton#advancedToggle {
 }
 
 QToolButton#advancedToggle:hover {
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(${ink_rgb}, 0.08);
     color: rgba(${ink_rgb}, 0.95);
 }
 

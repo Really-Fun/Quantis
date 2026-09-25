@@ -146,6 +146,7 @@ class PlayerBar(QFrame):
         )
         self._repeat_btn.clicked.connect(self._vm.cycle_repeat_mode)
         self._play_btn = self._make_button("play.svg", "Play", accent=True, size=40)
+        self._refresh_play_icon()
         self._next_btn = self._make_button("next.svg", "Далее", size=40)
         self._prev_btn.clicked.connect(self._vm.play_previous)
         self._play_btn.clicked.connect(self._vm.toggle_pause)
@@ -177,6 +178,7 @@ class PlayerBar(QFrame):
         self._position.setRange(0, 0)
         self._position.setFixedHeight(14)
         AccentStyles.instance().bind(self._position, resources.ACCENT_SEEK_SLIDER_QSS)
+        AccentStyles.instance().accent_changed.connect(self._refresh_play_icon)
         self._position.sliderPressed.connect(self._on_seek_start)
         self._position.sliderReleased.connect(self._on_seek_end)
         self._duration_label = QLabel("0:00")
@@ -444,8 +446,7 @@ class PlayerBar(QFrame):
 
     def _on_playing_changed(self, playing: bool) -> None:
         self._is_playing = playing
-        icon = "pause.svg" if playing else "play.svg"
-        self._play_btn.setIcon(resources.load_icon(icon))
+        self._refresh_play_icon()
         self._set_title_playing(playing)
 
     def _on_position_changed(self, position_ms: int) -> None:
@@ -502,6 +503,12 @@ class PlayerBar(QFrame):
         fade.setColorAt(1.0, QColor(0, 0, 0, 175))
         painter.fillRect(rect, fade)
         painter.end()
+
+    def _refresh_play_icon(self, *_: object) -> None:
+        """Play/пауза на заливке акцентом: сплошной значок, контрастный акценту."""
+        icon = "pause.svg" if self._is_playing else "play.svg"
+        color = resources.on_color(AccentStyles.instance().color)
+        self._play_btn.setIcon(resources.load_icon(icon, color))
 
     def refresh_theme(self) -> None:
         buttons = [

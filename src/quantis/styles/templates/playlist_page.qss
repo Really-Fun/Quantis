@@ -3,7 +3,7 @@ QWidget#playlistPage {
 }
 
 #playlistCoverFrame {
-    background: rgba(0, 0, 0, 0.2);
+    background: ${chip_bg};
     border: 1px solid rgba(${ink_rgb}, 0.08);
     border-radius: 12px;
 }
@@ -30,7 +30,7 @@ QTableView#trackListView QScrollBar:vertical {
 }
 
 QTableView#trackListView QScrollBar::handle:vertical {
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(${ink_rgb}, 0.2);
     border-radius: 3px;
     min-height: 40px;
 }

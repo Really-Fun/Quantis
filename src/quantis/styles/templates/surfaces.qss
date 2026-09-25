@@ -1,31 +1,25 @@
 QFrame#PlayMenu {
-    background-color: rgba(8, 12, 22, 0.72);
+    background-color: ${surface};
     border: 1px solid rgba(${ink_rgb}, 0.08);
     border-radius: ${radius};
 }
 
 QFrame#TrackListPanel {
-    background-color: rgba(8, 12, 22, 0.72);
+    background-color: ${surface};
     border: 1px solid rgba(${ink_rgb}, 0.08);
     border-radius: 22px;
 }
 
 QFrame#glassPanel {
-    background-color: rgba(8, 12, 22, 0.72);
     background: ${surface};
     border: none;
     border-radius: ${radius};
 }
 
 QFrame#sideNavRail {
-    background-color: rgba(6, 10, 20, 0.78);
+    background-color: ${surface};
     border: 1px solid rgba(${ink_rgb}, 0.06);
     border-radius: ${radius};
-}
-
-QFrame#playerDock {
-    background: qlineargradient( x1:0, y1:0, x2:0, y2:1, stop:0 rgba(0, 0, 0, 0), stop:0.35 rgba(3, 5, 12, 0.45), stop:1 rgba(3, 5, 12, 0.92) );
-    border: none;
 }
 
 #trackTitle[playing="true"] {

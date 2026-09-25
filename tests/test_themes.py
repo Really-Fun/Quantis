@@ -160,3 +160,25 @@ def test_no_cover_accent_follows_theme(qapp, tmp_path) -> None:
     assert not accent_from_cover_path(tmp_path / "missing.jpg").isValid()
     yellow = registry.get("yellow_dark")
     assert fallback_accent(yellow).name().upper() == yellow.colors.accent_fallback
+
+
+def test_no_selectorless_background_stylesheets() -> None:
+    """``setStyleSheet("background: …")`` без селектора наследуется всеми потомками
+    и перекрывает фоны оконного QSS внутри виджета."""
+    offenders = []
+    for path in SRC.rglob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr == "setStyleSheet"
+                and node.args
+                and isinstance(node.args[0], ast.Constant)
+                and isinstance(node.args[0].value, str)
+            ):
+                continue
+            sheet = node.args[0].value
+            if "background" in sheet and "{" not in sheet:
+                offenders.append(f"{path.relative_to(SRC)}:{node.lineno}")
+    assert offenders == []

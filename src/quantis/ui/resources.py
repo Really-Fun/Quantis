@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtGui import QColor, QIcon
+from PySide6.QtGui import QColor, QIcon, QPainter
 
 from quantis.ui.design_tokens import ACCENT_FALLBACK
 from quantis.utils import get_asset_path
@@ -31,16 +31,33 @@ def icon_path(name: str) -> str:
     return get_asset_path(f"assets/icons/{name}")
 
 
-_ICON_CACHE: dict[str, QIcon] = {}
+_ICON_CACHE: dict[tuple[str, int], QIcon] = {}
+_TINT_PX = 64
 
 
-def load_icon(name: str) -> QIcon:
-    cached = _ICON_CACHE.get(name)
+def load_icon(name: str, color: QColor | None = None) -> QIcon:
+    """Иконка из assets/icons; ``color`` — перекрасить в один сплошной цвет."""
+    key = (name, color.rgba() if color is not None else 0)
+    cached = _ICON_CACHE.get(key)
     if cached is not None:
         return cached
     icon = QIcon(icon_path(name))
-    _ICON_CACHE[name] = icon
+    if color is not None:
+        pixmap = icon.pixmap(_TINT_PX, _TINT_PX)
+        painter = QPainter(pixmap)
+        painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_SourceIn)
+        painter.fillRect(pixmap.rect(), color)
+        painter.end()
+        icon = QIcon(pixmap)
+    _ICON_CACHE[key] = icon
     return icon
+
+
+def on_color(background: QColor) -> QColor:
+    """Цвет значка/текста поверх заливки ``background``: тёмный на светлом, белый на тёмном."""
+    r, g, b = background.redF(), background.greenF(), background.blueF()
+    luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
+    return QColor(11, 13, 18) if luminance > 0.45 else QColor(255, 255, 255)
 
 
 def normalize_ui_theme(ui_theme: str | None) -> str:

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from string import Template
 
-from PySide6.QtCore import QObject
+from PySide6.QtCore import QObject, Signal
 from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QWidget
 
@@ -30,6 +30,9 @@ def accent_values(color: QColor) -> dict[str, str]:
 
 class AccentStyles(QObject):
     """Реестр виджетов с акцентом; обновляет только их stylesheet."""
+
+    accent_changed = Signal(QColor)
+    """Акцент сменился — для виджетов, которым мало stylesheet (иконки)."""
 
     _instance: AccentStyles | None = None
 
@@ -61,6 +64,7 @@ class AccentStyles(QObject):
         values = accent_values(color)
         for widget, template in list(self._bound.values()):
             self._apply(widget, template, values)
+        self.accent_changed.emit(QColor(color))
 
     @staticmethod
     def _apply(widget: QWidget, template: Template, values: dict[str, str]) -> None:

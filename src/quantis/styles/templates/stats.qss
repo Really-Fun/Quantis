@@ -4,7 +4,7 @@ QWidget#statsMetrics {
 }
 
 QFrame#statsMetric {
-    background-color: rgba(255, 255, 255, 0.05);
+    background-color: rgba(${ink_rgb}, 0.05);
     border: 1px solid rgba(${ink_rgb}, 0.08);
     border-radius: 18px;
 }

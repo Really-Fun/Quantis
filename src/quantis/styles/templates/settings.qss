@@ -46,15 +46,15 @@ QLineEdit#settingLineEdit {
 
 QComboBox#themeCombo:hover,
 QLineEdit#settingLineEdit:focus {
-    border-color: rgba(46, 230, 255, 0.55);
-    background: rgba(0, 0, 0, 0.52);
+    border-color: rgba(${hl_rgb}, 0.55);
+    background: ${field_bg};
 }
 
 QComboBox#themeCombo QAbstractItemView {
-    background: #080e18;
+    background: ${list_bg};
     color: ${title};
     border: 1px solid rgba(${ink_rgb}, 0.1);
-    selection-background-color: rgba(46, 230, 255, 0.28);
+    selection-background-color: rgba(${hl_rgb}, 0.28);
     outline: none;
     padding: 4px;
 }
@@ -64,8 +64,8 @@ QWidget#settingsPage {
 }
 
 QFrame#settingsPanel {
-    background: rgba(8, 12, 22, 0.86);
-    border: 1px solid rgba(46, 230, 255, 0.12);
+    background: ${surface};
+    border: 1px solid rgba(${hl_rgb}, 0.12);
     border-radius: 24px;
 }
 
@@ -80,8 +80,8 @@ QCheckBox#settingsCheck::indicator {
     width: 18px;
     height: 18px;
     border-radius: 6px;
-    border: 1px solid rgba(255, 255, 255, 0.28);
-    background: rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(${ink_rgb}, 0.28);
+    background: ${field_bg};
 }
 
 QCheckBox#settingsCheck::indicator:checked {
@@ -90,8 +90,8 @@ QCheckBox#settingsCheck::indicator:checked {
 }
 
 QSpinBox#settingSpin {
-    background: rgba(0, 0, 0, 0.4);
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: ${field_bg};
+    border: 1px solid rgba(${ink_rgb}, 0.12);
     border-radius: 12px;
     padding: 10px 12px;
     color: ${title};
@@ -101,8 +101,8 @@ QSpinBox#settingSpin {
 
 QSpinBox#settingSpin:hover,
 QSpinBox#settingSpin:focus {
-    border-color: rgba(46, 230, 255, 0.55);
-    background: rgba(0, 0, 0, 0.52);
+    border-color: rgba(${hl_rgb}, 0.55);
+    background: ${field_bg};
 }
 
 QComboBox#themeCombo::drop-down {
@@ -112,7 +112,7 @@ QComboBox#themeCombo::drop-down {
 
 QPushButton#settingsButton {
     background: rgba(${ink_rgb}, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.14);
+    border: 1px solid rgba(${ink_rgb}, 0.14);
     border-radius: 12px;
     padding: 8px 14px;
     color: ${text_soft};
@@ -122,18 +122,18 @@ QPushButton#settingsButton {
 
 QPushButton#settingsButton:hover {
     background: rgba(${hl_rgb}, 0.14);
-    border-color: rgba(46, 230, 255, 0.55);
+    border-color: rgba(${hl_rgb}, 0.55);
     color: ${title};
 }
 
 QPushButton#settingsButton:pressed {
-    background: rgba(46, 230, 255, 0.26);
+    background: rgba(${hl_rgb}, 0.26);
 }
 
 QFrame#updateBanner {
-    background: rgba(46, 230, 255, 0.12);
+    background: rgba(${hl_rgb}, 0.12);
     border: none;
-    border-bottom: 1px solid rgba(46, 230, 255, 0.22);
+    border-bottom: 1px solid rgba(${hl_rgb}, 0.22);
 }
 
 QLabel#updateBannerText {
@@ -144,8 +144,8 @@ QLabel#updateBannerText {
 }
 
 QPushButton#updateBannerButton {
-    background: rgba(255, 255, 255, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(${ink_rgb}, 0.06);
+    border: 1px solid rgba(${ink_rgb}, 0.14);
     border-radius: 10px;
     padding: 6px 12px;
     color: ${text_soft};
@@ -155,6 +155,6 @@ QPushButton#updateBannerButton {
 
 QPushButton#updateBannerButton:hover {
     background: rgba(${hl_rgb}, 0.14);
-    border-color: rgba(46, 230, 255, 0.55);
+    border-color: rgba(${hl_rgb}, 0.55);
     color: ${title};
 }

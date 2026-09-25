@@ -32,7 +32,7 @@ class BackgroundFrame(QFrame):
         self._content.setObjectName("appContent")
         self._content.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, False)
         self._content.setAutoFillBackground(False)
-        self._content.setStyleSheet("background: transparent;")
+        self._content.setStyleSheet("#appContent { background: transparent; }")
 
         self._eco = False
         self._cinematic = False

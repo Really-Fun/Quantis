@@ -33,7 +33,7 @@ QInputDialog QPushButton:hover {
 }
 
 QInputDialog QComboBox {
-    background-color: rgba(0, 0, 0, 140);
+    background-color: ${field_bg};
     border: 1px solid rgba(${hl_rgb}, 120);
     border-radius: 8px;
     color: rgb(${ink_rgb});
@@ -156,7 +156,7 @@ QInputDialog QComboBox QAbstractItemView {
 }
 
 #repeatButton:hover {
-    background: rgba(255,255,255,40);
+    background: rgba(${ink_rgb}, 0.16);
 }
 
 #repeatButton[state="active"] {
@@ -183,18 +183,18 @@ QInputDialog QComboBox QAbstractItemView {
     font-size: 13px;
     font-weight: 600;
     background: rgba(${ink_rgb}, 0.06);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(${ink_rgb}, 0.1);
     border-radius: 18px;
     padding: 9px 22px;
     min-width: 132px;
 }
 
 #actionButton[accent="true"]:hover {
-    background: rgb(80, 235, 255);
+    background: ${tint_hover};
 }
 
 #actionButton[accent="false"]:hover {
-    background: rgba(255, 255, 255, 0.14);
+    background: rgba(${ink_rgb}, 0.14);
 }
 
 #backButton {
@@ -298,7 +298,7 @@ QScrollBar::sub-line:vertical {
 
 #settingLineEdit {
     color: rgb(${ink_rgb});
-    background: rgba(0, 0, 0, 120);
+    background: ${field_bg};
     border: 1px solid rgba(${hl_rgb}, 80);
     border-radius: 8px;
     padding: 6px;
@@ -314,6 +314,7 @@ QScrollBar::sub-line:vertical {
 }
 
 #searchInput {
+    background: ${field_bg};
     border: 1px solid rgba(${ink_rgb}, 0.08);
     padding: 12px 14px;
     font-size: 14px;
@@ -326,7 +327,7 @@ QScrollBar::sub-line:vertical {
 }
 
 #TrackListPanel {
-    border-top: 1px solid rgba(46, 230, 255, 0.22);
+    border-top: 1px solid rgba(${hl_rgb}, 0.22);
 }
 
 QWidget {
