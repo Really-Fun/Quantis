@@ -177,6 +177,7 @@ class QuantisMainWindow(QMainWindow):
         self._body_shell = BodyWithWallpaper(
             resources.wallpaper_path(),
             theme=self._ui_prefs.theme,
+            compositor=shell.compositor,
         )
         body = self._body_shell.layout_host
         body.setContentsMargins(10, 10, 10, 0)
