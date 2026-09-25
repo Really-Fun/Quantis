@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from dataclasses import replace
+
 from PySide6.QtCore import QRect, QSize
 from PySide6.QtGui import QColor, QImage
 from PySide6.QtWidgets import QWidget
@@ -129,9 +131,11 @@ def test_glass_panel_paints_blurred_backdrop(qapp) -> None:
         install_glass(panel, "QFrame#glassPanel")
         shell.show()
         qapp.processEvents()
-        red = shell.grab().toImage().pixelColor(100, 90).red()
-        bg = comp.frame().pixelColor(100, 90).red()
-        assert (red != bg) is expect  # стекло с тонировкой отличается от фона
+        shot, frame = shell.grab().toImage(), comp.frame()
+        differs = any(
+            shot.pixelColor(x, 90) != frame.pixelColor(x, 90) for x in (60, 100, 140)
+        )
+        assert differs is expect  # стекло с тонировкой отличается от фона
 
 
 def _video_luma(comp: BackdropCompositor, color: str) -> float:
@@ -267,3 +271,38 @@ def test_backdrop_mode_maps_to_existing_wallpaper_settings(qapp) -> None:
     finally:
         UiPreferences._instance = None
         QSettings("ReallyFun", "Quantis").clear()
+
+
+def test_glass_samples_backdrop_under_the_panel(qapp) -> None:
+    """Стекло берёт из фона ровно то, что под панелью (без сдвига и масштаба)."""
+    from PySide6.QtGui import QPainter, QPainterPath
+
+    from quantis.ui.views.widgets.background_frame import BackgroundFrame
+    from quantis.ui.views.widgets.glass import paint_glass
+
+    shell = BackgroundFrame(theme=registry.get("neon"))
+    shell.resize(400, 200)
+    shell.show()  # иначе resizeEvent не придёт и кадр будет 1×1
+    qapp.processEvents()
+    comp = shell.compositor
+    comp.set_theme(replace(registry.get("neon"), glass_blur=0.02))  # почти без размытия
+    comp.set_look(dim=0.0, blur=0.0)
+    halves = QImage(400, 200, QImage.Format.Format_RGB32)
+    halves.fill(QColor("#ff0000"))
+    fill = QPainter(halves)
+    fill.fillRect(200, 0, 200, 200, QColor("#0000ff"))
+    fill.end()
+    comp.set_mode("image")
+    comp.set_wallpaper(halves)
+    panel = QWidget(shell.content_host())
+    panel.setGeometry(40, 50, 320, 100)  # и над красным, и над синим
+    path = QPainterPath()
+    path.addRect(0, 0, 320, 100)
+    out = QImage(320, 100, QImage.Format.Format_RGB32)
+    painter = QPainter(out)
+    assert paint_glass(panel, painter, path, QColor(0, 0, 0, 0), sheen=False)
+    painter.end()
+    # окно x=150 (красная половина) и x=250 (синяя); при лишнем масштабе
+    # стекло взяло бы 300 и 500 — наоборот
+    left, right = out.pixelColor(110, 50), out.pixelColor(210, 50)
+    assert left.red() > left.blue() and right.blue() > right.red()
