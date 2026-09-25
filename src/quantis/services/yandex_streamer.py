@@ -28,11 +28,9 @@ class AsyncYandexStreamer(AsyncStreamerInterface):
         )
 
     def _yandex_token(self) -> str | None:
-        from keyring import get_password
+        from quantis.config.credentials import yandex_token
 
-        from quantis.config.constants import SERVICE_NAME_YANDEX, USER
-
-        return get_password(SERVICE_NAME_YANDEX, USER)
+        return yandex_token() or None
 
     @staticmethod
     def pick_best_download_info(infos: list[Any]) -> Any | None:

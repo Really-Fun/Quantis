@@ -371,7 +371,12 @@ def _validate_youtube_auth(value: str) -> str:
 
 
 def yandex_token() -> str:
-    return get_password(SERVICE_NAME_YANDEX, USER) or ""
+    """Токен Яндекса или "", если его нет или keyring недоступен."""
+    try:
+        return get_password(SERVICE_NAME_YANDEX, USER) or ""
+    except KeyringError:
+        # Linux без gnome-keyring/KWallet: NoKeyringError вместо пустого токена.
+        return ""
 
 
 def yotube_cookie() -> str:

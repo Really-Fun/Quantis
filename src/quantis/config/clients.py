@@ -8,11 +8,6 @@ if TYPE_CHECKING:
     from yandex_music import ClientAsync
     from ytmusicapi import YTMusic
 
-from quantis.config.constants import (
-    SERVICE_NAME_YANDEX,
-    USER,
-)
-
 
 class Clients:
     """Singleton-фабрика клиентов.
@@ -63,13 +58,14 @@ class Clients:
 
     @staticmethod
     def _init_yandex() -> Any:
-        from keyring import get_password
         from yandex_music import ClientAsync
         from yandex_music.exceptions import NetworkError as NetworkErrorYandex
         from yandex_music.exceptions import TimedOutError
 
+        from quantis.config.credentials import yandex_token
+
         try:
-            return ClientAsync(get_password(SERVICE_NAME_YANDEX, USER))
+            return ClientAsync(yandex_token() or None)
         except (TimedOutError, NetworkErrorYandex):
             return None
 
