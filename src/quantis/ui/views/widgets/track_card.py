@@ -55,7 +55,7 @@ class TrackCardDelegate(QStyledItemDelegate):
         self._on_download = on_download
         self._prefs = UiPreferences()
         self._editorial = self._prefs.ui_theme == THEME_EDITORIAL
-        self._prefs.changed.connect(self._on_theme_changed)
+        self._prefs.theme_changed.connect(self._on_theme_changed)
         self._fm_title = QFontMetrics(FONT_TITLE)
         self._fm_author = QFontMetrics(FONT_AUTHOR)
         self._fm_editorial_title = QFontMetrics(FONT_EDITORIAL_TITLE)

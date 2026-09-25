@@ -2,16 +2,29 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import QByteArray, QObject, QSettings, Signal
+from PySide6.QtCore import QByteArray, QObject, QSettings, Signal, SignalInstance
 
 from quantis.models.repeat_mode import RepeatMode
 from quantis.ui.resources import DEFAULT_UI_THEME, normalize_ui_theme
 
 
 class UiPreferences(QObject):
-    """Синглтон настроек UI."""
+    """Синглтон настроек UI.
+
+    Сигналы по смыслу: слушай только то, от чего зависишь. ``changed`` —
+    для совместимости с плагинами (любая пользовательская настройка, кроме
+    громкости, повтора, геометрии окна и служебных полей обновлений); внутри
+    приложения на него не подписываемся.
+    """
 
     changed = Signal()
+    theme_changed = Signal()
+    # Статичные и динамические (видео) обои: вкл/выкл, путь, качество, fps, задержка.
+    wallpaper_changed = Signal()
+    # Панели главной и «Сейчас играет».
+    layout_changed = Signal()
+    eco_changed = Signal()
+    volume_changed = Signal(int)
 
     _instance: UiPreferences | None = None
 
@@ -49,6 +62,10 @@ class UiPreferences(QObject):
         self._settings = QSettings("ReallyFun", "Quantis")
         self._initialized = True
 
+    def _emit(self, signal: SignalInstance) -> None:
+        signal.emit()
+        self.changed.emit()
+
     @staticmethod
     def _read_bool(raw: object, default: bool) -> bool:
         if isinstance(raw, str):
@@ -82,7 +99,7 @@ class UiPreferences(QObject):
         if self.show_home_featured_panel == value:
             return
         self._settings.setValue(self._KEY_HOME_FEATURED, value)
-        self.changed.emit()
+        self._emit(self.layout_changed)
 
     @property
     def show_now_playing_panel(self) -> bool:
@@ -95,7 +112,7 @@ class UiPreferences(QObject):
         if self.show_now_playing_panel == value:
             return
         self._settings.setValue(self._KEY_NOW_PLAYING, value)
-        self.changed.emit()
+        self._emit(self.layout_changed)
 
     @property
     def ui_theme(self) -> str:
@@ -107,7 +124,7 @@ class UiPreferences(QObject):
         if self.ui_theme == theme_id:
             return
         self._settings.setValue(self._KEY_UI_THEME, theme_id)
-        self.changed.emit()
+        self._emit(self.theme_changed)
 
     @property
     def dynamic_wallpaper_enabled(self) -> bool:
@@ -120,7 +137,7 @@ class UiPreferences(QObject):
         if self.dynamic_wallpaper_enabled == value:
             return
         self._settings.setValue(self._KEY_DYNAMIC_WALLPAPER, value)
-        self.changed.emit()
+        self._emit(self.wallpaper_changed)
 
     @property
     def dynamic_wallpaper_quality(self) -> int:
@@ -141,7 +158,7 @@ class UiPreferences(QObject):
         if self.dynamic_wallpaper_quality == clamped:
             return
         self._settings.setValue(self._KEY_WALLPAPER_QUALITY, clamped)
-        self.changed.emit()
+        self._emit(self.wallpaper_changed)
 
     @property
     def dynamic_wallpaper_fps(self) -> int:
@@ -160,7 +177,7 @@ class UiPreferences(QObject):
         if self.dynamic_wallpaper_fps == clamped:
             return
         self._settings.setValue(self._KEY_WALLPAPER_FPS, clamped)
-        self.changed.emit()
+        self._emit(self.wallpaper_changed)
 
     @property
     def dynamic_wallpaper_av_delay_ms(self) -> int:
@@ -184,7 +201,7 @@ class UiPreferences(QObject):
         if self.dynamic_wallpaper_av_delay_ms == clamped:
             return
         self._settings.setValue(self._KEY_WALLPAPER_AV_DELAY, clamped)
-        self.changed.emit()
+        self._emit(self.wallpaper_changed)
 
     @property
     def wallpaper_path(self) -> str:
@@ -196,7 +213,7 @@ class UiPreferences(QObject):
         if self.wallpaper_path == normalized:
             return
         self._settings.setValue(self._KEY_WALLPAPER, normalized)
-        self.changed.emit()
+        self._emit(self.wallpaper_changed)
 
     @property
     def wallpaper_enabled(self) -> bool:
@@ -209,7 +226,7 @@ class UiPreferences(QObject):
         if self.wallpaper_enabled == value:
             return
         self._settings.setValue(self._KEY_WALLPAPER_ENABLED, value)
-        self.changed.emit()
+        self._emit(self.wallpaper_changed)
 
     @property
     def background_eco_enabled(self) -> bool:
@@ -223,7 +240,7 @@ class UiPreferences(QObject):
         if self.background_eco_enabled == value:
             return
         self._settings.setValue(self._KEY_BACKGROUND_ECO, value)
-        self.changed.emit()
+        self._emit(self.eco_changed)
 
     @property
     def volume(self) -> int:
@@ -239,7 +256,7 @@ class UiPreferences(QObject):
         if self.volume == clamped:
             return
         self._settings.setValue(self._KEY_VOLUME, clamped)
-        self.changed.emit()
+        self.volume_changed.emit(clamped)
 
     @property
     def repeat_mode(self) -> RepeatMode:
@@ -250,7 +267,6 @@ class UiPreferences(QObject):
         if self.repeat_mode == mode:
             return
         self._settings.setValue(self._KEY_REPEAT_MODE, mode.value)
-        self.changed.emit()
 
     @property
     def window_geometry(self) -> QByteArray | None:

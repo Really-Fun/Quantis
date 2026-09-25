@@ -354,7 +354,13 @@ class SettingsPage(QWidget):
         if remapped:
             self._prefs.set_wallpaper_path(remapped)
 
-        self._prefs.changed.connect(self._sync_from_preferences)
+        for signal in (
+            self._prefs.theme_changed,
+            self._prefs.wallpaper_changed,
+            self._prefs.layout_changed,
+            self._prefs.eco_changed,
+        ):
+            signal.connect(self._sync_from_preferences)
         self._sync_from_preferences()
 
     def showEvent(self, event: QShowEvent) -> None:
@@ -444,9 +450,11 @@ class SettingsPage(QWidget):
         )
         if chosen:
             self._prefs.set_music_dir(chosen)
+            self._sync_storage_labels()
 
     def _on_reset_music_dir(self) -> None:
         self._prefs.set_music_dir("")
+        self._sync_storage_labels()
 
     def _on_open_music_dir(self) -> None:
         self._open_folder(app_paths.music_dir())

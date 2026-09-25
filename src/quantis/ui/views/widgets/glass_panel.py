@@ -15,7 +15,7 @@ class GlassPanel(QFrame):
         super().__init__(parent)
         self.setObjectName("glassPanel")
         self._prefs = UiPreferences()
-        self._prefs.changed.connect(self._on_theme_changed)
+        self._prefs.theme_changed.connect(self._on_theme_changed)
         self._apply_editorial_mode()
 
     def _on_theme_changed(self) -> None:

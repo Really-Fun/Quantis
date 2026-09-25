@@ -19,7 +19,7 @@ from quantis.ui.controllers.dynamic_wallpaper import (  # noqa: E402
 
 
 class _Prefs(QObject):
-    changed = Signal()
+    wallpaper_changed = Signal()
     dynamic_wallpaper_enabled = True
     dynamic_wallpaper_quality = 360
     dynamic_wallpaper_fps = 10

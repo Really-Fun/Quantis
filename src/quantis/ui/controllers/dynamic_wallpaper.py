@@ -97,7 +97,7 @@ class DynamicWallpaperController(QObject):
         self._sync_timer.setInterval(SYNC_TICK_MS)
         self._sync_timer.timeout.connect(self._tick)
 
-        preferences.changed.connect(self._on_preferences_changed)
+        preferences.wallpaper_changed.connect(self._on_preferences_changed)
         event_bus.track_changed.connect(self._on_track_changed)
         event_bus.playback_paused.connect(self._on_audio_paused)
         event_bus.playback_resumed.connect(self._on_audio_resumed)

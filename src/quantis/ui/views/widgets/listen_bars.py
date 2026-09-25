@@ -27,7 +27,7 @@ class ListenBars(QWidget):
         self._hover = -1
         self._accent = QColor(ACCENT_FALLBACK)
         self._prefs = UiPreferences()
-        self._prefs.changed.connect(self.update)
+        self._prefs.theme_changed.connect(self.update)
         self.setMouseTracking(True)
         self._sync_height()
 

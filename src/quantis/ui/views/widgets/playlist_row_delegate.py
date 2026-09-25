@@ -25,7 +25,7 @@ class PlaylistRowDelegate(QStyledItemDelegate):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self._prefs = UiPreferences()
-        self._prefs.changed.connect(self._on_theme_changed)
+        self._prefs.theme_changed.connect(self._on_theme_changed)
 
     def _on_theme_changed(self) -> None:
         parent = self.parent()

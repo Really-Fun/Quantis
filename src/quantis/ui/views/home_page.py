@@ -207,7 +207,7 @@ class HomePage(QWidget):
 
         self._vm.home_changed.connect(self._rebuild)
         self._vm.recent_changed.connect(self._on_recent_changed)
-        self._prefs.changed.connect(self._apply_featured_visibility)
+        self._prefs.layout_changed.connect(self._apply_featured_visibility)
         self._apply_featured_visibility()
 
     def _make_track_table(

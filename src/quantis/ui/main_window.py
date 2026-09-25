@@ -274,7 +274,10 @@ class QuantisMainWindow(QMainWindow):
             lambda: self._home_vm.refresh_downloaded(self._bridge)
         )
         self._playlist_vm.tracks_mutated.connect(self._on_playlist_tracks_mutated)
-        self._ui_prefs.changed.connect(self._on_prefs_changed)
+        self._ui_prefs.theme_changed.connect(self._on_theme_changed)
+        self._ui_prefs.wallpaper_changed.connect(self._on_wallpaper_changed)
+        self._ui_prefs.layout_changed.connect(self._sync_now_playing_visibility)
+        self._ui_prefs.eco_changed.connect(self._on_eco_pref_changed)
         self._dynamic_wallpaper = DynamicWallpaperController(
             self._body_shell.backdrop,
             bundle.music,
@@ -764,14 +767,16 @@ class QuantisMainWindow(QMainWindow):
             self._playlist_vm.set_playlist(match)
             self._header.set_page(match.name, f"{len(match)} треков")
 
-    def _on_prefs_changed(self) -> None:
+    def _on_eco_pref_changed(self) -> None:
         self._eco.set_pref_enabled(self._ui_prefs.background_eco_enabled)
+
+    def _on_theme_changed(self) -> None:
         theme = self._ui_prefs.ui_theme
         if theme != self._applied_theme:
             self._apply_ui_theme(theme)
+
+    def _on_wallpaper_changed(self) -> None:
         self._apply_wallpaper()
-        self._sync_now_playing_visibility()
-        self._player_bar.refresh_theme()
         if self._ui_prefs.dynamic_wallpaper_enabled and not self._eco.active:
             self._dynamic_wallpaper.refresh_for_track(
                 self._bundle.playback.current_track
