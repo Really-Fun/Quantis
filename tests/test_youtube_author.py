@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock
 
+from quantis.models.track import YoutubeTrack, strip_youtube_stats
 from quantis.services.async_finder import (
     AsyncYoutubeFinder,
     youtube_author_from_payload,
@@ -93,3 +94,28 @@ def test_search_skips_rows_without_video_id() -> None:
     assert len(tracks) == 1
     assert tracks[0].track_id == "abcdefghijk"
     assert tracks[0].author == "Artist"
+
+
+def test_likes_counter_is_not_an_artist() -> None:
+    track = YoutubeTrack(
+        track_id="abc", title="t", author='37R, Отметок "Нравится": 1,2 тыс.'
+    )
+    assert track.author == "37R"
+
+
+def test_likes_counter_from_downloaded_filename() -> None:
+    # в имени файла кавычки и двоеточие заменены на «_»
+    track = YoutubeTrack(
+        track_id="abc", title="t", author="Narvent, VØJ, Отметок _Нравится__ 174 тыс"
+    )
+    assert track.author == "Narvent, VØJ"
+
+
+def test_views_counter_in_english() -> None:
+    assert strip_youtube_stats("Narvent | 1.2M views") == "Narvent"
+
+
+def test_real_artists_are_kept() -> None:
+    assert strip_youtube_stats("Likes, Views & Co") == "Likes, Views & Co"
+    assert strip_youtube_stats("Tyler, The Creator") == "Tyler, The Creator"
+    assert strip_youtube_stats("") == ""

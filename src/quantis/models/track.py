@@ -10,6 +10,7 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -39,6 +40,34 @@ def clock_to_ms(text: object) -> int:
     if len(nums) == 3:
         return (nums[0] * 3600 + nums[1] * 60 + nums[2]) * 1000
     return 0
+
+
+# YouTube Music в выдаче на русском отдаёт счётчик лайков/просмотров как ещё
+# одного «исполнителя»: «37R, Отметок "Нравится": 1,2 тыс.». В имени скачанного
+# файла кавычки и двоеточие уже заменены на «_».
+_ARTIST_SEPARATOR = re.compile(r"(,\s+|\s+\|\s+|\s+•\s+)")
+_STAT_WORD = re.compile(
+    r"нравится|просмотр|отмет(?:ок|ки|ка)|подписчик|\bviews?\b|\blikes?\b|\bsubscribers?\b",
+    re.IGNORECASE,
+)
+
+
+def _is_stat_text(segment: str) -> bool:
+    return any(ch.isdigit() for ch in segment) and bool(_STAT_WORD.search(segment))
+
+
+def strip_youtube_stats(author: str) -> str:
+    """Убирает из строки исполнителя счётчики лайков и просмотров YouTube."""
+    parts = _ARTIST_SEPARATOR.split(author)
+    kept: list[str] = []
+    for index in range(0, len(parts), 2):
+        segment = parts[index]
+        if not segment.strip() or _is_stat_text(segment):
+            continue
+        if kept:
+            kept.append(parts[index - 1])
+        kept.append(segment)
+    return "".join(kept).strip() or author
 
 
 class TrackSource(StrEnum):
@@ -96,6 +125,9 @@ class YoutubeTrack(Track):
 
     source: str = TrackSource.YOUTUBE
     extension: str = "m4a"
+
+    def __post_init__(self) -> None:
+        self.author = strip_youtube_stats(self.author)
 
 
 @dataclass(eq=False)
