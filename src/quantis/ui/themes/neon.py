@@ -16,6 +16,10 @@ UI_FONTS = (
     "Segoe UI",
     "sans-serif",
 )
+# Aurora и Glass — по референсу редизайна: Manrope для интерфейса, Unbounded для
+# крупных заголовков (название трека, заголовки страниц). Оба встроены.
+AURORA_UI_FONTS = ("Manrope", "Segoe UI Variable Display", "Segoe UI", "sans-serif")
+AURORA_DISPLAY_FONTS = ("Unbounded", "Manrope", "Segoe UI", "sans-serif")
 MONO_FONTS = (
     "Cascadia Mono",
     "JetBrains Mono",
@@ -133,7 +137,7 @@ THEME = ThemeSpec(
         popup_border="2px solid rgba(0, 220, 255, 150)",
         list_bg="#0b0d16",
     ),
-    fonts=ThemeFonts(ui=UI_FONTS, display=UI_FONTS, mono=MONO_FONTS),
+    fonts=ThemeFonts(ui=AURORA_UI_FONTS, display=AURORA_DISPLAY_FONTS, mono=MONO_FONTS),
     backdrop=BackdropSpec(depth=DARK_DEPTH, glow=GlowSpec("cover")),
     radius=16,
     radius_control=12,

@@ -26,11 +26,22 @@ def test_bundled_fonts_register(qapp) -> None:
 
 def test_theme_font_falls_back_to_bundled(qapp) -> None:
     register_bundled_fonts()
-    font = theme_font(registry.get("neon"), "ui", 10)
+    font = theme_font(registry.get("classic"), "ui", 10)
     assert font.families()[0] == "Bahnschrift"
     installed = QFontInfo(font).family()
     # на Windows победит Bahnschrift, в остальных системах — встроенный Manrope
     assert installed in {"Bahnschrift", "Manrope"}
+
+
+def test_aurora_and_glass_use_manrope_and_unbounded(qapp) -> None:
+    register_bundled_fonts()
+    for theme_id in ("neon", "glass"):
+        theme = registry.get(theme_id)
+        assert QFontInfo(theme_font(theme, "ui", 10)).family() == "Manrope"
+        assert QFontInfo(theme_font(theme, "display", 20)).family() == "Unbounded"
+    # остальные темы шрифты не меняли
+    classic = registry.get("classic")
+    assert classic.fonts.display == classic.fonts.ui
 
 
 def test_generic_family_becomes_style_hint(qapp) -> None:

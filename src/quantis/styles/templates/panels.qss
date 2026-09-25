@@ -28,6 +28,7 @@ QFrame#nowPlayingPanel {
     color: ${text};
     font-size: 16px;
     font-weight: 700;
+    font-family: ${font_display};
 }
 
 #nowPlayingArtist {

@@ -59,7 +59,7 @@ QInputDialog QComboBox QAbstractItemView {
     font-size: 14px;
     font-weight: 650;
     color: ${text};
-    font-family: ${font_display};
+    font-family: ${font_ui};
 }
 
 #playlistName {
@@ -68,6 +68,7 @@ QInputDialog QComboBox QAbstractItemView {
     font-weight: 800;
     letter-spacing: -0.4px;
     background: transparent;
+    font-family: ${font_display};
 }
 
 #sectionTitle {
@@ -84,7 +85,7 @@ QInputDialog QComboBox QAbstractItemView {
     color: ${text};
     font-size: 14px;
     font-weight: 650;
-    font-family: ${font_display};
+    font-family: ${font_ui};
 }
 
 #headerSub {
@@ -319,7 +320,7 @@ QScrollBar::sub-line:vertical {
     padding: 12px 14px;
     font-size: 14px;
     color: ${text};
-    font-family: ${font_display};
+    font-family: ${font_ui};
 }
 
 #searchInput::placeholder {
@@ -332,5 +333,5 @@ QScrollBar::sub-line:vertical {
 
 QWidget {
     color: ${text};
-    font-family: ${font_display};
+    font-family: ${font_ui};
 }

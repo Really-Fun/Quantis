@@ -109,6 +109,8 @@ def dynamic_accent_qss(accent: QColor | None = None) -> str:
 # «background: transparent» на appContent/bodyForeground, он не виден.
 # #sideNavRail тоже: его перебивает QFrame#sideNavRail, рельс рисует акцент сам.
 ACCENT_TRACK_TITLE_QSS = '#trackTitle[playing="true"] { color: ${rgb}; }'
+
+
 def load_stylesheet(
     ui_theme: str | None = None,
     *,

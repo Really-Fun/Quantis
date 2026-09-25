@@ -14,7 +14,7 @@ QLabel#settingsRowTitle {
     font-size: 15px;
     font-weight: 650;
     background: transparent;
-    font-family: ${font_display};
+    font-family: ${font_ui};
 }
 
 QLabel#settingsRowDesc {
@@ -41,7 +41,7 @@ QLineEdit#settingLineEdit {
     color: ${title};
     font-size: 13px;
     min-height: 20px;
-    font-family: ${font_display};
+    font-family: ${font_ui};
 }
 
 QComboBox#themeCombo:hover,

@@ -1,6 +1,6 @@
 """Glass — полупрозрачные панели поверх обоев."""
 
-from quantis.ui.themes.neon import MONO_FONTS, UI_FONTS
+from quantis.ui.themes.neon import AURORA_DISPLAY_FONTS, AURORA_UI_FONTS, MONO_FONTS
 from quantis.ui.themes.spec import (
     BackdropSpec,
     GlowSpec,
@@ -100,7 +100,7 @@ THEME = ThemeSpec(
         popup_border="2px solid rgba(0, 220, 255, 150)",
         list_bg="#0b0d16",
     ),
-    fonts=ThemeFonts(ui=UI_FONTS, display=UI_FONTS, mono=MONO_FONTS),
+    fonts=ThemeFonts(ui=AURORA_UI_FONTS, display=AURORA_DISPLAY_FONTS, mono=MONO_FONTS),
     backdrop=BackdropSpec(
         depth=((0.0, "rgba(20, 24, 33, 30)"), (1.0, "rgba(0, 0, 0, 80)")),
         # Без обоев стеклу нужно, что просвечивать: свои цветные пятна
