@@ -82,12 +82,6 @@ QFrame#sideNavRail {
     border-top: 2px solid rgba(0, 229, 255, 0.4);
 }
 
-QLabel#homeGreeting {
-    font-size: 34px;
-    font-weight: 400;
-    letter-spacing: -0.6px;
-}
-
 QLabel#homeSectionTitle {
     font-size: 24px;
     font-weight: 400;
@@ -102,21 +96,6 @@ QLabel#homeSectionSubtitle {
 #searchStatus {
     font-size: 10px;
     letter-spacing: 1px;
-}
-
-QToolButton#featuredPlayBtn {
-    background: ${tint};
-    border-radius: 0;
-    color: ${on_tint};
-}
-
-QToolButton#featuredPlayBtn:hover {
-    background: ${tint_hover};
-    color: ${on_tint};
-}
-
-QToolButton#featuredPlayBtn:disabled {
-    color: rgba(255, 255, 255, 0.35);
 }
 
 QPushButton#searchButton {

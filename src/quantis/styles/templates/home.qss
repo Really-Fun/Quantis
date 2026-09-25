@@ -1,7 +1,5 @@
 QWidget#homePage,
 QWidget#homeScrollContent,
-QWidget#homeHero,
-QWidget#homeHeroCluster,
 QWidget#libraryPage {
     background: transparent;
 }
@@ -16,25 +14,6 @@ QWidget#quickPickShelf,
 QWidget#playlistShelfHost,
 QWidget#quickPickShelfHost {
     background: transparent;
-}
-
-QLabel#homeKicker {
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 2.4px;
-    color: rgba(${hl_rgb}, 0.88);
-    background: transparent;
-    padding: 0;
-}
-
-QLabel#homeGreeting {
-    font-size: 42px;
-    font-weight: 700;
-    letter-spacing: -1.6px;
-    color: ${title};
-    padding: 0;
-    background: transparent;
-    font-family: ${font_display};
 }
 
 QLabel#homeGreetingSub {
@@ -181,96 +160,72 @@ QTableView#homeTrackList QScrollBar:horizontal {
     background: transparent;
 }
 
-QFrame#featuredPanel {
-    min-height: 148px;
-    max-height: 168px;
+
+/* Сцена «Сейчас играет» */
+QLabel#stageKicker {
+    color: ${text_soft};
+    font-size: 13px;
+    font-weight: 500;
     background: transparent;
-    border: none;
-    border-radius: 18px;
 }
 
-QLabel#featuredTitle {
-    font-size: 22px;
-    font-weight: 700;
-    letter-spacing: -0.5px;
+QLabel#stageTitle {
     color: ${title};
-    background: transparent;
-}
-
-QLabel#featuredAuthor {
-    font-size: 13px;
-    color: rgba(${mist_rgb}, 0.62);
-    background: transparent;
-}
-
-QToolButton#featuredPlayBtn {
-    background: ${title};
-    border: none;
-    border-radius: 22px;
-    color: #0b0d12;
-    font-size: 14px;
+    font-family: ${font_display};
+    font-size: 40px;
     font-weight: 700;
-    min-width: 44px;
-    max-width: 44px;
-    min-height: 44px;
-    max-height: 44px;
-    padding: 0;
-    font-family: ${font_label};
-}
-
-QToolButton#featuredPlayBtn:hover {
-    background: rgb(${ink_rgb});
-    color: #0b0d12;
-}
-
-QToolButton#featuredPlayBtn:disabled {
-    background: rgba(${ink_rgb}, 0.08);
-    color: rgba(248, 250, 252, 0.32);
-}
-
-QFrame#wavePromoCard {
     background: transparent;
+}
+
+QLabel#stageArtist {
+    color: ${text_soft};
+    font-size: 15px;
+    font-weight: 500;
+    background: transparent;
+}
+
+QLabel#stageChipLabel {
+    color: ${text_dim};
+    font-size: 12px;
+    font-weight: 500;
+    background: transparent;
+}
+
+QPushButton#stagePill {
+    color: ${text};
+    font-size: 13px;
+    font-weight: 600;
+    background: rgba(${ink_rgb}, 0.08);
+    border: 1px solid rgba(${ink_rgb}, 0.16);
+    border-radius: 16px;
+    min-height: 30px;
+    padding: 0 16px;
+}
+
+QPushButton#stagePill:hover {
+    background: rgba(${ink_rgb}, 0.14);
+}
+
+/* «Моя волна» — первая плитка быстрого доступа */
+QLabel#quickPickSubtitle {
+    color: ${text_dim};
+    font-size: 12px;
+    background: transparent;
+}
+
+QToolButton#waveQuickPlay {
+    color: ${on_tint};
+    background: ${tint};
     border: none;
     border-radius: 18px;
-}
-
-QLabel#wavePromoSubtitle {
-    font-size: 12px;
-    color: rgba(${mist_rgb}, 0.55);
-    background: transparent;
-}
-
-QLabel#wavePromoCount {
-    font-size: 10px;
-    font-weight: 600;
-    letter-spacing: 0.2px;
-    color: rgba(125, 211, 252, 0.9);
-    background: transparent;
-    padding: 0;
-}
-
-QToolButton#wavePromoPlayBtn {
-    background: rgba(${hl_rgb}, 0.12);
-    border: 1px solid rgba(${hl_rgb}, 0.28);
-    border-radius: 22px;
-    color: #e8fcff;
     font-size: 13px;
-    font-weight: 700;
-    min-width: 44px;
-    max-width: 44px;
-    min-height: 44px;
-    max-height: 44px;
-    padding: 0;
 }
 
-QToolButton#wavePromoPlayBtn:hover {
-    background: rgba(${hl_rgb}, 0.28);
-    border-color: rgba(${hl_rgb}, 0.5);
-    color: #ffffff;
+QToolButton#waveQuickPlay:hover {
+    background: ${tint_hover};
 }
 
-QToolButton#wavePromoPlayBtn:disabled {
-    background: rgba(${ink_rgb}, 0.04);
-    border-color: rgba(${ink_rgb}, 0.06);
-    color: rgba(248, 250, 252, 0.28);
+QToolButton#waveQuickPlay:disabled {
+    background: rgba(${ink_rgb}, 0.1);
+    color: rgba(${ink_rgb}, 0.35);
 }

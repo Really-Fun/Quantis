@@ -67,6 +67,7 @@ from quantis.ui.views.widgets.backdrop_panel import (
 from quantis.ui.views.widgets.background_frame import BackgroundFrame
 from quantis.ui.views.widgets.now_playing_fullscreen import NowPlayingFullscreen
 from quantis.ui.views.widgets.now_playing_panel import NowPlayingPanel
+from quantis.ui.views.widgets.now_playing_stage import upcoming
 from quantis.ui.views.widgets.resize_grips import WindowResizeGrips
 from quantis.ui.views.widgets.side_nav import SideNavRail
 from quantis.ui.views.widgets.update_banner import UpdateBanner
@@ -221,6 +222,12 @@ class QuantisMainWindow(QMainWindow):
         self._stack.addWidget(QWidget())  # 7 PLAYLIST
 
         self._home_page.playlist_open_requested.connect(self._open_playlist_page)
+        self._home_page.search_requested.connect(
+            lambda: self._goto_page(self.PAGE_SEARCH)
+        )
+        self._home_page.queue_requested.connect(self._open_playing_queue)
+        self._home_page.up_next_activated.connect(self._play_up_next)
+        self._player_vm.is_playing_changed.connect(self._home_page.set_playing)
 
         content.addWidget(self._stack, stretch=1)
 
@@ -347,6 +354,7 @@ class QuantisMainWindow(QMainWindow):
 
     def _apply_eco(self, active: bool) -> None:
         self._shell.set_eco(active)
+        self._home_page.set_eco(active)
         self._player_vm.set_eco(active)
         self._bundle.history_watcher.set_eco(active)
         self._bundle.music.streamer.set_eco(active)
@@ -485,7 +493,9 @@ class QuantisMainWindow(QMainWindow):
             self._now_playing.hide()
             return
         wide = self.width() >= 1100
-        show = self._ui_prefs.show_now_playing_panel and wide
+        # на главной трек показывает сцена, справа — «Дальше»
+        on_home = self._stack.currentIndex() == self.PAGE_HOME
+        show = self._ui_prefs.show_now_playing_panel and wide and not on_home
         self._now_playing.setVisible(show)
 
     def _on_page_changed(self, page_id: int) -> None:
@@ -663,6 +673,7 @@ class QuantisMainWindow(QMainWindow):
         self._current_page = page_id
         self._stack.setCurrentIndex(page_id)
         self._nav.set_active_page(page_id)
+        self._sync_now_playing_visibility()
         self._fade_current_page()
         title, subtitle = self._page_meta.get(page_id, ("Quantis", ""))
         self._header.set_page(title, subtitle)
@@ -693,6 +704,7 @@ class QuantisMainWindow(QMainWindow):
         self._return_page_id = self._current_page
         self._playlist_vm.set_playlist(playlist)
         self._stack.setCurrentIndex(self.PAGE_PLAYLIST)
+        self._sync_now_playing_visibility()
         count = len(playlist)
         self._header.set_page(playlist.name, f"{count} треков")
         _ = page
@@ -715,10 +727,38 @@ class QuantisMainWindow(QMainWindow):
             self._stats_page.set_playing_track(track)
         if self._playlist_page is not None:
             self._playlist_page.set_playing_track(track)
-        self._home_page.refresh_featured()
+        self._home_page.set_now_playing(track)
+        self._refresh_up_next()
         self._now_playing.set_track(track)
         self._np_fullscreen.set_track(track)
         self._update_palette_from_track(track)
+
+    def _refresh_up_next(self) -> None:
+        playlist = self._bundle.playback.playlist_manager.current_playlist
+        if playlist is None:
+            self._home_page.set_up_next([])
+            return
+        cycle = playlist.tracks
+        self._home_page.set_up_next(
+            upcoming(
+                cycle.values,
+                self._bundle.playback.current_track,
+                getattr(cycle, "_index", 0),
+            )
+        )
+
+    def _play_up_next(self, index: int) -> None:
+        playlist = self._bundle.playback.playlist_manager.current_playlist
+        if playlist is None:
+            return
+        from quantis.ui.async_ui import schedule
+
+        schedule(self._home_vm.play_playlist(playlist, index), self._bridge)
+
+    def _open_playing_queue(self) -> None:
+        playlist = self._bundle.playback.playlist_manager.current_playlist
+        if playlist is not None and len(playlist):
+            self._open_playlist_page(playlist)
 
     def _open_now_playing_fullscreen(self) -> None:
         track = self._bundle.playback.current_track
@@ -783,6 +823,7 @@ class QuantisMainWindow(QMainWindow):
 
     def _on_queue_extended(self, playlist) -> None:
         self._home_vm.apply_queue_extended(playlist)
+        self._refresh_up_next()
         if self._playlist_page is not None and self._playlist_vm.playlist is playlist:
             self._playlist_vm.sync_appended()
             self._header.set_page(playlist.name, f"{len(playlist)} треков")

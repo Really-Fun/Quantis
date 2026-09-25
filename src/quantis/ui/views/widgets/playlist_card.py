@@ -15,6 +15,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QSizePolicy,
+    QToolButton,
     QVBoxLayout,
     QWidget,
 )
@@ -270,6 +271,7 @@ class QuickPickTile(QFrame):
         text_col.addWidget(self._title)
         text_col.addStretch(1)
         layout.addLayout(text_col, stretch=1)
+        self._text_col = text_col
 
     @property
     def playlist(self) -> Playlist:
@@ -315,6 +317,59 @@ class QuickPickTile(QFrame):
         if event.button() == Qt.MouseButton.LeftButton:
             self.activated.emit(self._playlist)
         super().mouseReleaseEvent(event)
+
+
+class WaveQuickTile(QuickPickTile):
+    """«Моя волна» первой плиткой быстрого доступа: клик — открыть поток,
+    кнопка справа — сразу играть; под названием — «N в потоке»."""
+
+    play_requested = Signal()
+
+    def __init__(self, playlist: Playlist, parent=None) -> None:
+        super().__init__(playlist, parent)
+        self.setObjectName("waveQuickTile")
+        self._available = True
+        self._subtitle = QLabel("")
+        self._subtitle.setObjectName("quickPickSubtitle")
+        self._subtitle.setSizePolicy(
+            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
+        )
+        self._text_col.insertWidget(2, self._subtitle)
+        self._play_btn = QToolButton()
+        self._play_btn.setObjectName("waveQuickPlay")
+        self._play_btn.setText("▶")
+        self._play_btn.setToolTip("Слушать «Мою волну»")
+        self._play_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._play_btn.setFixedSize(36, 36)
+        self._play_btn.clicked.connect(self.play_requested.emit)
+        self.layout().addWidget(self._play_btn, 0, Qt.AlignmentFlag.AlignVCenter)
+
+    def set_state(
+        self,
+        *,
+        available: bool,
+        track_count: int = 0,
+        loading: bool = False,
+        error: str | None = None,
+    ) -> None:
+        self._available = available
+        self._play_btn.setEnabled(available and track_count > 0 and not loading)
+        if loading:
+            text = "Загружаем…"
+        elif error:
+            text = error
+        elif available and track_count:
+            text = f"{track_count} в потоке"
+        elif available:
+            text = "Пока пусто"
+        else:
+            text = "Нужен токен Yandex (Member)"
+        self._subtitle.setText(text)
+        self._subtitle.setToolTip(text)
+
+    def mouseReleaseEvent(self, event) -> None:
+        if self._available:
+            super().mouseReleaseEvent(event)
 
 
 class WrapGrid(QWidget):
@@ -437,10 +492,13 @@ class QuickPickShelf(QWidget):
     """Сетка быстрых плиток — как recently played, без ползунка."""
 
     playlist_activated = Signal(object)
+    wave_play_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setObjectName("quickPickShelf")
+        self._wave_tile: WaveQuickTile | None = None
+        self._wave_state: dict[str, object] = {"available": False}
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
 
         outer = QVBoxLayout(self)
@@ -459,18 +517,40 @@ class QuickPickShelf(QWidget):
 
     def set_playlists(self, playlists: list[Playlist]) -> None:
         if not playlists:
+            self._wave_tile = None
             self._grid.set_widgets([])
             self._grid.hide()
             self._empty.show()
             return
         self._empty.hide()
         self._grid.show()
+        # «Моя волна» — всегда первой
+        ordered = sorted(playlists, key=lambda p: getattr(p, "kind", None) != "wave")
         tiles: list[QWidget] = []
-        for playlist in playlists:
-            tile = QuickPickTile(playlist)
+        self._wave_tile = None
+        for playlist in ordered:
+            if getattr(playlist, "kind", None) == "wave":
+                wave = WaveQuickTile(playlist)
+                wave.play_requested.connect(self.wave_play_requested.emit)
+                wave.set_state(**self._wave_state)
+                self._wave_tile = wave
+                tile: QuickPickTile = wave
+            else:
+                tile = QuickPickTile(playlist)
             tile.activated.connect(self.playlist_activated.emit)
             tiles.append(tile)
         self._grid.set_widgets(tiles)
+
+    def set_wave_state(self, **state: object) -> None:
+        """Состояние плитки «Моя волна» (см. ``WaveQuickTile.set_state``);
+        запоминается, если плитки ещё нет."""
+        self._wave_state = dict(state)
+        if self._wave_tile is not None:
+            self._wave_tile.set_state(**state)  # type: ignore[arg-type]
+
+    @property
+    def wave_tile(self) -> WaveQuickTile | None:
+        return self._wave_tile
 
 
 class PlaylistShelf(QWidget):

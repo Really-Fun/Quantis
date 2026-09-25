@@ -173,30 +173,6 @@ QToolButton#homeSectionAction:hover {
     border-color: rgba(${tint_rgb}, 0.40);
 }
 
-QToolButton#featuredPlayBtn {
-    color: #F7F8FB;
-}
-
-QToolButton#featuredPlayBtn:hover {
-    color: #FFFFFF;
-}
-
-QToolButton#featuredPlayBtn:disabled {
-    color: rgba(27, 32, 48, 0.32);
-}
-
-QLabel#wavePromoCount {
-    color: #4C46C8;
-}
-
-QToolButton#wavePromoPlayBtn {
-    color: #4C46C8;
-}
-
-QToolButton#wavePromoPlayBtn:hover {
-    border-color: ${tint};
-}
-
 #searchStatus {
     min-height: 16px;
 }

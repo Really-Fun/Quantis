@@ -30,6 +30,3 @@ QPushButton#searchButton:hover {
     border-color: rgba(${accent_fallback_rgb}, 36);
 }
 
-QPushButton#featuredPlayBtn {
-    font-family: ${font_label};
-}

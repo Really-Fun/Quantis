@@ -114,10 +114,6 @@ QToolButton#navPinButton {
     color: rgba(250, 246, 238, 0.7);
 }
 
-QFrame#featuredPanel {
-    border-radius: 14px;
-}
-
 #TrackListPanel {
     border-radius: 16px;
 }

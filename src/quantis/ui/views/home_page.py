@@ -3,8 +3,8 @@ from __future__ import annotations
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
-    QBoxLayout,
     QFrame,
+    QHBoxLayout,
     QHeaderView,
     QLabel,
     QScrollArea,
@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
 
 from quantis.config.credentials import yandex_token
 from quantis.core.async_bridge import AsyncBridge
-from quantis.models import UserPlaylist
+from quantis.models import Track, UserPlaylist
 from quantis.models.playlist import Playlist
 from quantis.ui.async_ui import schedule
 from quantis.ui.models import TrackListModel
@@ -26,65 +26,27 @@ from quantis.ui.playlist_actions import (
 )
 from quantis.ui.preferences import UiPreferences
 from quantis.ui.viewmodels.home_vm import HomeViewModel
-from quantis.ui.views.widgets.featured_track import FeaturedTrackPanel
 from quantis.ui.views.widgets.home_section import HomeSection
+from quantis.ui.views.widgets.now_playing_stage import (
+    NowPlayingStage,
+    UpNextItem,
+    UpNextPanel,
+)
 from quantis.ui.views.widgets.playlist_card import PlaylistShelf, QuickPickShelf
 from quantis.ui.views.widgets.track_card import TrackCardDelegate
-from quantis.ui.views.widgets.wave_promo import WavePromoCard
 
 _MAX_VISIBLE_TRACKS = 12
-_HERO_STACK_AT = 820
-
-
-class _HomeHeroCluster(QWidget):
-    """Featured + волна: в ряд на широком окне, столбиком на узком."""
-
-    def __init__(
-        self,
-        featured: FeaturedTrackPanel,
-        wave: WavePromoCard,
-        parent: QWidget | None = None,
-    ) -> None:
-        super().__init__(parent)
-        self.setObjectName("homeHeroCluster")
-        self._featured = featured
-        self._wave = wave
-        self._box = QBoxLayout(QBoxLayout.Direction.LeftToRight, self)
-        self._box.setContentsMargins(0, 4, 0, 0)
-        self._box.setSpacing(14)
-        self._box.addWidget(featured, 5)
-        self._box.addWidget(wave, 3)
-
-    def resizeEvent(self, event) -> None:
-        super().resizeEvent(event)
-        self.sync_layout(self.width())
-
-    def sync_layout(self, width: int | None = None) -> None:
-        if width is None:
-            width = self.width()
-        featured_on = not self._featured.isHidden()
-        stacked = (not featured_on) or width < _HERO_STACK_AT
-        direction = (
-            QBoxLayout.Direction.TopToBottom
-            if stacked
-            else QBoxLayout.Direction.LeftToRight
-        )
-        if self._box.direction() != direction:
-            self._box.setDirection(direction)
-        if stacked:
-            self._wave.setMinimumHeight(80)
-            self._wave.setMaximumHeight(92)
-            self._featured.setMinimumHeight(148)
-            self._featured.setMaximumHeight(168)
-        else:
-            self._wave.setMinimumHeight(148)
-            self._wave.setMaximumHeight(168)
-            self._featured.setMinimumHeight(148)
-            self._featured.setMaximumHeight(168)
+_UP_NEXT_FROM = 900
+"""Уже этого — панель «Дальше» прячем, сцене нужно место."""
 
 
 class HomePage(QWidget):
     playlist_open_requested = Signal(object)
+    search_requested = Signal()
+    queue_requested = Signal()
+    """«Вся очередь» на панели «Дальше» — открыть играющий плейлист."""
+    up_next_activated = Signal(int)
+    """Трек из «Дальше»: индекс в играющем плейлисте."""
 
     def __init__(
         self,
@@ -116,34 +78,27 @@ class HomePage(QWidget):
         self._layout.setContentsMargins(28, 20, 28, 40)
         self._layout.setSpacing(26)
 
-        hero = QWidget()
-        hero.setObjectName("homeHero")
-        hero_layout = QVBoxLayout(hero)
-        hero_layout.setContentsMargins(0, 0, 0, 0)
-        hero_layout.setSpacing(6)
-
-        self._kicker = QLabel("ДЛЯ ТЕБЯ")
-        self._kicker.setObjectName("homeKicker")
-        hero_layout.addWidget(self._kicker)
-
-        self._greeting = QLabel()
-        self._greeting.setObjectName("homeGreeting")
-        hero_layout.addWidget(self._greeting)
-        self._layout.addWidget(hero)
-
-        self._featured = FeaturedTrackPanel()
-        self._featured.play_requested.connect(self._on_featured_play)
-
-        self._wave_card = WavePromoCard()
-        self._wave_card.open_requested.connect(self._on_wave_open)
-        self._wave_card.play_requested.connect(self._on_wave_play)
-
-        self._hero_cluster = _HomeHeroCluster(self._featured, self._wave_card)
-        self._layout.addWidget(self._hero_cluster)
+        # Сцена «Сейчас играет» и «Дальше». «Продолжить слушать» — состояние
+        # сцены, «Моя волна» — первая плитка быстрого доступа.
+        self._now_track: Track | None = None
+        self._playing = False
+        stage_row = QHBoxLayout()
+        stage_row.setSpacing(28)
+        self._stage = NowPlayingStage()
+        self._stage.resume_requested.connect(lambda: self._on_featured_play(0))
+        self._stage.wave_requested.connect(self._on_wave_play)
+        self._stage.search_requested.connect(self.search_requested.emit)
+        stage_row.addWidget(self._stage, 1)
+        self._up_next = UpNextPanel()
+        self._up_next.track_activated.connect(self.up_next_activated.emit)
+        self._up_next.queue_requested.connect(self.queue_requested.emit)
+        stage_row.addWidget(self._up_next, 0, Qt.AlignmentFlag.AlignTop)
+        self._layout.addLayout(stage_row)
 
         self._quick_section = HomeSection("Быстрый доступ")
         self._quick_shelf = QuickPickShelf()
         self._quick_shelf.playlist_activated.connect(self._on_playlist)
+        self._quick_shelf.wave_play_requested.connect(self._on_wave_play)
         self._quick_section.add_widget_block(self._quick_shelf)
         self._layout.addWidget(self._quick_section)
 
@@ -207,8 +162,7 @@ class HomePage(QWidget):
 
         self._vm.home_changed.connect(self._rebuild)
         self._vm.recent_changed.connect(self._on_recent_changed)
-        self._prefs.layout_changed.connect(self._apply_featured_visibility)
-        self._apply_featured_visibility()
+        self._sync_stage()
 
     def _make_track_table(
         self,
@@ -259,13 +213,12 @@ class HomePage(QWidget):
 
     def _rebuild(self) -> None:
         snap = self._vm.snapshot
-        self._greeting.setText(snap.greeting)
+        self._stage.set_greeting(snap.greeting)
 
         has_token = bool(yandex_token())
-        self._wave_card.set_state(
+        self._quick_shelf.set_wave_state(
             available=has_token,
             track_count=snap.wave_track_count,
-            source=snap.wave_source,
             loading=has_token and not snap.wave_ready,
         )
 
@@ -285,7 +238,7 @@ class HomePage(QWidget):
         self._recent_empty.setVisible(recent_count == 0)
         self._sync_table_height(self._recommend_list, self._vm.recommendation_model)
         self._sync_table_height(self._recent_list, self._vm.recent_model)
-        self._sync_featured()
+        self._sync_stage()
 
     def _on_recent_changed(self) -> None:
         snap = self._vm.snapshot
@@ -294,24 +247,45 @@ class HomePage(QWidget):
         recent_count = len(snap.recent_tracks)
         self._recent_empty.setVisible(recent_count == 0)
         self._sync_table_height(self._recent_list, self._vm.recent_model)
-        self._sync_featured()
+        self._sync_stage()
 
-    def _apply_featured_visibility(self) -> None:
-        # Hero — центр новой главной, панель всегда на месте.
-        self._featured.setVisible(True)
-        self._hero_cluster.sync_layout()
-        self._sync_featured()
+    # --- сцена -----------------------------------------------------------
 
-    def _sync_featured(self) -> None:
-        if not self._featured.isVisible():
+    def set_now_playing(self, track: Track | None) -> None:
+        """Трек плеера (None — ничего не выбрано)."""
+        self._now_track = track
+        self._sync_stage()
+
+    def set_playing(self, playing: bool) -> None:
+        self._playing = playing
+        self._stage.set_playing(playing)
+
+    def set_up_next(self, items: list[UpNextItem]) -> None:
+        self._up_next.set_items(items)
+
+    def set_eco(self, enabled: bool) -> None:
+        self._stage.set_eco(enabled)
+
+    @property
+    def stage(self) -> NowPlayingStage:
+        return self._stage
+
+    def _sync_stage(self) -> None:
+        if self._now_track is not None:
+            self._stage.set_track(self._now_track, mode="playing")
+            self._stage.set_playing(self._playing)
             return
         model = self._vm.recent_model
-        if model.rowCount() == 0:
-            self._featured.set_track(None)
-            return
-        track = model.data(model.index(0, 0), TrackListModel.TrackRole)
-        playing = bool(model.data(model.index(0, 0), TrackListModel.IsPlayingRole))
-        self._featured.set_track(track, 0, playing=playing)
+        last = (
+            model.data(model.index(0, 0), TrackListModel.TrackRole)
+            if model.rowCount()
+            else None
+        )
+        self._stage.set_track(last, mode="resume" if last is not None else "empty")
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._up_next.setVisible(self.width() >= _UP_NEXT_FROM)
 
     def _on_playlist(self, playlist: Playlist) -> None:
         if getattr(playlist, "kind", None) == "wave":
@@ -333,28 +307,24 @@ class HomePage(QWidget):
         schedule(self._play_wave_async(), self._bridge)
 
     async def _open_wave_async(self) -> None:
-        self._wave_card.set_state(
+        self._quick_shelf.set_wave_state(
             available=True,
             track_count=self._vm.snapshot.wave_track_count,
             loading=True,
         )
         playlist = await self._vm.open_wave()
         if playlist is None or not len(playlist):
-            self._wave_card.set_state(
+            self._quick_shelf.set_wave_state(
                 available=bool(yandex_token()),
                 track_count=0,
-                error="Не удалось загрузить волну. Проверь токен Yandex.",
+                error="Не удалось загрузить волну",
             )
             return
-        self._wave_card.set_state(
-            available=True,
-            track_count=len(playlist),
-            source=getattr(playlist, "source", "yandex"),
-        )
+        self._quick_shelf.set_wave_state(available=True, track_count=len(playlist))
         self.playlist_open_requested.emit(playlist)
 
     async def _play_wave_async(self) -> None:
-        self._wave_card.set_state(
+        self._quick_shelf.set_wave_state(
             available=True,
             track_count=self._vm.snapshot.wave_track_count,
             loading=True,
@@ -362,10 +332,8 @@ class HomePage(QWidget):
         await self._vm.play_wave()
         wave = getattr(self._vm, "_wave_playlist", None)
         count = len(wave) if wave is not None else self._vm.snapshot.wave_track_count
-        self._wave_card.set_state(
-            available=bool(yandex_token()),
-            track_count=count,
-            source=self._vm.snapshot.wave_source,
+        self._quick_shelf.set_wave_state(
+            available=bool(yandex_token()), track_count=count
         )
 
     def _on_recommendations_open(self) -> None:
@@ -428,4 +396,4 @@ class HomePage(QWidget):
         show_add_to_playlist_menu(track, bridge=self._bridge, parent=self, on_done=done)
 
     def refresh_featured(self) -> None:
-        self._sync_featured()
+        self._sync_stage()

@@ -73,10 +73,6 @@ QToolButton#navPinButton {
     color: rgba(232, 238, 245, 0.7);
 }
 
-QFrame#featuredPanel {
-    border-radius: 12px;
-}
-
 QWidget {
     color: #dde2e8;
 }
