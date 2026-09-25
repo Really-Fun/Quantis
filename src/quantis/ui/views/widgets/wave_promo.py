@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import (
-    QColor,
     QLinearGradient,
     QPainter,
     QPainterPath,
@@ -56,7 +55,9 @@ class _WaveMark(QWidget):
         painter.setPen(pen)
         painter.drawPath(path)
 
-        painter.setPen(QColor(184, 244, 255, 230))
+        mark = qcolor(colors.hl_rgb)
+        mark.setAlpha(230)
+        painter.setPen(mark)
         font = painter.font()
         font.setPointSize(18)
         font.setBold(True)
@@ -178,16 +179,22 @@ class WavePromoCard(QFrame):
         path = QPainterPath()
         path.addRoundedRect(rect, 18, 18)
 
+        colors = UiPreferences().theme.colors
+        hl = qcolor(colors.hl_rgb)
+        ink = qcolor(colors.ink_rgb)
         fill = QLinearGradient(rect.topLeft(), rect.bottomRight())
         top_alpha = 22 if self._available else 8
         if self._hovered and self._available:
             top_alpha = 32
-        fill.setColorAt(0.0, QColor(46, 230, 255, top_alpha))
-        fill.setColorAt(1.0, QColor(255, 255, 255, 8 if self._available else 5))
+        hl.setAlpha(top_alpha)
+        ink.setAlpha(8 if self._available else 5)
+        fill.setColorAt(0.0, hl)
+        fill.setColorAt(1.0, ink)
         painter.fillPath(path, fill)
 
-        border_alpha = 28 if not self._available else (95 if self._hovered else 60)
-        pen = QPen(QColor(46, 230, 255, border_alpha))
+        border = qcolor(colors.hl_rgb)
+        border.setAlpha(28 if not self._available else (95 if self._hovered else 60))
+        pen = QPen(border)
         pen.setWidthF(1.15)
         painter.setPen(pen)
         painter.drawPath(path)

@@ -105,13 +105,14 @@ QLabel#homeSectionSubtitle {
 }
 
 QToolButton#featuredPlayBtn {
+    background: ${tint};
     border-radius: 0;
-    color: #ffffff;
-    font-size: 11px;
-    font-weight: 500;
-    padding: 12px 22px;
-    letter-spacing: 1.5px;
-    text-transform: uppercase;
+    color: ${on_tint};
+}
+
+QToolButton#featuredPlayBtn:hover {
+    background: ${tint_hover};
+    color: ${on_tint};
 }
 
 QToolButton#featuredPlayBtn:disabled {

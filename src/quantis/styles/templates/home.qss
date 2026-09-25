@@ -219,7 +219,7 @@ QToolButton#featuredPlayBtn {
 }
 
 QToolButton#featuredPlayBtn:hover {
-    background: #ffffff;
+    background: rgb(${ink_rgb});
     color: #0b0d12;
 }
 

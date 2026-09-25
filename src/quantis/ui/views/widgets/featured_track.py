@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
 from quantis.models import Track
 from quantis.ui.cover_accent import accent_from_cover_path, fallback_accent
 from quantis.ui.views.widgets.cover_art import load_track_cover, track_cover_file
+from quantis.ui.views.widgets.elided_label import ElidedLabel
 from quantis.ui.views.widgets.home_pill_badge import HomePillBadge
 from quantis.ui.views.widgets.playlist_card import GradientCover
 
@@ -51,10 +52,8 @@ class FeaturedTrackPanel(QFrame):
         self._eyebrow = HomePillBadge("Продолжить слушать", variant="continue")
         col.addWidget(self._eyebrow, 0, Qt.AlignmentFlag.AlignLeft)
 
-        self._title = QLabel("Выбери трек")
+        self._title = ElidedLabel("Выбери трек", max_lines=2)
         self._title.setObjectName("featuredTitle")
-        self._title.setWordWrap(True)
-        self._title.setMaximumHeight(52)
         col.addWidget(self._title)
 
         self._author = QLabel("Открой поиск или плейлист")

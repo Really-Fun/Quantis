@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from PySide6.QtCore import QPoint, Qt, Signal
-from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -12,6 +11,8 @@ from PySide6.QtWidgets import (
 )
 
 from quantis.ui import resources
+from quantis.ui.preferences import UiPreferences
+from quantis.ui.themes.spec import qcolor
 from quantis.ui.views.widgets.brand_mark import BrandMark
 
 
@@ -61,28 +62,32 @@ class AppHeader(QFrame):
 
         self._hide_ui_btn = self._make_control(
             "windowHideUiBtn",
-            resources.icon_path("hide-ui.svg"),
+            "hide-ui.svg",
             "Скрыть интерфейс (S)",
             self.hide_ui_requested.emit,
         )
         self._min_btn = self._make_control(
             "windowMinBtn",
-            resources.icon_path("minimize.svg"),
+            "minimize.svg",
             "Свернуть",
             self.minimize_requested.emit,
         )
         self._max_btn = self._make_control(
             "windowMaxBtn",
-            resources.icon_path("maximize.svg"),
+            "maximize.svg",
             "Развернуть",
             self.maximize_requested.emit,
         )
         self._close_btn = self._make_control(
             "windowCloseBtn",
-            resources.icon_path("close.svg"),
+            "close.svg",
             "Закрыть",
             self.close_requested.emit,
         )
+
+        self._prefs = UiPreferences()
+        self._prefs.theme_changed.connect(self._refresh_icons)
+        self._refresh_icons()
 
         controls.addWidget(self._hide_ui_btn)
         controls.addWidget(self._min_btn)
@@ -93,19 +98,30 @@ class AppHeader(QFrame):
     def _make_control(
         self,
         object_name: str,
-        icon_path: str,
+        icon_name: str,
         tooltip: str,
         on_click,
     ) -> QToolButton:
         button = QToolButton(self)
         button.setObjectName(object_name)
-        button.setIcon(QIcon(icon_path))
+        button.setProperty("iconName", icon_name)
         button.setToolTip(tooltip)
         button.setCursor(Qt.CursorShape.PointingHandCursor)
         button.setAutoRaise(True)
         button.setFixedSize(46, 36)
         button.clicked.connect(on_click)
         return button
+
+    def _refresh_icons(self) -> None:
+        """Значки кнопок окна цветом ``text_soft`` темы (в SVG — светло-серый)."""
+        color = qcolor(self._prefs.theme.colors.text_soft)
+        for button in (
+            self._hide_ui_btn,
+            self._min_btn,
+            self._max_btn,
+            self._close_btn,
+        ):
+            button.setIcon(resources.load_icon(button.property("iconName"), color))
 
     def set_page(self, title: str, subtitle: str = "") -> None:
         self._title.setText(title)
@@ -119,8 +135,9 @@ class AppHeader(QFrame):
         self._maximized = maximized
         icon_name = "restore.svg" if maximized else "maximize.svg"
         tooltip = "Восстановить" if maximized else "Развернуть"
-        self._max_btn.setIcon(QIcon(resources.icon_path(icon_name)))
+        self._max_btn.setProperty("iconName", icon_name)
         self._max_btn.setToolTip(tooltip)
+        self._refresh_icons()
 
     def _can_drag(self, pos: QPoint) -> bool:
         widget = self.childAt(pos)
