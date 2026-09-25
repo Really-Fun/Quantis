@@ -9,44 +9,12 @@ from PySide6.QtGui import QColor, QIcon
 from quantis.ui.design_tokens import ACCENT_FALLBACK
 from quantis.utils import get_asset_path
 
-THEME_CLASSIC = "classic"
-THEME_NEON = "neon"  # Aurora (база)
-THEME_AURORA = THEME_NEON
-THEME_GLASS = "glass"
-THEME_EDITORIAL = "editorial"
-THEME_LIGHT = "light"
-THEME_YELLOW_DARK = "yellow_dark"
-DEFAULT_UI_THEME = THEME_NEON
 
-UI_THEME_LABELS: dict[str, str] = {
-    THEME_NEON: "Aurora",
-    THEME_GLASS: "Glass",
-    THEME_CLASSIC: "Классическая",
-    THEME_EDITORIAL: "Редакционная",
-    THEME_LIGHT: "Светлая",
-    THEME_YELLOW_DARK: "Тёмно-жёлтая",
-}
+def ui_theme_labels() -> dict[str, str]:
+    """Id темы → название для настроек, в порядке показа."""
+    from quantis.ui.themes import registry
 
-UI_THEME_BASE_QSS: dict[str, str] = {
-    THEME_CLASSIC: "dark",
-    THEME_NEON: "dark",
-    THEME_GLASS: "dark",
-    THEME_EDITORIAL: "dark",
-    THEME_LIGHT: "light",
-    THEME_YELLOW_DARK: "yellow_dark",
-}
-
-_SHARED_WIDGET_STYLES = (
-    "surfaces.qss",
-    "panels.qss",
-    "home.qss",
-    "stats.qss",
-    "play_menu.qss",
-    "playlist_page.qss",
-    "playlist_preview.qss",
-    "quantis.qss",
-    "track_card.qss",
-)
+    return {theme.id: theme.label for theme in registry.all()}
 
 
 def styles_dir() -> Path:
@@ -64,7 +32,6 @@ def icon_path(name: str) -> str:
 
 
 _ICON_CACHE: dict[str, QIcon] = {}
-_BASE_SHEET_CACHE: dict[str, str] = {}
 
 
 def load_icon(name: str) -> QIcon:
@@ -76,43 +43,10 @@ def load_icon(name: str) -> QIcon:
     return icon
 
 
-def load_theme(theme: str = "dark") -> str:
-    theme_file = styles_dir() / f"{theme}.qss"
-    if not theme_file.is_file():
-        theme_file = styles_dir() / "dark.qss"
-    return theme_file.read_text(encoding="utf-8")
-
-
 def normalize_ui_theme(ui_theme: str | None) -> str:
-    if ui_theme in UI_THEME_LABELS:
-        return ui_theme
-    if ui_theme == "aurora":
-        return THEME_NEON
-    return DEFAULT_UI_THEME
+    from quantis.ui.themes import registry
 
-
-def load_widget_styles(ui_theme: str = DEFAULT_UI_THEME) -> str:
-    theme_id = normalize_ui_theme(ui_theme)
-    parts: list[str] = []
-
-    widget_dir = styles_dir() / "widget_styles"
-    for name in _SHARED_WIDGET_STYLES:
-        if name == "settings.qss":
-            continue
-        path = widget_dir / name
-        if path.is_file():
-            parts.append(path.read_text(encoding="utf-8"))
-
-    theme_dir = styles_dir() / "themes" / theme_id
-    if theme_dir.is_dir():
-        for path in sorted(theme_dir.glob("*.qss")):
-            parts.append(path.read_text(encoding="utf-8"))
-
-    settings_qss = widget_dir / "settings.qss"
-    if settings_qss.is_file():
-        parts.append(settings_qss.read_text(encoding="utf-8"))
-
-    return "\n".join(parts)
+    return registry.resolve_id(ui_theme)
 
 
 def wallpaper_path() -> str:
@@ -170,17 +104,13 @@ ACCENT_SEEK_SLIDER_QSS = """
 
 
 def load_stylesheet(
-    ui_theme: str = DEFAULT_UI_THEME,
+    ui_theme: str | None = None,
     *,
     accent: QColor | None = None,
 ) -> str:
-    theme_id = normalize_ui_theme(ui_theme)
-    base_sheet = _BASE_SHEET_CACHE.get(theme_id)
-    if base_sheet is None:
-        base = UI_THEME_BASE_QSS.get(theme_id, "dark")
-        base_sheet = load_theme(base) + "\n" + load_widget_styles(theme_id)
-        _BASE_SHEET_CACHE[theme_id] = base_sheet
-    return base_sheet + "\n" + dynamic_accent_qss(accent)
+    from quantis.ui.themes import qss, registry
+
+    return qss.render(registry.get(ui_theme)) + "\n" + dynamic_accent_qss(accent)
 
 
 def format_ms(ms: int) -> str:

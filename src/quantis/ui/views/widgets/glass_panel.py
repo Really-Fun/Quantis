@@ -5,7 +5,6 @@ from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import QFrame
 
 from quantis.ui.preferences import UiPreferences
-from quantis.ui.resources import THEME_EDITORIAL
 
 
 class GlassPanel(QFrame):
@@ -23,11 +22,11 @@ class GlassPanel(QFrame):
         self.update()
 
     def _apply_editorial_mode(self) -> None:
-        editorial = self._prefs.ui_theme == THEME_EDITORIAL
+        editorial = self._prefs.theme.card_style == "editorial"
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, not editorial)
 
     def paintEvent(self, event) -> None:
-        if self._prefs.ui_theme != THEME_EDITORIAL:
+        if self._prefs.theme.card_style != "editorial":
             super().paintEvent(event)
             return
 

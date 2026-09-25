@@ -36,7 +36,7 @@ from quantis.services.wallpaper_policy import (
     WALLPAPER_QUALITY_CHOICES,
 )
 from quantis.ui.preferences import UiPreferences
-from quantis.ui.resources import UI_THEME_LABELS
+from quantis.ui.resources import ui_theme_labels
 from quantis.ui.shortcuts import KEYBIND_HINTS
 from quantis.ui.views.widgets.glass_panel import GlassPanel
 from quantis.ui.wallpapers import (
@@ -86,7 +86,7 @@ class SettingsPage(QWidget):
         self._theme_combo = QComboBox()
         self._theme_combo.setObjectName("themeCombo")
         self._theme_combo.setCursor(Qt.CursorShape.PointingHandCursor)
-        for theme_id, label in UI_THEME_LABELS.items():
+        for theme_id, label in ui_theme_labels().items():
             self._theme_combo.addItem(label, theme_id)
         self._theme_combo.currentIndexChanged.connect(self._on_theme_changed)
         theme_body.addWidget(self._theme_combo)

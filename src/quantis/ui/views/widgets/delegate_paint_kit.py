@@ -6,8 +6,6 @@ from typing import NamedTuple
 
 from PySide6.QtGui import QColor, QFont
 
-from quantis.ui.resources import THEME_LIGHT
-
 # Цвета — Aurora
 C_BG_HOVER = QColor(255, 255, 255, 16)
 C_BG_PLAYING = QColor(108, 92, 231, 28)
@@ -86,11 +84,13 @@ LIGHT_PAINT = PaintColors(
 
 
 def paint_colors(theme_id: str | None = None) -> PaintColors:
+    from quantis.ui.themes import registry
+
     if theme_id is None:
         from quantis.ui.preferences import UiPreferences
 
         theme_id = UiPreferences().ui_theme
-    if theme_id == THEME_LIGHT:
+    if registry.get(theme_id).is_light:
         return LIGHT_PAINT
     return DARK_PAINT
 

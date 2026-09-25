@@ -5,7 +5,9 @@ from __future__ import annotations
 from PySide6.QtCore import QByteArray, QObject, QSettings, Signal, SignalInstance
 
 from quantis.models.repeat_mode import RepeatMode
-from quantis.ui.resources import DEFAULT_UI_THEME, normalize_ui_theme
+from quantis.ui.resources import normalize_ui_theme
+from quantis.ui.themes import registry
+from quantis.ui.themes.spec import ThemeSpec
 
 
 class UiPreferences(QObject):
@@ -116,8 +118,13 @@ class UiPreferences(QObject):
 
     @property
     def ui_theme(self) -> str:
-        raw = self._settings.value(self._KEY_UI_THEME, DEFAULT_UI_THEME)
+        raw = self._settings.value(self._KEY_UI_THEME, registry.DEFAULT_ID)
         return normalize_ui_theme(str(raw) if raw is not None else None)
+
+    @property
+    def theme(self) -> ThemeSpec:
+        """Описание текущей темы."""
+        return registry.get(self.ui_theme)
 
     def set_ui_theme(self, theme_id: str) -> None:
         theme_id = normalize_ui_theme(theme_id)

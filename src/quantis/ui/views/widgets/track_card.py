@@ -16,7 +16,6 @@ from PySide6.QtWidgets import QStyle, QStyledItemDelegate
 from quantis.models import Track
 from quantis.ui.models import TrackListModel
 from quantis.ui.preferences import UiPreferences
-from quantis.ui.resources import THEME_EDITORIAL
 from quantis.ui.views.widgets.cover_art import load_track_cover, paint_rounded_cover
 from quantis.ui.views.widgets.delegate_paint_kit import (
     C_TITLE_PLAYING,
@@ -54,7 +53,7 @@ class TrackCardDelegate(QStyledItemDelegate):
         super().__init__(parent)
         self._on_download = on_download
         self._prefs = UiPreferences()
-        self._editorial = self._prefs.ui_theme == THEME_EDITORIAL
+        self._editorial = self._prefs.theme.card_style == "editorial"
         self._prefs.theme_changed.connect(self._on_theme_changed)
         self._fm_title = QFontMetrics(FONT_TITLE)
         self._fm_author = QFontMetrics(FONT_AUTHOR)
@@ -62,7 +61,7 @@ class TrackCardDelegate(QStyledItemDelegate):
         self._fm_editorial_author = QFontMetrics(FONT_EDITORIAL_AUTHOR)
 
     def _on_theme_changed(self) -> None:
-        self._editorial = self._prefs.ui_theme == THEME_EDITORIAL
+        self._editorial = self._prefs.theme.card_style == "editorial"
         parent = self.parent()
         if parent is not None and hasattr(parent, "viewport"):
             parent.viewport().update()

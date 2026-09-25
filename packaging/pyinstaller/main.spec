@@ -180,6 +180,9 @@ if sys.platform == "win32":
         except Exception:
             hiddenimports.append(pkg)
 
+# Темы находятся по файлам пакета (pkgutil) — статически их никто не импортирует.
+hiddenimports += collect_submodules("quantis.ui.themes")
+
 hiddenimports += [
     "qasync",
     "aiosqlite",
