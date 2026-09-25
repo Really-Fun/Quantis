@@ -18,7 +18,6 @@ from quantis.ui.models import TrackListModel
 from quantis.ui.preferences import UiPreferences
 from quantis.ui.views.widgets.cover_art import load_track_cover, paint_rounded_cover
 from quantis.ui.views.widgets.delegate_paint_kit import (
-    C_TITLE_PLAYING,
     FONT_ACTION,
     FONT_AUTHOR,
     FONT_COVER,
@@ -53,7 +52,7 @@ class TrackCardDelegate(QStyledItemDelegate):
         super().__init__(parent)
         self._on_download = on_download
         self._prefs = UiPreferences()
-        self._editorial = self._prefs.theme.card_style == "editorial"
+        self._editorial = self._prefs.theme.card_style == "magazine"
         self._prefs.theme_changed.connect(self._on_theme_changed)
         self._fm_title = QFontMetrics(FONT_TITLE)
         self._fm_author = QFontMetrics(FONT_AUTHOR)
@@ -61,7 +60,7 @@ class TrackCardDelegate(QStyledItemDelegate):
         self._fm_editorial_author = QFontMetrics(FONT_EDITORIAL_AUTHOR)
 
     def _on_theme_changed(self) -> None:
-        self._editorial = self._prefs.theme.card_style == "editorial"
+        self._editorial = self._prefs.theme.card_style == "magazine"
         parent = self.parent()
         if parent is not None and hasattr(parent, "viewport"):
             parent.viewport().update()
@@ -129,7 +128,7 @@ class TrackCardDelegate(QStyledItemDelegate):
             painter.setFont(FONT_ACTION)
             painter.drawText(action_rect, Qt.AlignmentFlag.AlignCenter, "✓")
         elif hovered:
-            colors = paint_colors(self._prefs.ui_theme)
+            colors = paint_colors(self._prefs.theme)
             painter.setBrush(colors.dl_hover_bg)
             painter.setPen(QPen(colors.dl_hover_pen, 1))
             painter.drawEllipse(action_rect)
@@ -147,7 +146,7 @@ class TrackCardDelegate(QStyledItemDelegate):
         selected: bool,
     ) -> None:
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
-        colors = paint_colors(self._prefs.ui_theme)
+        colors = paint_colors(self._prefs.theme)
 
         if is_playing:
             painter.setBrush(colors.bg_playing)
@@ -269,7 +268,11 @@ class TrackCardDelegate(QStyledItemDelegate):
         title_rect = QRect(text_left, inner.top() + 10, text_w, 22)
         author_rect = QRect(text_left, inner.top() + 30, text_w, 16)
 
-        painter.setPen(C_TITLE_PLAYING if is_playing else self._C_EDITORIAL_TITLE)
+        painter.setPen(
+            paint_colors(self._prefs.theme).title_playing
+            if is_playing
+            else self._C_EDITORIAL_TITLE
+        )
         painter.setFont(FONT_EDITORIAL_TITLE)
         painter.drawText(
             title_rect,

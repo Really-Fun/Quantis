@@ -548,7 +548,10 @@ class SettingsPage(QWidget):
         if theme_id:
             theme_id = str(theme_id)
             self._prefs.set_ui_theme(theme_id)
-            if theme_id == "glass" and not self._prefs.wallpaper_enabled:
+            if (
+                self._prefs.theme.requires_wallpaper
+                and not self._prefs.wallpaper_enabled
+            ):
                 self._prefs.set_wallpaper_enabled(True)
 
     def _sync_update_row(self) -> None:

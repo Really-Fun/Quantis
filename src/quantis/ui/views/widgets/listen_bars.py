@@ -76,7 +76,7 @@ class ListenBars(QWidget):
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        colors = paint_colors(self._prefs.ui_theme)
+        colors = paint_colors(self._prefs.theme)
         if not self._tracks:
             painter.setPen(colors.empty)
             painter.setFont(QFont(self.font().family(), 12))

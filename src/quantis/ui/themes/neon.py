@@ -47,7 +47,7 @@ THEME = ThemeSpec(
         list_bg="#0b0d16",
     ),
     fonts=ThemeFonts(ui=UI_FONTS, display=UI_FONTS, mono=MONO_FONTS),
-    backdrop=BackdropSpec(depth=DARK_DEPTH, glow=GlowSpec("aurora")),
+    backdrop=BackdropSpec(depth=DARK_DEPTH, glow=GlowSpec("cover")),
     radius=16,
     radius_control=12,
     wallpaper_opacity=0.11,

@@ -36,6 +36,7 @@ from quantis.ui.shortcuts import (
     is_space_target,
     is_typing_target,
 )
+from quantis.ui.themes import registry
 from quantis.ui.ui_extensions import NavExtension, UiExtensionHost
 from quantis.ui.viewmodels.home_vm import HomeViewModel
 from quantis.ui.viewmodels.player_vm import PlayerViewModel
@@ -148,7 +149,7 @@ class QuantisMainWindow(QMainWindow):
 
         shell = BackgroundFrame(
             resources.wallpaper_path(),
-            variant=self._ui_prefs.ui_theme,
+            theme=self._ui_prefs.theme,
         )
         self.setCentralWidget(shell)
         self._shell = shell
@@ -172,7 +173,7 @@ class QuantisMainWindow(QMainWindow):
 
         self._body_shell = BodyWithWallpaper(
             resources.wallpaper_path(),
-            variant=self._ui_prefs.ui_theme,
+            theme=self._ui_prefs.theme,
         )
         body = self._body_shell.layout_host
         body.setContentsMargins(10, 10, 10, 0)
@@ -790,8 +791,9 @@ class QuantisMainWindow(QMainWindow):
     def _apply_ui_theme(self, theme_id: str) -> None:
         self._applied_theme = theme_id
         self.setStyleSheet(resources.load_stylesheet(theme_id, accent=self._accent))
-        self._shell.set_variant(theme_id)
-        self._body_shell.set_variant(theme_id)
+        theme = registry.get(theme_id)
+        self._shell.set_theme(theme)
+        self._body_shell.set_theme(theme)
         self._player_bar.refresh_theme()
 
     def _restore_window_geometry(self) -> None:

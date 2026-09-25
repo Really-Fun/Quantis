@@ -14,7 +14,7 @@ from typing import Literal
 from PySide6.QtGui import QColor
 
 ThemeMode = Literal["dark", "light"]
-CardStyle = Literal["default", "editorial"]
+CardStyle = Literal["default", "magazine"]
 
 
 @dataclass(frozen=True)
@@ -103,10 +103,10 @@ class GlowSpot:
 
 @dataclass(frozen=True)
 class GlowSpec:
-    """Свечение фона. ``aurora`` — два пятна цвета обложки плывут по окну;
+    """Свечение фона. ``cover`` — два пятна цвета обложки плывут по окну;
     ``spots`` — неподвижные пятна своих цветов, только дышат."""
 
-    style: Literal["aurora", "spots"]
+    style: Literal["cover", "spots"]
     spots: tuple[GlowSpot, ...] = ()
 
 

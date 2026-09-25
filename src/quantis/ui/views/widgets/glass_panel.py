@@ -22,11 +22,11 @@ class GlassPanel(QFrame):
         self.update()
 
     def _apply_editorial_mode(self) -> None:
-        editorial = self._prefs.theme.card_style == "editorial"
+        editorial = self._prefs.theme.card_style == "magazine"
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, not editorial)
 
     def paintEvent(self, event) -> None:
-        if self._prefs.theme.card_style != "editorial":
+        if self._prefs.theme.card_style != "magazine":
             super().paintEvent(event)
             return
 

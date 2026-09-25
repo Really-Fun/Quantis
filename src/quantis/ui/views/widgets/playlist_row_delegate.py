@@ -46,7 +46,7 @@ class PlaylistRowDelegate(QStyledItemDelegate):
         if playlist is None:
             return
 
-        colors = paint_colors(self._prefs.ui_theme)
+        colors = paint_colors(self._prefs.theme)
         hovered = bool(option.state & QStyle.StateFlag.State_MouseOver)
         selected = bool(option.state & QStyle.StateFlag.State_Selected)
         rect = option.rect.adjusted(0, 2, 0, -2)

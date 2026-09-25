@@ -39,5 +39,5 @@ THEME = ThemeSpec(
     radius=0,
     radius_control=0,
     wallpaper_opacity=0.0,
-    card_style="editorial",
+    card_style="magazine",
 )

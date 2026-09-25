@@ -24,6 +24,8 @@ from quantis.services.wallpaper_policy import (
     wallpaper_seek_target,
 )
 from quantis.services.wallpaper_sync import VideoState
+from quantis.ui.themes import registry
+from quantis.ui.themes.spec import ThemeSpec
 from quantis.ui.views.widgets.cover_art import load_wallpaper_pixmap
 
 logger = logging.getLogger(__name__)
@@ -206,14 +208,14 @@ class WallpaperBackdrop(QWidget):
     def __init__(
         self,
         wallpaper: str | Path | None = None,
-        variant: str = "neon",
+        theme: ThemeSpec | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self.setObjectName("wallpaperBackdrop")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, False)
         self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
-        self._variant = variant
+        self._theme = theme or registry.default()
         self._wallpaper_path: str | None = str(wallpaper) if wallpaper else None
         self._cached = QPixmap()
         self._cache_size = (0, 0)
@@ -292,9 +294,9 @@ class WallpaperBackdrop(QWidget):
         self._host_player.setVideoSink(None)
         self._host_player = None
 
-    def set_variant(self, variant: str) -> None:
-        if self._variant != variant:
-            self._variant = variant
+    def set_theme(self, theme: ThemeSpec) -> None:
+        if self._theme is not theme:
+            self._theme = theme
             self.update()
 
     def set_wallpaper(self, path: str | Path | None) -> None:
@@ -540,13 +542,7 @@ class WallpaperBackdrop(QWidget):
         self._cache_size = (size.width(), size.height())
 
     def _wallpaper_opacity(self) -> float:
-        return {
-            "classic": 0.12,
-            "neon": 0.11,
-            "editorial": 0.0,
-            "light": 0.14,
-            "yellow_dark": 0.11,
-        }.get(self._variant, 0.10)
+        return self._theme.wallpaper_opacity
 
     def paintEvent(self, event) -> None:
         if self._video_active:
@@ -557,7 +553,7 @@ class WallpaperBackdrop(QWidget):
 
         if (
             self._dynamic_enabled
-            or self._variant == "editorial"
+            or self._wallpaper_opacity() <= 0
             or self._cached.isNull()
         ):
             return
@@ -578,12 +574,12 @@ class BodyWithWallpaper(QWidget):
     def __init__(
         self,
         wallpaper: str | Path | None = None,
-        variant: str = "neon",
+        theme: ThemeSpec | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self.setObjectName("bodyWithWallpaper")
-        self._backdrop = WallpaperBackdrop(wallpaper, variant, self)
+        self._backdrop = WallpaperBackdrop(wallpaper, theme, self)
         self._layer_host = QWidget(self)
         self._layer_host.setObjectName("backgroundLayerHost")
         self._layer_host.setAttribute(
@@ -627,8 +623,8 @@ class BodyWithWallpaper(QWidget):
         self._layer_host.stackUnder(self._foreground)
         self._foreground.raise_()
 
-    def set_variant(self, variant: str) -> None:
-        self._backdrop.set_variant(variant)
+    def set_theme(self, theme: ThemeSpec) -> None:
+        self._backdrop.set_theme(theme)
 
     def set_wallpaper(self, path: str | Path | None) -> None:
         self._backdrop.set_wallpaper(path)

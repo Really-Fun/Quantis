@@ -61,7 +61,7 @@ class PlaylistTrackDelegate(QStyledItemDelegate):
         row = index.row()
         rect = option.rect
 
-        colors = paint_colors(self._prefs.ui_theme)
+        colors = paint_colors(self._prefs.theme)
         if is_playing:
             painter.fillRect(rect, colors.bg_playing)
         elif hovered or selected:
