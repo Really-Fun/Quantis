@@ -92,17 +92,6 @@ class SettingsPage(QWidget):
         theme_body.addWidget(self._theme_combo)
         panel_layout.addWidget(theme_row)
 
-        featured_row, featured_body = self._row(
-            "Главная",
-            "Дополнительная панель текущего трека",
-        )
-        self._home_featured_cb = QCheckBox("Панель «Сейчас» на главной")
-        self._home_featured_cb.setObjectName("settingsCheck")
-        self._home_featured_cb.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._home_featured_cb.toggled.connect(self._on_home_featured_toggled)
-        featured_body.addWidget(self._home_featured_cb)
-        panel_layout.addWidget(featured_row)
-
         now_row, now_body = self._row(
             "Now Playing",
             "Правая колонка с обложкой и метаданными (на широком окне)",
@@ -381,9 +370,6 @@ class SettingsPage(QWidget):
         return frame, col
 
     def _sync_from_preferences(self) -> None:
-        self._home_featured_cb.blockSignals(True)
-        self._home_featured_cb.setChecked(self._prefs.show_home_featured_panel)
-        self._home_featured_cb.blockSignals(False)
 
         self._now_playing_cb.blockSignals(True)
         self._now_playing_cb.setChecked(self._prefs.show_now_playing_panel)
@@ -466,9 +452,6 @@ class SettingsPage(QWidget):
     def _open_folder(path: Path) -> None:
         path.mkdir(parents=True, exist_ok=True)
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
-
-    def _on_home_featured_toggled(self, checked: bool) -> None:
-        self._prefs.set_show_home_featured_panel(checked)
 
     def _on_now_playing_toggled(self, checked: bool) -> None:
         self._prefs.set_show_now_playing_panel(checked)

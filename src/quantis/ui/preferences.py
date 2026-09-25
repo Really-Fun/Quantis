@@ -35,7 +35,6 @@ class UiPreferences(QObject):
 
     _instance: UiPreferences | None = None
 
-    _KEY_HOME_FEATURED = "ui/show_home_featured_panel"
     _KEY_UI_THEME = "ui/theme"
     _KEY_DYNAMIC_WALLPAPER = "ui/dynamic_wallpaper"
     _KEY_WALLPAPER_QUALITY = "ui/dynamic_wallpaper_quality"
@@ -99,19 +98,6 @@ class UiPreferences(QObject):
             return float(raw)  # type: ignore[arg-type]
         except (TypeError, ValueError):
             return default
-
-    @property
-    def show_home_featured_panel(self) -> bool:
-        return self._read_bool(
-            self._settings.value(self._KEY_HOME_FEATURED, True),
-            True,
-        )
-
-    def set_show_home_featured_panel(self, value: bool) -> None:
-        if self.show_home_featured_panel == value:
-            return
-        self._settings.setValue(self._KEY_HOME_FEATURED, value)
-        self._emit(self.layout_changed)
 
     @property
     def show_now_playing_panel(self) -> bool:

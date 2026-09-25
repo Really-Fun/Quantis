@@ -70,7 +70,6 @@ def test_silent_settings(prefs: UiPreferences, emitted: Counter[str]) -> None:
         (lambda p: p.set_backdrop_mode("cover"), "wallpaper_changed"),
         (lambda p: p.set_backdrop_motion(False), "wallpaper_changed"),
         (lambda p: p.set_show_now_playing_panel(False), "layout_changed"),
-        (lambda p: p.set_show_home_featured_panel(False), "layout_changed"),
         (lambda p: p.set_background_eco_enabled(False), "eco_changed"),
     ],
 )
