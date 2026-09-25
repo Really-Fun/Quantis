@@ -117,3 +117,30 @@ def render(theme: ThemeSpec) -> str:
     sheet = merge(base, extra)
     _CACHE[theme.id] = sheet
     return sheet
+
+
+_RULES: dict[tuple[str, str], dict[str, str]] = {}
+
+
+def rule(theme: ThemeSpec, selector: str) -> dict[str, str]:
+    """Итоговые свойства селектора в QSS темы (шаблон + ``extra_qss``).
+
+    Для виджетов, которые рисуют часть себя сами и должны совпасть с рамкой из
+    QSS (радиус, толщина рамки)."""
+    key = (theme.id, selector)
+    found = _RULES.get(key)
+    if found is None:
+        found = {}
+        for selectors, decls in parse(render(theme)):
+            if selector in selectors:
+                found.update(decls)
+        _RULES[key] = found
+    return found
+
+
+def px(value: str | None, default: float = 0.0) -> float:
+    """``"16px"`` / ``"1px solid …"`` → 16.0 / 1.0; ``none`` и пусто — ``default``."""
+    if not value or value.strip().startswith("none"):
+        return default
+    match = re.match(r"\s*(\d+(?:\.\d+)?)px", value)
+    return float(match.group(1)) if match else default

@@ -69,6 +69,7 @@ class BackgroundFrame(QFrame):
             return
         self._eco = enabled
         self._sync_timer()
+        self._compositor.set_eco(enabled)
 
     def set_cinematic(self, enabled: bool) -> None:
         if self._cinematic == enabled:

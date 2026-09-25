@@ -130,6 +130,7 @@ files = [
     "src/quantis/ui/viewmodels/player_vm.py",
     "src/quantis/ui/views/widgets/backdrop_compositor.py",
     "src/quantis/ui/views/widgets/brand_mark.py",
+    "src/quantis/ui/views/widgets/glass.py",
     "src/quantis/ui/views/widgets/source_badge.py",
     "src/quantis/ui/views/widgets/update_banner.py",
     "src/quantis/ui/wallpapers.py",

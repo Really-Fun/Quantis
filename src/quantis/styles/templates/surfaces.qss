@@ -1,5 +1,5 @@
 QFrame#PlayMenu {
-    background-color: ${surface};
+    background-color: ${panel_bg};
     border: 1px solid rgba(${ink_rgb}, 0.08);
     border-radius: ${radius};
 }
@@ -11,13 +11,13 @@ QFrame#TrackListPanel {
 }
 
 QFrame#glassPanel {
-    background: ${surface};
+    background: ${panel_bg};
     border: none;
     border-radius: ${radius};
 }
 
 QFrame#sideNavRail {
-    background-color: ${surface};
+    background-color: ${panel_bg};
     border: 1px solid rgba(${ink_rgb}, 0.06);
     border-radius: ${radius};
 }

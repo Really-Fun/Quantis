@@ -158,6 +158,7 @@ THEME = ThemeSpec(
     fonts=ThemeFonts(ui=SERIF, display=SERIF, mono=MONO, label=MONO),
     backdrop=BackdropSpec(depth=DARK_DEPTH, vignette=None, glow=None),
     radius=0,
+    glass_blur=0,  # журнальные панели: сплошные, без стекла
     radius_control=0,
     wallpaper_opacity=0.0,
     card_style="magazine",

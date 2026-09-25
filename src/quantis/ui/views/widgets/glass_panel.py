@@ -5,6 +5,7 @@ from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import QFrame
 
 from quantis.ui.preferences import UiPreferences
+from quantis.ui.views.widgets.glass import install_glass
 
 
 class GlassPanel(QFrame):
@@ -13,6 +14,7 @@ class GlassPanel(QFrame):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.setObjectName("glassPanel")
+        install_glass(self, "QFrame#glassPanel")
         self._prefs = UiPreferences()
         self._prefs.theme_changed.connect(self._on_theme_changed)
         self._apply_editorial_mode()

@@ -6,13 +6,18 @@
 
 Слой темы (цвет, глубина, свечение, виньетка) мягкий, поэтому собирается в
 половинном разрешении и растягивается.
+
+Отсюда же — матовое стекло: ``glass()`` отдаёт размытую копию кадра для панелей
+(см. ``ui/views/widgets/glass.py``). Пересчёт — только когда поменялся кадр, и не
+чаще FPS видео-обоев (или 10 раз в секунду без видео); в эко-режиме — никогда.
 """
 
 from __future__ import annotations
 
 import math
+from time import monotonic
 
-from PySide6.QtCore import QObject, QPoint, QRect, QSize, Qt, Signal
+from PySide6.QtCore import QObject, QPoint, QRect, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import (
     QColor,
     QImage,
@@ -22,11 +27,14 @@ from PySide6.QtGui import (
 )
 
 from quantis.ui.cover_accent import CoverPalette, fallback_palette
-from quantis.ui.image_fx import fill_crop
+from quantis.ui.image_fx import blur_image, fill_crop
 from quantis.ui.themes import registry
 from quantis.ui.themes.spec import GlowSpec, ThemeSpec, qcolor
 
 VIDEO_OPACITY = 0.28
+GLASS_MIN_INTERVAL = 0.1
+"""Без видео стекло пересчитывается не чаще 10 раз в секунду: свечение и
+переход палитры медленные, под размытием разница не видна."""
 _FAST = Qt.TransformationMode.FastTransformation
 _SMOOTH = Qt.TransformationMode.SmoothTransformation
 
@@ -57,6 +65,15 @@ class BackdropCompositor(QObject):
         self._soft_dirty = True
         self._frame = QImage()
         self._frame_dirty = True
+        # стекло
+        self._glass = QImage()
+        self._glass_key = 0
+        self._glass_at = 0.0
+        self._video_interval = 1 / 24
+        self._eco = False
+        self._glass_timer = QTimer(self)
+        self._glass_timer.setSingleShot(True)
+        self._glass_timer.timeout.connect(self.frame_changed.emit)
 
     # --- состояние -------------------------------------------------------
 
@@ -90,7 +107,15 @@ class BackdropCompositor(QObject):
             return
         self._theme = theme
         self._wallpaper_fit = QImage()
+        self._glass = QImage()
         self._invalidate(soft=True)
+
+    def set_eco(self, enabled: bool) -> None:
+        """Окно в фоне: стекло не пересчитываем (последнее остаётся)."""
+        self._eco = enabled
+
+    def set_video_fps(self, fps: float) -> None:
+        self._video_interval = 1 / max(1.0, fps)
 
     def set_palette(self, palette: CoverPalette) -> None:
         if palette == self._palette:
@@ -218,6 +243,33 @@ class BackdropCompositor(QObject):
         painter.setOpacity(opacity)
         painter.drawImage(rect.topLeft(), self._wallpaper_fit)
         painter.setOpacity(1.0)
+
+    # --- стекло ----------------------------------------------------------
+
+    def glass(self) -> QImage:
+        """Размытая копия кадра в половинном разрешении (DPR учтён в картинке)."""
+        frame = self.frame()
+        size = QSize(max(1, frame.width() // 2), max(1, frame.height() // 2))
+        if self._glass.isNull() or self._glass.size() != size:
+            self._render_glass(frame, size)
+        elif self._glass_key != frame.cacheKey() and not self._eco:
+            interval = (
+                self._video_interval if self.has_video_frame() else GLASS_MIN_INTERVAL
+            )
+            wait = interval - (monotonic() - self._glass_at)
+            if wait <= 0:
+                self._render_glass(frame, size)
+            elif not self._glass_timer.isActive():
+                # кадр больше не меняется — догоним его, когда выйдет интервал
+                self._glass_timer.start(max(1, round(wait * 1000)))
+        return self._glass
+
+    def _render_glass(self, frame: QImage, size: QSize) -> None:
+        half = frame.scaled(size, Qt.AspectRatioMode.IgnoreAspectRatio, _SMOOTH)
+        self._glass = blur_image(half, self._theme.glass_blur)
+        self._glass.setDevicePixelRatio(frame.devicePixelRatio() / 2)
+        self._glass_key = frame.cacheKey()
+        self._glass_at = monotonic()
 
     # --- слой темы -------------------------------------------------------
 

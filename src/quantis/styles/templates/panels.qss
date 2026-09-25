@@ -19,7 +19,7 @@ QToolButton#sourceFilterChip:checked {
 }
 
 QFrame#nowPlayingPanel {
-    background: ${surface};
+    background: ${panel_bg};
     border: 1px solid rgba(${ink_rgb}, 0.06);
     border-radius: 16px;
 }

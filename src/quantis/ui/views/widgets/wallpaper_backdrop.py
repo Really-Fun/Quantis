@@ -258,6 +258,7 @@ class WallpaperBackdrop(QWidget):
 
     def set_video_limits(self, *, fps: int, max_side: int) -> None:
         self._video_feed.set_limits(fps=fps, max_side=max_side)
+        self._compositor.set_video_fps(fps)
 
     def set_cinematic(self, enabled: bool) -> None:
         self._compositor.set_cinematic(enabled)

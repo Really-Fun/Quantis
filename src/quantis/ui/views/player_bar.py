@@ -30,6 +30,7 @@ from quantis.ui.preferences import UiPreferences
 from quantis.ui.ui_extensions import UiExtensionHost
 from quantis.ui.viewmodels.player_vm import PlayerViewModel
 from quantis.ui.views.widgets.cover_art import load_cover_pixmap
+from quantis.ui.views.widgets.glass import install_glass
 from quantis.ui.views.widgets.source_badge import paint_source_badge
 
 
@@ -106,6 +107,7 @@ class PlayerBar(QFrame):
 
         card = QFrame()
         card.setObjectName("PlayMenu")
+        install_glass(card, "QFrame#PlayMenu")
         self._card = card
 
         card_layout = QVBoxLayout(card)

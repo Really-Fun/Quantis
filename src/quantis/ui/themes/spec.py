@@ -137,6 +137,11 @@ class ThemeSpec:
     requires_wallpaper: bool = False
     """Тема задумана поверх обоев: при выборе включаем статичные обои."""
     card_style: CardStyle = "default"
+    glass_blur: float = 0.35
+    """Матовое стекло панелей: глубина размытия фона 0..1; 0 — стекла нет,
+    панели заливаются ``surface`` из QSS."""
+    glass_tint: str = ""
+    """Тонировка поверх размытого фона; пусто — ``surface`` прозрачнее в 0,6 раза."""
     extra_qss: str = ""
     """QSS только этой темы (${токены} доступны). Правила с селектором из общего
     шаблона дополняют и переопределяют его свойства."""
@@ -149,6 +154,17 @@ class ThemeSpec:
     def is_light(self) -> bool:
         return self.mode == "light"
 
+    @property
+    def has_glass(self) -> bool:
+        return self.glass_blur > 0
+
+    def glass_tint_color(self) -> QColor:
+        if self.glass_tint:
+            return qcolor(self.glass_tint)
+        color = qcolor(self.colors.surface)
+        color.setAlphaF(color.alphaF() * 0.6)
+        return color
+
     def tokens(self) -> dict[str, str]:
         """Значения для ``string.Template`` в QSS."""
         values = {f.name: getattr(self.colors, f.name) for f in fields(self.colors)}
@@ -156,6 +172,8 @@ class ThemeSpec:
         for role in ("ui", "display", "mono", "label"):
             values[f"font_{role}"] = self.fonts.css(role)
         values["radius"] = f"{self.radius}px"
+        # фон стеклянных панелей: стекло рисуют сами панели, QSS — только рамку
+        values["panel_bg"] = "transparent" if self.has_glass else self.colors.surface
         values["radius_control"] = f"{self.radius_control}px"
         return values
 

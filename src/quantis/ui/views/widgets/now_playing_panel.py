@@ -20,6 +20,7 @@ from quantis.models.track import Track
 from quantis.providers.path_provider import PathProvider
 from quantis.ui.cover_prefetch import schedule_cover_prefetch
 from quantis.ui.views.widgets.cover_art import load_cover_pixmap
+from quantis.ui.views.widgets.glass import install_glass
 from quantis.ui.views.widgets.source_badge import paint_source_badge
 
 _EMPTY_TITLE = "Ничего не играет"
@@ -93,6 +94,7 @@ class NowPlayingPanel(QFrame):
     ) -> None:
         super().__init__(parent)
         self.setObjectName("nowPlayingPanel")
+        install_glass(self, "QFrame#nowPlayingPanel")
         self.setFixedWidth(300)
         self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
         self._path_provider = path_provider

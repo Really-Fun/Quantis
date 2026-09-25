@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 from quantis.ui import resources
 from quantis.ui.design_tokens import ACCENT_FALLBACK
 from quantis.ui.ui_extensions import UiExtensionHost
+from quantis.ui.views.widgets.glass import install_glass
 
 _COLLAPSED_W = 72
 _EXPANDED_W = 208
@@ -104,6 +105,7 @@ class SideNavRail(QFrame):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setObjectName("sideNavRail")
+        install_glass(self, "QFrame#sideNavRail")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
 
