@@ -85,7 +85,7 @@ QPushButton#searchButton:hover {
 QToolButton#sourceFilterChip {
     background: rgba(27, 32, 48, 0.04);
     border: 1px solid rgba(27, 32, 48, 0.08);
-    border-radius: 999px;
+    border-radius: 14px; /* Qt игнорирует радиус больше половины высоты */
     color: #667085;
     padding: 6px 14px;
     font-size: 12px;
@@ -259,7 +259,7 @@ QLabel#statsMetricValue { color: #1B2030; }
 QLabel#statsMetricLabel { color: rgba(27, 32, 48, 0.48); }
 
 /* Плейлист */
-#TrackListPanel {
+QFrame#TrackListPanel {
     border-top: 1px solid rgba(108, 92, 231, 0.14);
 }
 #listDivider {
@@ -397,4 +397,20 @@ QFrame#playerInnerDivider {
         stop:0.5 rgba(108, 92, 231, 0.28),
         stop:1 rgba(108, 92, 231, 0)
     );
+}
+
+QToolButton#advancedToggle {
+    border-color: rgba(27, 32, 48, 0.12);
+    color: #667085;
+}
+
+QToolButton#advancedToggle:hover {
+    background: rgba(108, 92, 231, 0.1);
+    color: #1B2030;
+}
+
+QToolButton#advancedToggle:checked {
+    background: rgba(108, 92, 231, 0.16);
+    border-color: rgba(108, 92, 231, 0.45);
+    color: #1B2030;
 }

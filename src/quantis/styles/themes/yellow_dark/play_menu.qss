@@ -1,6 +1,6 @@
 /* Yellow dark player */
 
-#PlayMenu {
+QFrame#PlayMenu {
     background: rgba(18, 13, 6, 0.95);
     border: none;
     border-radius: 14px;

@@ -4,7 +4,7 @@
     min-height: 80px;
 }
 
-#PlayMenu {
+QFrame#PlayMenu {
     background: rgba(20, 24, 33, 0.55);
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 20px;

@@ -88,17 +88,33 @@ class GradientCover(QWidget):
     def _reload_pixmap(self) -> None:
         self._pixmap = load_cover_pixmap(self._image_path, self._size)
 
+    def _is_icon_cover(self) -> bool:
+        return bool(self._image_path) and str(self._image_path).lower().endswith(".svg")
+
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
         rect = self.rect()
-        paint_rounded_cover(
-            painter,
-            rect,
-            label=self._name,
-            pixmap=self._pixmap,
-            source_key=self._source_key,
-            radius=self._radius,
-        )
+        if self._is_icon_cover() and self._pixmap is not None:
+            # SVG-иконки системных подборок — контур на прозрачном фоне:
+            # во весь квадрат они упираются в края, поэтому рисуем с полями.
+            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+            painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+            backdrop = QPainterPath()
+            backdrop.addRoundedRect(rect, self._radius, self._radius)
+            painter.fillPath(backdrop, QColor(255, 255, 255, 14))
+            inset = round(rect.width() * 0.2)
+            painter.drawPixmap(
+                rect.adjusted(inset, inset, -inset, -inset), self._pixmap
+            )
+        else:
+            paint_rounded_cover(
+                painter,
+                rect,
+                label=self._name,
+                pixmap=self._pixmap,
+                source_key=self._source_key,
+                radius=self._radius,
+            )
         if self._play_overlay:
             overlay = QPainterPath()
             overlay.addRoundedRect(rect, self._radius, self._radius)

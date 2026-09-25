@@ -1,6 +1,6 @@
 /* Editorial player */
 
-#PlayMenu {
+QFrame#PlayMenu {
     border-radius: 0;
     border-top: 2px solid rgba(0, 229, 255, 0.45);
 }

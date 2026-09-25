@@ -1,6 +1,6 @@
 /* Classic player — сдержанный стальной синий */
 
-#PlayMenu {
+QFrame#PlayMenu {
     background: rgba(16, 18, 26, 0.94);
     border: none;
     border-radius: 12px;

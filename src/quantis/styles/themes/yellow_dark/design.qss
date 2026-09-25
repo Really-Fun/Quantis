@@ -68,3 +68,17 @@ QScrollBar::handle:vertical {
     background: rgba(255, 170, 0, 0.35); min-height: 40px; border-radius: 2px;
 }
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+
+/* Акцент темы для общих панелей из widget_styles/panels.qss */
+QToolButton#sourceFilterChip:checked,
+QToolButton#advancedToggle:checked,
+QToolButton#navPinButton:checked {
+    background: rgba(255, 170, 0, 0.26);
+    border-color: rgba(255, 170, 0, 0.55);
+}
+
+#nowPlayingSourceBtn:hover,
+#nowPlayingStubBtn:hover,
+QToolButton#navPinButton:hover {
+    background: rgba(255, 170, 0, 0.2);
+}

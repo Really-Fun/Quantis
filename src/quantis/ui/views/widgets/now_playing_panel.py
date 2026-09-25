@@ -22,6 +22,9 @@ from quantis.ui.cover_prefetch import schedule_cover_prefetch
 from quantis.ui.views.widgets.cover_art import load_cover_pixmap
 from quantis.ui.views.widgets.source_badge import paint_source_badge
 
+_EMPTY_TITLE = "Ничего не играет"
+_EMPTY_HINT = "Включи трек, и он появится здесь"
+
 
 class _CoverWithBadge(QLabel):
     def __init__(self, parent: QWidget | None = None) -> None:
@@ -43,8 +46,16 @@ class _CoverWithBadge(QLabel):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         rect = self.rect().adjusted(4, 4, -4, -4)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(QColor(28, 33, 45))
+        # Полупрозрачная подложка: читается и на тёмных темах, и на светлой.
+        painter.setBrush(QColor(128, 136, 160, 38))
         painter.drawRoundedRect(rect, 16, 16)
+
+        if self._pixmap.isNull():
+            font = painter.font()
+            font.setPixelSize(rect.height() // 3)
+            painter.setFont(font)
+            painter.setPen(QColor(128, 136, 160, 120))
+            painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, "♪")
 
         if not self._pixmap.isNull():
             scaled = self._pixmap.scaled(
@@ -100,7 +111,7 @@ class NowPlayingPanel(QFrame):
         self._cover = _CoverWithBadge()
         layout.addWidget(self._cover, 0, Qt.AlignmentFlag.AlignHCenter)
 
-        self._title = QLabel("Выберите трек")
+        self._title = QLabel(_EMPTY_TITLE)
         self._title.setObjectName("nowPlayingTitle")
         self._title.setWordWrap(True)
         self._title.setAlignment(Qt.AlignmentFlag.AlignHCenter)
@@ -131,18 +142,30 @@ class NowPlayingPanel(QFrame):
         self._queue_btn.clicked.connect(self.queue_requested.emit)
         actions.addWidget(self._lyrics_btn)
         actions.addWidget(self._queue_btn)
-        layout.addLayout(actions)
+        self._actions = QWidget()
+        self._actions.setLayout(actions)
+        actions.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(self._actions)
 
         layout.addStretch(1)
+        self._set_actions_visible(False)
+        self._artist.setText(_EMPTY_HINT)
+
+    def _set_actions_visible(self, visible: bool) -> None:
+        self._source_btn.setVisible(visible)
+        self._actions.setVisible(visible)
 
     def set_track(self, track: Track | None) -> None:
         self._track = track
         if track is None:
-            self._title.setText("Выберите трек")
-            self._artist.setText("")
+            self._title.setText(_EMPTY_TITLE)
+            self._artist.setText(_EMPTY_HINT)
             self._cover.set_cover(None, None)
             self._source_btn.setText("Источник")
+            self._set_actions_visible(False)
             return
+
+        self._set_actions_visible(True)
 
         self._title.setText(track.title)
         self._artist.setText(track.author)

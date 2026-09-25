@@ -29,7 +29,7 @@ QFrame#appHeader {
 
 #searchInput {
     background: rgba(0, 0, 0, 0.28);
-    border: none;
+    border: 1px solid rgba(255, 255, 255, 0.08);
     border-radius: 10px;
     padding: 12px 14px;
     font-size: 14px;
@@ -94,3 +94,17 @@ QScrollBar::handle:vertical {
     border-radius: 2px;
 }
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+
+/* Акцент темы для общих панелей из widget_styles/panels.qss */
+QToolButton#sourceFilterChip:checked,
+QToolButton#advancedToggle:checked,
+QToolButton#navPinButton:checked {
+    background: rgba(58, 168, 216, 0.26);
+    border-color: rgba(58, 168, 216, 0.55);
+}
+
+#nowPlayingSourceBtn:hover,
+#nowPlayingStubBtn:hover,
+QToolButton#navPinButton:hover {
+    background: rgba(58, 168, 216, 0.2);
+}

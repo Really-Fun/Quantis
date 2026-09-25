@@ -116,7 +116,7 @@ class PlayerBar(QFrame):
         meta = QVBoxLayout()
         meta.setSpacing(2)
         meta.setContentsMargins(0, 0, 0, 0)
-        self._title = QLabel("Выберите трек")
+        self._title = QLabel("Ничего не играет")
         self._author = QLabel("")
         self._title.setObjectName("trackTitle")
         self._author.setObjectName("trackArtist")

@@ -187,3 +187,17 @@ QTableView#homeTrackList {
     border: none;
     outline: none;
 }
+
+/* Акцент темы для общих панелей из widget_styles/panels.qss */
+QToolButton#sourceFilterChip:checked,
+QToolButton#advancedToggle:checked,
+QToolButton#navPinButton:checked {
+    background: rgba(230, 59, 46, 0.26);
+    border-color: rgba(230, 59, 46, 0.55);
+}
+
+#nowPlayingSourceBtn:hover,
+#nowPlayingStubBtn:hover,
+QToolButton#navPinButton:hover {
+    background: rgba(230, 59, 46, 0.2);
+}

@@ -186,12 +186,12 @@ class SettingsPage(QWidget):
         )
         video_opts.addWidget(self._wallpaper_fps_combo)
 
-        video_opts.addWidget(
-            QLabel(
-                "Задержка звука — видео спешит: больше, опаздывает: меньше",
-                objectName="settingsRowDesc",
-            )
+        av_delay_hint = QLabel(
+            "Задержка звука — видео спешит: больше, опаздывает: меньше",
+            objectName="settingsRowDesc",
         )
+        av_delay_hint.setWordWrap(True)
+        video_opts.addWidget(av_delay_hint)
         self._wallpaper_av_delay_spin = QSpinBox()
         self._wallpaper_av_delay_spin.setObjectName("settingSpin")
         self._wallpaper_av_delay_spin.setRange(
@@ -368,7 +368,10 @@ class SettingsPage(QWidget):
         col.setContentsMargins(14, 12, 14, 12)
         col.setSpacing(8)
         col.addWidget(QLabel(title, objectName="settingsRowTitle"))
-        col.addWidget(QLabel(desc, objectName="settingsRowDesc"))
+        description = QLabel(desc, objectName="settingsRowDesc")
+        # Без переноса длинное описание задаёт минимальную ширину всей панели.
+        description.setWordWrap(True)
+        col.addWidget(description)
         return frame, col
 
     def _sync_from_preferences(self) -> None:

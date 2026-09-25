@@ -27,6 +27,16 @@ from quantis.core.async_bridge import AsyncBridge
 from quantis.services.membership import MembershipSnapshot, fetch_membership_snapshot
 from quantis.ui.views.widgets.glass_panel import GlassPanel
 
+_ERROR_PREVIEW_CHARS = 140
+
+
+def _short_error(error: str) -> str:
+    """Первая строка ошибки без простыни JSON; целиком она в подсказке."""
+    first = error.strip().splitlines()[0] if error.strip() else ""
+    if len(first) > _ERROR_PREVIEW_CHARS:
+        first = first[:_ERROR_PREVIEW_CHARS].rstrip() + "…"
+    return first
+
 
 class MemberPage(QWidget):
     def __init__(
@@ -171,7 +181,9 @@ class MemberPage(QWidget):
         col.setContentsMargins(14, 12, 14, 12)
         col.setSpacing(8)
         col.addWidget(QLabel(title, objectName="settingsRowTitle"))
-        col.addWidget(QLabel(desc, objectName="settingsRowDesc"))
+        description = QLabel(desc, objectName="settingsRowDesc")
+        description.setWordWrap(True)
+        col.addWidget(description)
         return frame, col
 
     def _update_cred_status(self) -> None:
@@ -224,8 +236,9 @@ class MemberPage(QWidget):
         if ya.has_plus and ya.plus_until:
             ya_lines.append(f"Действует до: {ya.plus_until}")
         if ya.error:
-            ya_lines.append(f"Детали: {ya.error}")
+            ya_lines.append(f"Детали: {_short_error(ya.error)}")
         self._yandex_info.setText("\n".join(ya_lines))
+        self._yandex_info.setToolTip(ya.error or "")
 
         yt = snapshot.youtube
         yt_lines: list[str] = []
@@ -235,8 +248,9 @@ class MemberPage(QWidget):
             yt_lines.append(f"Канал: {yt.channel_handle}")
         yt_lines.append(yt.detail or "Нет данных")
         if yt.error:
-            yt_lines.append(f"Детали: {yt.error}")
+            yt_lines.append(f"Детали: {_short_error(yt.error)}")
         self._youtube_info.setText("\n".join(yt_lines))
+        self._youtube_info.setToolTip(yt.error or "")
 
     def _on_save_yandex_token(self) -> None:
         try:

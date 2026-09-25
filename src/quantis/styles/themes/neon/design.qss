@@ -74,7 +74,7 @@ QPushButton#searchButton:hover {
 QToolButton#sourceFilterChip {
     background: rgba(255, 255, 255, 0.04);
     border: 1px solid rgba(255, 255, 255, 0.08);
-    border-radius: 999px;
+    border-radius: 14px; /* Qt игнорирует радиус больше половины высоты */
     color: #8A92A6;
     padding: 6px 14px;
     font-size: 12px;
