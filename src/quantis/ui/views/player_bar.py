@@ -23,6 +23,7 @@ from quantis.providers.path_provider import PathProvider
 from quantis.services.liked_tracks import LikedTracksService
 from quantis.services.music_service import MusicService
 from quantis.ui import resources
+from quantis.ui.accent import AccentStyles
 from quantis.ui.cover_prefetch import schedule_cover_prefetch
 from quantis.ui.playlist_actions import show_add_to_playlist_menu
 from quantis.ui.preferences import UiPreferences
@@ -121,6 +122,7 @@ class PlayerBar(QFrame):
         self._title.setObjectName("trackTitle")
         self._author.setObjectName("trackArtist")
         self._title.setMaximumWidth(220)
+        AccentStyles.instance().bind(self._title, resources.ACCENT_TRACK_TITLE_QSS)
         self._author.setMaximumWidth(220)
         meta.addWidget(self._title)
         meta.addWidget(self._author)
@@ -174,6 +176,7 @@ class PlayerBar(QFrame):
         self._position.setObjectName("seekSlider")
         self._position.setRange(0, 0)
         self._position.setFixedHeight(14)
+        AccentStyles.instance().bind(self._position, resources.ACCENT_SEEK_SLIDER_QSS)
         self._position.sliderPressed.connect(self._on_seek_start)
         self._position.sliderReleased.connect(self._on_seek_end)
         self._duration_label = QLabel("0:00")

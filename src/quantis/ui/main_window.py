@@ -24,6 +24,7 @@ from PySide6.QtWidgets import (
 from quantis.core.bootstrap import ApplicationBundle
 from quantis.core.eco_mode import EcoMode
 from quantis.ui import resources
+from quantis.ui.accent import AccentStyles
 from quantis.ui.controllers.dynamic_wallpaper import DynamicWallpaperController
 from quantis.ui.cover_accent import accent_from_cover_path
 from quantis.ui.design_tokens import ACCENT_FALLBACK
@@ -707,18 +708,18 @@ class QuantisMainWindow(QMainWindow):
         if self._eco.active:
             return
         path = Path(self._bundle.music.provider.get_cover_path(track))
-        color = accent_from_cover_path(path if path.is_file() else None)
-        self._accent = color
+        self.apply_accent(accent_from_cover_path(path if path.is_file() else None))
+
+    def apply_accent(self, color: QColor) -> None:
+        """Акцент из обложки: фон, меню и акцентные виджеты, без перестилизации окна."""
+        if not color.isValid():
+            return
+        self._accent = QColor(color)
         self._shell.set_accent(color)
         self._nav.set_accent(color)
         if self._stats_page is not None:
             self._stats_page.set_accent(color)
-        self.setStyleSheet(
-            resources.load_stylesheet(
-                self._applied_theme or self._ui_prefs.ui_theme, accent=color
-            )
-        )
-        self._player_bar.refresh_theme()
+        AccentStyles.instance().set_accent(color)
 
     def _on_history_updated(self) -> None:
         if self._eco.active:
