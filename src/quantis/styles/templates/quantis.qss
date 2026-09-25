@@ -67,6 +67,7 @@ QLabel#headerBrandWordmark {
     background: transparent;
 }
 
+QToolButton#windowBackdropBtn,
 QToolButton#windowHideUiBtn,
 QToolButton#windowMinBtn,
 QToolButton#windowMaxBtn,
@@ -78,6 +79,7 @@ QToolButton#windowCloseBtn {
     margin: 0;
 }
 
+QToolButton#windowBackdropBtn:hover,
 QToolButton#windowHideUiBtn:hover,
 QToolButton#windowMinBtn:hover,
 QToolButton#windowMaxBtn:hover {
@@ -99,4 +101,58 @@ QLabel#headerBrandMark {
 
 QFrame#sideNavRail QToolButton#navIconButton {
     outline: none;
+}
+
+/* Панель «Фон» (поповер под кнопкой в шапке) */
+QLabel#backdropPanelTitle {
+    color: ${title};
+    font-family: ${font_display};
+    font-size: 17px;
+    font-weight: 700;
+    background: transparent;
+}
+
+QToolButton#backdropPanelPick {
+    color: ${title};
+    font-size: 12px;
+    font-weight: 600;
+    background: transparent;
+    border: none;
+    padding: 2px 0;
+}
+
+QToolButton#backdropPanelPick:hover {
+    color: rgb(${hl_rgb});
+}
+
+QLabel#backdropPanelHint {
+    color: ${text_dim};
+    font-size: 12px;
+    background: transparent;
+}
+
+QLabel#backdropPanelLabel {
+    color: ${text};
+    font-size: 13px;
+    font-weight: 500;
+    background: transparent;
+}
+
+QSlider#backdropSlider::groove:horizontal {
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(${ink_rgb}, 0.16);
+}
+
+QSlider#backdropSlider::sub-page:horizontal {
+    border-radius: 2px;
+    background: ${text};
+}
+
+QSlider#backdropSlider::handle:horizontal {
+    width: 14px;
+    height: 14px;
+    margin: -5px 0;
+    border-radius: 7px;
+    background: ${handle};
 }

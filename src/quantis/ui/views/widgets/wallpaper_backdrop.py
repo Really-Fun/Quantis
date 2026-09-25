@@ -154,6 +154,7 @@ class WallpaperBackdrop(QWidget):
         self._compositor = compositor or BackdropCompositor(self._theme, self)
         self._wallpaper_path: str | None = str(wallpaper) if wallpaper else None
         self._dynamic_enabled = False
+        self._file_loop: str | None = None
         self._wallpaper_loaded = False
         self._video_active = False
         self._streaming = False
@@ -252,8 +253,40 @@ class WallpaperBackdrop(QWidget):
 
     def set_dynamic_wallpaper_enabled(self, enabled: bool) -> None:
         self._dynamic_enabled = enabled
-        if not enabled:
+        if not enabled and self._file_loop is None:
             self.stop_video()
+
+    def play_file_loop(self, path: str) -> None:
+        """Свой видеофайл фоном: по кругу, без звука и без синхронизации с
+        треком. Клипы треков в это время выключены, контроллер его не трогает."""
+        if not path or (path == self._file_loop and self._video_active):
+            return
+        self._file_loop = path
+        self._detach_host()
+        self._loop_enabled = True
+        self._streaming = False  # синхронизатору трека этот плеер не отдаём
+        self._stall_notified = False
+        self._set_video_active(True)
+        player = self._ensure_video_player()
+        self._current_source = path
+        self._silence_video_audio()
+        player.setPlaybackRate(1.0)
+        player.setSource(_media_url(path))
+        player.play()
+
+    def stop_file_loop(self) -> None:
+        if self._file_loop is not None:
+            self._file_loop = None
+            self.stop_video()
+
+    def set_file_loop_paused(self, paused: bool) -> None:
+        """Эко-режим: свой клип стоит, как и клипы треков."""
+        if self._file_loop is None or self._video_player is None:
+            return
+        if paused:
+            self._video_player.pause()
+        else:
+            self._video_player.play()
 
     def set_video_limits(self, *, fps: int, max_side: int) -> None:
         self._video_feed.set_limits(fps=fps, max_side=max_side)

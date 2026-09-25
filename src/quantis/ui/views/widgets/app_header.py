@@ -20,6 +20,8 @@ class AppHeader(QFrame):
     """Шапка: бренд QUANTIS + заголовок страницы + chrome окна."""
 
     hide_ui_requested = Signal()
+    backdrop_requested = Signal()
+    """Кнопка «Фон» — открыть/закрыть панель фона."""
     minimize_requested = Signal()
     maximize_requested = Signal()
     close_requested = Signal()
@@ -60,6 +62,12 @@ class AppHeader(QFrame):
         controls.setSpacing(0)
         controls.setContentsMargins(0, 0, 0, 0)
 
+        self._backdrop_btn = self._make_control(
+            "windowBackdropBtn",
+            "backdrop.svg",
+            "Фон",
+            self.backdrop_requested.emit,
+        )
         self._hide_ui_btn = self._make_control(
             "windowHideUiBtn",
             "hide-ui.svg",
@@ -89,6 +97,7 @@ class AppHeader(QFrame):
         self._prefs.theme_changed.connect(self._refresh_icons)
         self._refresh_icons()
 
+        controls.addWidget(self._backdrop_btn)
         controls.addWidget(self._hide_ui_btn)
         controls.addWidget(self._min_btn)
         controls.addWidget(self._max_btn)
@@ -116,12 +125,18 @@ class AppHeader(QFrame):
         """Значки кнопок окна цветом ``text_soft`` темы (в SVG — светло-серый)."""
         color = qcolor(self._prefs.theme.colors.text_soft)
         for button in (
+            self._backdrop_btn,
             self._hide_ui_btn,
             self._min_btn,
             self._max_btn,
             self._close_btn,
         ):
             button.setIcon(resources.load_icon(button.property("iconName"), color))
+
+    @property
+    def backdrop_button(self) -> QToolButton:
+        """Якорь панели «Фон»."""
+        return self._backdrop_btn
 
     def set_page(self, title: str, subtitle: str = "") -> None:
         self._title.setText(title)

@@ -45,6 +45,7 @@ class UiPreferences(QObject):
     _KEY_WALLPAPER_ENABLED = "ui/wallpaper_enabled"
     _KEY_BACKDROP_MODE = "ui/backdrop_mode"
     _KEY_BACKDROP_MOTION = "ui/backdrop_motion"
+    _KEY_BACKDROP_VIDEO_FILE = "ui/backdrop_video_file"
     _KEY_BACKDROP_DIM = "ui/backdrop_dim"
     _KEY_BACKDROP_BLUR = "ui/backdrop_blur"
     _KEY_NOW_PLAYING = "ui/show_now_playing_panel"
@@ -256,15 +257,44 @@ class UiPreferences(QObject):
         if self.wallpaper_enabled:
             return "image"
         raw = str(self._settings.value(self._KEY_BACKDROP_MODE, "palette"))
+        if raw == "video" and self.backdrop_video_file:
+            return "video"  # свой видеофайл вместо клипов треков
         return "cover" if raw == "cover" else "palette"
 
     def set_backdrop_mode(self, mode: BackdropMode) -> None:
-        if mode not in BACKDROP_MODES or mode == self.backdrop_mode:
+        if mode not in BACKDROP_MODES:
             return
+        if mode == self.backdrop_mode and not (
+            mode == "video" and not self.dynamic_wallpaper_enabled
+        ):
+            return
+        # «Клип» отсюда — клипы треков с YouTube (свой файл — set_backdrop_video_file)
         self._settings.setValue(self._KEY_DYNAMIC_WALLPAPER, mode == "video")
         self._settings.setValue(self._KEY_WALLPAPER_ENABLED, mode == "image")
-        if mode in ("palette", "cover"):
-            self._settings.setValue(self._KEY_BACKDROP_MODE, mode)
+        self._settings.setValue(self._KEY_BACKDROP_MODE, mode)
+        self._emit(self.wallpaper_changed)
+
+    @property
+    def backdrop_video_file(self) -> str:
+        """Свой видеофайл фоном (по кругу, без звука) — вместо клипов треков."""
+        raw = self._settings.value(self._KEY_BACKDROP_VIDEO_FILE, "")
+        return str(raw).strip() if raw else ""
+
+    @property
+    def backdrop_video_is_file(self) -> bool:
+        return self.backdrop_mode == "video" and not self.dynamic_wallpaper_enabled
+
+    def set_backdrop_video_file(self, path: str) -> None:
+        """Режим «Клип» со своим файлом: клипы треков выключаются."""
+        normalized = path.strip()
+        if not normalized or (
+            self.backdrop_video_is_file and normalized == self.backdrop_video_file
+        ):
+            return
+        self._settings.setValue(self._KEY_BACKDROP_VIDEO_FILE, normalized)
+        self._settings.setValue(self._KEY_DYNAMIC_WALLPAPER, False)
+        self._settings.setValue(self._KEY_WALLPAPER_ENABLED, False)
+        self._settings.setValue(self._KEY_BACKDROP_MODE, "video")
         self._emit(self.wallpaper_changed)
 
     @property

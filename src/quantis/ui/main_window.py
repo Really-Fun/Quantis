@@ -59,6 +59,11 @@ from quantis.ui.views.search_page import SearchPage
 from quantis.ui.views.settings_page import SettingsPage
 from quantis.ui.views.stats_page import StatsPage
 from quantis.ui.views.widgets.app_header import AppHeader
+from quantis.ui.views.widgets.backdrop_panel import (
+    BackdropPanel,
+    apply_backdrop_file,
+    backdrop_kind,
+)
 from quantis.ui.views.widgets.background_frame import BackgroundFrame
 from quantis.ui.views.widgets.now_playing_fullscreen import NowPlayingFullscreen
 from quantis.ui.views.widgets.now_playing_panel import NowPlayingPanel
@@ -230,6 +235,14 @@ class QuantisMainWindow(QMainWindow):
         self._np_fullscreen.closed.connect(self._np_fullscreen.hide)
         self._np_fullscreen.hide()
 
+        self._backdrop_panel = BackdropPanel(
+            shell.compositor, self._ui_prefs, parent=shell
+        )
+        self._header.backdrop_requested.connect(
+            lambda: self._backdrop_panel.toggle(self._header.backdrop_button)
+        )
+        self.setAcceptDrops(True)  # картинка или видео в окно — фоном
+
         mid = QWidget()
         mid_layout = QHBoxLayout(mid)
         mid_layout.setContentsMargins(0, 0, 0, 0)
@@ -284,11 +297,9 @@ class QuantisMainWindow(QMainWindow):
         self._playlist_vm.tracks_mutated.connect(self._on_playlist_tracks_mutated)
         self._ui_prefs.theme_changed.connect(self._on_theme_changed)
         self._ui_prefs.wallpaper_changed.connect(self._on_wallpaper_changed)
-        self._wallpaper_source = (
-            resources.wallpaper_path(),
-            self._ui_prefs.dynamic_wallpaper_enabled,
-        )
+        self._wallpaper_source = self._backdrop_source()
         self._apply_backdrop_look()
+        self._apply_file_loop()
         self._ui_prefs.layout_changed.connect(self._sync_now_playing_visibility)
         self._ui_prefs.eco_changed.connect(self._on_eco_pref_changed)
         self._dynamic_wallpaper = DynamicWallpaperController(
@@ -340,6 +351,7 @@ class QuantisMainWindow(QMainWindow):
         self._bundle.history_watcher.set_eco(active)
         self._bundle.music.streamer.set_eco(active)
         self._dynamic_wallpaper.set_eco(active)
+        self._body_shell.backdrop.set_file_loop_paused(active)
         for widget in getattr(self, "_mounted_layers", {}).values():
             setter = getattr(widget, "set_eco", None)
             if callable(setter):
@@ -806,15 +818,55 @@ class QuantisMainWindow(QMainWindow):
 
     def _on_wallpaper_changed(self) -> None:
         self._apply_backdrop_look()
-        source = (resources.wallpaper_path(), self._ui_prefs.dynamic_wallpaper_enabled)
+        source = self._backdrop_source()
         if source == self._wallpaper_source:
             return  # двигают ползунки затемнения/размытия — видео не трогаем
         self._wallpaper_source = source
         self._apply_wallpaper()
+        self._apply_file_loop()
         if self._ui_prefs.dynamic_wallpaper_enabled and not self._eco.active:
             self._dynamic_wallpaper.refresh_for_track(
                 self._bundle.playback.current_track
             )
+
+    def _backdrop_source(self) -> tuple[object, ...]:
+        """Откуда берётся фон; поменялось — перезапускаем картинку/видео."""
+        prefs = self._ui_prefs
+        own_video = prefs.backdrop_video_file if prefs.backdrop_video_is_file else ""
+        return (resources.wallpaper_path(), prefs.dynamic_wallpaper_enabled, own_video)
+
+    def _apply_file_loop(self) -> None:
+        """Свой видеофайл фоном (режим «Клип» без клипов треков)."""
+        backdrop = self._body_shell.backdrop
+        prefs = self._ui_prefs
+        if prefs.backdrop_video_is_file and Path(prefs.backdrop_video_file).is_file():
+            backdrop.play_file_loop(prefs.backdrop_video_file)
+            backdrop.set_file_loop_paused(self._eco.active)
+        else:
+            backdrop.stop_file_loop()
+
+    def _dropped_path(self, event) -> str | None:
+        mime = event.mimeData()
+        if mime is None or not mime.hasUrls():
+            return None
+        for url in mime.urls():
+            path = url.toLocalFile()
+            if path and backdrop_kind(path) is not None:
+                return path
+        return None
+
+    def dragEnterEvent(self, event) -> None:
+        if self._dropped_path(event) is not None:
+            event.acceptProposedAction()
+            return
+        super().dragEnterEvent(event)
+
+    def dropEvent(self, event) -> None:
+        path = self._dropped_path(event)
+        if path is not None and apply_backdrop_file(self._ui_prefs, path):
+            event.acceptProposedAction()
+            return
+        super().dropEvent(event)
 
     def _apply_backdrop_look(self) -> None:
         compositor = self._shell.compositor
@@ -885,6 +937,8 @@ class QuantisMainWindow(QMainWindow):
         self._sync_now_playing_visibility()
         if self._np_fullscreen.isVisible():
             self._np_fullscreen.setGeometry(self._shell.rect())
+        if self._backdrop_panel.isVisible():
+            self._backdrop_panel.refresh()  # держится у кнопки «Фон»
 
     def _show_error(self, message: str) -> None:
         import logging

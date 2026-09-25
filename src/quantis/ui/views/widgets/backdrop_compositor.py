@@ -60,7 +60,8 @@ class BackdropCompositor(QObject):
         self._mode: BackdropMode = "palette"
         # своя картинка
         self._wallpaper = QImage()
-        # обложка трека: мягкая копия и её дрейф
+        # обложка трека: как есть (превью) и мягкая копия, и её дрейф
+        self._cover_raw = QImage()
         self._cover = QImage()
         self._drift = 0.0
         self._motion = True
@@ -180,6 +181,7 @@ class BackdropCompositor(QObject):
     def set_cover(self, image: QImage | None) -> None:
         """Обложка трека → мягкая насыщенная копия для режима «Обложка» и для
         клипа, пока он грузится или если его нет."""
+        self._cover_raw = QImage() if image is None else image
         self._cover = QImage() if image is None else soften_cover(image)
         if self._shows_cover():
             self._invalidate()
@@ -188,6 +190,22 @@ class BackdropCompositor(QObject):
         if enabled != self._motion:
             self._motion = enabled
             self._invalidate()
+
+    # превью для панели «Фон»
+    def cover_image(self) -> QImage:
+        return self._cover_raw
+
+    def cover_preview(self) -> QImage:
+        return self._cover
+
+    def wallpaper_image(self) -> QImage:
+        return self._wallpaper
+
+    def has_wallpaper(self) -> bool:
+        return not self._wallpaper.isNull()
+
+    def video_image(self) -> QImage:
+        return self._video
 
     def needs_drift(self) -> bool:
         """Хозяину пора крутить таймер дрейфа (~15 к/с)."""
