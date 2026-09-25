@@ -281,6 +281,5 @@ THEME = ThemeSpec(
     ),
     radius=16,
     radius_control=12,
-    wallpaper_opacity=0.14,
     extra_qss=EXTRA_QSS,
 )

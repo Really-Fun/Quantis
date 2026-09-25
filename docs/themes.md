@@ -37,7 +37,6 @@
 | `fonts` | `ThemeFonts`: списки семейств для ролей `ui`, `display`, `mono`, `label` |
 | `backdrop` | `BackdropSpec`: градиент глубины, виньетка, свечение (`GlowSpec`) |
 | `radius`, `radius_control` | Радиусы панелей и кнопок/полей, px |
-| `wallpaper_opacity` | Непрозрачность статичных обоев; `0` — тема обои не показывает |
 | `requires_wallpaper` | При выборе темы включить статичные обои |
 | `card_style` | `"default"` или `"magazine"` (карточки главной) |
 | `glass_blur` | Матовое стекло панелей: глубина размытия фона 0..1; `0` — стекла нет, панели заливаются `surface` |

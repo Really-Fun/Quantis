@@ -141,6 +141,5 @@ THEME = ThemeSpec(
     backdrop=BackdropSpec(depth=DARK_DEPTH, glow=GlowSpec("cover")),
     radius=16,
     radius_control=12,
-    wallpaper_opacity=0.11,
     extra_qss=EXTRA_QSS,
 )

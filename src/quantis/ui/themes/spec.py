@@ -132,8 +132,6 @@ class ThemeSpec:
     """Радиус панелей."""
     radius_control: int = 12
     """Радиус кнопок и полей."""
-    wallpaper_opacity: float = 0.11
-    """Непрозрачность статичных обоев; 0 — тема обои не показывает."""
     requires_wallpaper: bool = False
     """Тема задумана поверх обоев: при выборе включаем статичные обои."""
     card_style: CardStyle = "default"
