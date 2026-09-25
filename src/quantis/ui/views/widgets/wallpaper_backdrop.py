@@ -587,7 +587,9 @@ class BodyWithWallpaper(QWidget):
         )
         self._layer_host.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, False)
         self._layer_host.setAutoFillBackground(False)
-        self._layer_host.setStyleSheet("#backgroundLayerHost { background: transparent; }")
+        self._layer_host.setStyleSheet(
+            "#backgroundLayerHost { background: transparent; }"
+        )
         self._foreground = QWidget(self)
         self._foreground.setObjectName("bodyForeground")
         self._foreground.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, False)

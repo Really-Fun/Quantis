@@ -25,8 +25,15 @@ from quantis.core.eco_mode import EcoMode
 from quantis.ui import resources
 from quantis.ui.accent import AccentStyles
 from quantis.ui.controllers.dynamic_wallpaper import DynamicWallpaperController
-from quantis.ui.cover_accent import accent_from_cover_path, fallback_accent
+from quantis.ui.cover_accent import (
+    CoverPalette,
+    fallback_accent,
+    fallback_palette,
+    palette_from_accent,
+    palette_from_cover_path,
+)
 from quantis.ui.fonts import register_bundled_fonts, theme_font
+from quantis.ui.live_palette import LivePalette
 from quantis.ui.preferences import UiPreferences
 from quantis.ui.shortcuts import (
     ALT_PAGE_IDS,
@@ -106,8 +113,8 @@ class QuantisMainWindow(QMainWindow):
         self._resize_grips = WindowResizeGrips(self)
         self._current_page = -1
         self._accent = fallback_accent(self._ui_prefs.theme)
-        self._cover_accent = QColor()
-        """Акцент обложки текущего трека; невалидный — обложки нет, акцент от темы."""
+        self._cover_palette: CoverPalette | None = None
+        """Палитра обложки текущего трека; None — обложки нет, палитра от темы."""
 
         self._player_vm = PlayerViewModel(
             bundle.playback,
@@ -264,6 +271,7 @@ class QuantisMainWindow(QMainWindow):
             view_model.error_occurred.connect(self._show_error)
 
         bundle.event_bus.track_changed.connect(self._sync_playing_track)
+        LivePalette.instance().palette_changed.connect(self._on_live_palette)
         bundle.event_bus.history_updated.connect(self._on_history_updated)
         bundle.event_bus.playlists_updated.connect(self._on_playlists_updated)
         bundle.event_bus.queue_extended.connect(self._on_queue_extended)
@@ -691,7 +699,7 @@ class QuantisMainWindow(QMainWindow):
         self._home_page.refresh_featured()
         self._now_playing.set_track(track)
         self._np_fullscreen.set_track(track)
-        self._update_accent_from_track(track)
+        self._update_palette_from_track(track)
 
     def _open_now_playing_fullscreen(self) -> None:
         track = self._bundle.playback.current_track
@@ -702,26 +710,35 @@ class QuantisMainWindow(QMainWindow):
         self._np_fullscreen.update()
         self._np_fullscreen.setFocus(Qt.FocusReason.ActiveWindowFocusReason)
 
-    def _update_accent_from_track(self, track) -> None:
+    def _update_palette_from_track(self, track) -> None:
         if self._eco.active:
             return
         path = Path(self._bundle.music.provider.get_cover_path(track))
-        self._cover_accent = accent_from_cover_path(path if path.is_file() else None)
-        if self._cover_accent.isValid():
-            self.apply_accent(self._cover_accent)
-        else:
-            self.apply_accent(fallback_accent(registry.get(self._applied_theme)))
+        self._cover_palette = palette_from_cover_path(path if path.is_file() else None)
+        self.apply_palette(
+            self._cover_palette or fallback_palette(registry.get(self._applied_theme))
+        )
 
-    def apply_accent(self, color: QColor) -> None:
-        """Акцент из обложки: фон, меню и акцентные виджеты, без перестилизации окна."""
-        if not color.isValid():
-            return
+    def apply_palette(self, palette: CoverPalette, *, animate: bool = True) -> None:
+        """Палитра трека. Виджеты со stylesheet получают итоговый акцент сразу и
+        один раз; рисующие себя сами (фон, меню) — кадры перехода от LivePalette."""
+        color = palette.accent
         self._accent = QColor(color)
-        self._shell.set_accent(color)
-        self._nav.set_accent(color)
         if self._stats_page is not None:
             self._stats_page.set_accent(color)
         AccentStyles.instance().set_accent(color)
+        LivePalette.instance().set_target(
+            palette, animate=animate and not self._eco.active
+        )
+
+    def _on_live_palette(self, palette: CoverPalette) -> None:
+        self._shell.set_palette(palette)
+        self._nav.set_accent(palette.accent)
+
+    def apply_accent(self, color: QColor) -> None:
+        """Акцент одним цветом, без перехода (палитра достраивается из него)."""
+        if color.isValid():
+            self.apply_palette(palette_from_accent(color), animate=False)
 
     def _on_history_updated(self) -> None:
         if self._eco.active:
@@ -793,8 +810,8 @@ class QuantisMainWindow(QMainWindow):
         self._applied_theme = theme_id
         theme = registry.get(theme_id)
         QApplication.setFont(theme_font(theme, "ui", 10))
-        if not self._cover_accent.isValid():
-            self.apply_accent(fallback_accent(theme))
+        if self._cover_palette is None:
+            self.apply_palette(fallback_palette(theme), animate=False)
         self.setStyleSheet(resources.load_stylesheet(theme_id, accent=self._accent))
         self._shell.set_theme(theme)
         self._body_shell.set_theme(theme)

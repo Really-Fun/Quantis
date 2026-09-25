@@ -6,7 +6,7 @@ from PySide6.QtCore import Qt, QTimer
 from PySide6.QtGui import QColor, QLinearGradient, QPainter, QRadialGradient
 from PySide6.QtWidgets import QFrame, QWidget
 
-from quantis.ui.design_tokens import ACCENT_FALLBACK
+from quantis.ui.cover_accent import CoverPalette, fallback_palette
 from quantis.ui.themes import registry
 from quantis.ui.themes.spec import GlowSpec, ThemeSpec, qcolor
 
@@ -25,7 +25,7 @@ class BackgroundFrame(QFrame):
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, False)
         self._theme = theme or registry.default()
         self._phase = 0.0
-        self._accent = QColor(ACCENT_FALLBACK)
+        self._palette = fallback_palette(self._theme)
         _ = wallpaper
 
         self._content = QWidget(self)
@@ -77,10 +77,14 @@ class BackgroundFrame(QFrame):
             self._sync_timer()
             self.update()
 
-    def set_accent(self, color: QColor) -> None:
-        if color.isValid() and color != self._accent:
-            self._accent = QColor(color)
-            self.update()
+    def set_palette(self, palette: CoverPalette) -> None:
+        """Палитра трека (и кадры перехода между треками)."""
+        if palette != self._palette:
+            self._palette = palette
+            if self._theme.backdrop.glow is not None and (
+                self._theme.backdrop.glow.style == "cover"
+            ):
+                self.update()
 
     def _tick(self) -> None:
         if self._eco or self._cinematic or not self._animated():
@@ -139,7 +143,7 @@ class BackgroundFrame(QFrame):
         rect = self.rect()
         pulse = 0.5 + 0.5 * math.sin(self._phase)
         pulse2 = 0.5 + 0.5 * math.sin(self._phase + 2.1)
-        accent = self._accent
+        accent = self._palette.accent
 
         cx = w * (0.78 + 0.06 * math.sin(self._phase * 0.7))
         cy = h * (0.08 + 0.04 * pulse)
@@ -157,11 +161,7 @@ class BackgroundFrame(QFrame):
 
         mx = w * (0.12 + 0.05 * math.cos(self._phase * 0.55))
         my = h * (0.85 - 0.05 * pulse2)
-        secondary = QColor(
-            min(255, accent.red() + 40),
-            max(0, accent.green() - 20),
-            min(255, accent.blue() + 30),
-        )
+        secondary = self._palette.accent2
         coral = QRadialGradient(mx, my, w * (0.38 + 0.05 * pulse2))
         coral.setColorAt(
             0.0,
