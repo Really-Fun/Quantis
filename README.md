@@ -2,7 +2,7 @@
   <img src="docs/assets/readme/hero.svg" alt="Quantis" width="100%">
 </p>
 
-<h3 align="center">Вся твоя музыка в одном окне</h3>
+<h2 align="center"><strong>Слушай музыку с разных платформ в одном приложении</strong></h2>
 
 <p align="center">
   Десктопный плеер для Яндекс.Музыки, YouTube и SoundCloud:<br>
