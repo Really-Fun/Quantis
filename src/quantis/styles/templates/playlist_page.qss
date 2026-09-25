@@ -1,0 +1,41 @@
+QWidget#playlistPage {
+    background: transparent;
+}
+
+#playlistCoverFrame {
+    background: rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(${ink_rgb}, 0.08);
+    border-radius: 12px;
+}
+
+QTableView#trackListView {
+    background: transparent;
+    border: none;
+    outline: none;
+}
+
+QTableView#trackListView::item {
+    border: none;
+    padding: 0;
+}
+
+QTableView#trackListView::item:selected {
+    background: transparent;
+}
+
+QTableView#trackListView QScrollBar:vertical {
+    width: 5px;
+    background: transparent;
+    margin: 4px 0;
+}
+
+QTableView#trackListView QScrollBar::handle:vertical {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+    min-height: 40px;
+}
+
+QTableView#trackListView QScrollBar::add-line:vertical,
+QTableView#trackListView QScrollBar::sub-line:vertical {
+    height: 0;
+}

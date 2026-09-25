@@ -1,0 +1,335 @@
+QMenu,
+QMessageBox,
+QDialog,
+QToolTip,
+QInputDialog {
+    background-color: ${popup_bg};
+    color: rgb(${ink_rgb});
+    border: ${popup_border};
+    border-radius: 14px;
+}
+
+QMessageBox QLabel,
+QInputDialog QLabel {
+    color: rgba(${ink_rgb}, 240);
+    font-size: 14px;
+}
+
+QMessageBox QPushButton,
+QInputDialog QPushButton {
+    background-color: rgba(${hl_rgb}, 30);
+    border: 1px solid rgba(${hl_rgb}, 150);
+    border-radius: 8px;
+    color: rgb(${ink_rgb});
+    padding: 6px 16px;
+    min-width: 80px;
+    font-weight: bold;
+}
+
+QMessageBox QPushButton:hover,
+QInputDialog QPushButton:hover {
+    background-color: rgba(${hl_rgb}, 100);
+    border: 1px solid rgba(${hl_rgb}, 255);
+}
+
+QInputDialog QComboBox {
+    background-color: rgba(0, 0, 0, 140);
+    border: 1px solid rgba(${hl_rgb}, 120);
+    border-radius: 8px;
+    color: rgb(${ink_rgb});
+    padding: 6px 12px;
+    font-size: 14px;
+}
+
+QInputDialog QComboBox::drop-down {
+    border: none;
+}
+
+QInputDialog QComboBox QAbstractItemView {
+    background-color: ${list_bg};
+    color: rgb(${ink_rgb});
+    border: 1px solid rgba(${hl_rgb}, 120);
+    selection-background-color: rgba(${hl_rgb}, 120);
+    selection-color: rgb(${ink_rgb});
+    outline: none;
+}
+
+#headerGreeting {
+    background: transparent;
+    font-size: 14px;
+    font-weight: 650;
+    color: ${text};
+    font-family: ${font_display};
+}
+
+#playlistName {
+    color: rgb(${ink_rgb});
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: -0.4px;
+    background: transparent;
+}
+
+#sectionTitle {
+    font-size: 11px;
+    font-weight: 700;
+    color: ${text_dim};
+    letter-spacing: 1.8px;
+    text-transform: uppercase;
+    font-family: ${font_label};
+}
+
+#trackTitle {
+    background: transparent;
+    color: ${text};
+    font-size: 14px;
+    font-weight: 650;
+    font-family: ${font_display};
+}
+
+#headerSub {
+    background: transparent;
+    color: rgba(${ink_rgb}, 200);
+    font-size: 13px;
+    font-weight: 500;
+}
+
+#colHeaderNum,
+#colHeaderTitle,
+#colHeaderSource {
+    color: rgba(${ink_rgb}, 0.38);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.2px;
+    background: transparent;
+}
+
+#playlistTag {
+    color: rgba(${hl_rgb}, 0.75);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    background: transparent;
+}
+
+#timeLabel {
+    font-size: 10px;
+    font-family: ${font_mono};
+    background: transparent;
+    color: ${text_meta};
+}
+
+#playlistCount {
+    color: rgba(${ink_rgb}, 90);
+    font-size: 11px;
+    background: transparent;
+}
+
+#trackArtist {
+    background: transparent;
+    color: ${text_dim};
+    font-size: 12px;
+    font-family: ${font_label};
+}
+
+#controlButton {
+    outline: none;
+    border: none;
+    background: transparent;
+    color: ${text};
+    border-radius: 20px;
+    padding: 0;
+    margin: 0;
+}
+
+#repeatButton {
+    outline: none;
+    background: transparent;
+    border: none;
+    border-radius: 18px;
+    padding: 0;
+    margin: 0;
+}
+
+#controlButton:hover {
+    background: rgba(${ink_rgb}, 0.08);
+}
+
+#repeatButton:hover {
+    background: rgba(255,255,255,40);
+}
+
+#repeatButton[state="active"] {
+    background: rgba(${ink_rgb}, 0.08);
+}
+
+#repeatButton[state="active"]:hover {
+    background: rgba(${hl_rgb}, 120);
+}
+
+#actionButton[accent="true"] {
+    color: #001018;
+    font-size: 13px;
+    font-weight: 700;
+    background: rgb(${hl_rgb});
+    border: none;
+    border-radius: 18px;
+    padding: 9px 22px;
+    min-width: 116px;
+}
+
+#actionButton[accent="false"] {
+    color: rgb(${ink_rgb});
+    font-size: 13px;
+    font-weight: 600;
+    background: rgba(${ink_rgb}, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 18px;
+    padding: 9px 22px;
+    min-width: 132px;
+}
+
+#actionButton[accent="true"]:hover {
+    background: rgb(80, 235, 255);
+}
+
+#actionButton[accent="false"]:hover {
+    background: rgba(255, 255, 255, 0.14);
+}
+
+#backButton {
+    color: rgb(${ink_rgb});
+    font-size: 17px;
+    font-weight: 700;
+    background: rgba(${ink_rgb}, 0.05);
+    border: 1px solid rgba(${ink_rgb}, 0.08);
+    border-radius: 20px;
+}
+
+#backButton:hover {
+    background: rgba(${hl_rgb}, 0.16);
+    border-color: rgba(${hl_rgb}, 0.3);
+}
+
+#seekSlider::groove:horizontal,
+#volSlider::groove:horizontal {
+    background: rgba(${ink_rgb}, 0.1);
+    height: 4px;
+    border-radius: 2px;
+}
+
+#seekSlider::handle:horizontal {
+    background: ${handle};
+    width: 12px;
+    height: 12px;
+    margin: -5px 0;
+    border-radius: 6px;
+    border: 2px solid rgb(108, 92, 231);
+}
+
+#volSlider::handle:horizontal {
+    background: ${text};
+    width: 10px;
+    height: 10px;
+    margin: -4px 0;
+    border-radius: 5px;
+}
+
+#seekSlider::handle:horizontal:hover {
+    background: ${tint};
+}
+
+#seekSlider::sub-page:horizontal {
+    background: ${accent_fallback};
+    border-radius: 2px;
+}
+
+#volSlider::sub-page:horizontal {
+    background: rgba(${tint_rgb}, 0.55);
+    border-radius: 2px;
+}
+
+QScrollArea,
+#trackListView {
+    border: none;
+    outline: none;
+    background: transparent;
+}
+
+#trackListView::item:hover {
+    background: transparent;
+}
+
+QScrollBar:vertical {
+    width: 5px;
+    background: transparent;
+    margin: 8px 2px;
+}
+
+QScrollBar::handle:vertical {
+    min-height: 40px;
+    border-radius: 3px;
+}
+
+#trackListView QScrollBar::handle:vertical {
+    background: rgba(${hl_rgb}, 140);
+}
+
+QScrollBar::add-line:vertical,
+QScrollBar::sub-line:vertical {
+    height: 0;
+}
+
+#listDivider {
+    background: rgba(${ink_rgb}, 0.07);
+    border: none;
+    max-height: 1px;
+}
+
+#coverLabel {
+    border: 1px solid rgba(${ink_rgb}, 0.08);
+    min-width: 52px;
+    max-width: 52px;
+    min-height: 52px;
+    max-height: 52px;
+    border-radius: 14px;
+    background: transparent;
+}
+
+#settingLineEdit {
+    color: rgb(${ink_rgb});
+    background: rgba(0, 0, 0, 120);
+    border: 1px solid rgba(${hl_rgb}, 80);
+    border-radius: 8px;
+    padding: 6px;
+}
+
+#settingsScroll {
+    background: transparent;
+    border: none;
+}
+
+#settingsScroll QScrollBar::handle:vertical {
+    background: rgba(${hl_rgb}, 120);
+}
+
+#searchInput {
+    border: 1px solid rgba(${ink_rgb}, 0.08);
+    padding: 12px 14px;
+    font-size: 14px;
+    color: ${text};
+    font-family: ${font_display};
+}
+
+#searchInput::placeholder {
+    color: rgba(${ink_rgb}, 200);
+}
+
+#TrackListPanel {
+    border-top: 1px solid rgba(46, 230, 255, 0.22);
+}
+
+QWidget {
+    color: ${text};
+    font-family: ${font_display};
+}

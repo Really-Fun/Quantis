@@ -108,9 +108,13 @@ def load_stylesheet(
     *,
     accent: QColor | None = None,
 ) -> str:
+    """QSS темы; ``accent`` — акцент обложки для правил dynamic_accent_qss."""
     from quantis.ui.themes import qss, registry
 
-    return qss.render(registry.get(ui_theme)) + "\n" + dynamic_accent_qss(accent)
+    sheet = qss.render(registry.get(ui_theme))
+    if accent is None:
+        return sheet
+    return qss.merge(sheet, dynamic_accent_qss(accent))
 
 
 def format_ms(ms: int) -> str:

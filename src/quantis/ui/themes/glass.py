@@ -9,6 +9,68 @@ from quantis.ui.themes.spec import (
     ThemeSpec,
 )
 
+EXTRA_QSS = """
+#headerGreeting {
+    letter-spacing: 0;
+}
+
+#seekSlider::handle:horizontal:hover {
+    background: rgb(0,220,255);
+}
+
+QScrollBar::handle:vertical {
+    background: rgba(0, 217, 163, 0.5);
+    min-height: 48px;
+}
+
+#searchInput {
+    border-radius: 16px;
+    padding: 13px 16px;
+    selection-background-color: rgba(0, 217, 163, 0.35);
+}
+
+QFrame#glassPanel {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+QFrame#nowPlayingPanel {
+    border-radius: 20px;
+}
+
+#nowPlayingSourceBtn {
+    border-radius: 14px;
+}
+
+#nowPlayingStubBtn {
+    border-radius: 14px;
+}
+
+QFrame#pluginCard {
+    border-radius: 20px;
+}
+
+QToolButton#navPinButton {
+    border-radius: 12px;
+    color: rgba(255, 255, 255, 0.65);
+}
+
+QToolButton#advancedToggle:checked {
+    border-color: rgba(255, 255, 255, 0.28);
+}
+
+QFrame#sideNavRail[expanded="true"] {
+    border: 1px solid rgba(0, 217, 163, 0.28);
+}
+
+QToolButton#navIconButton {
+    border-radius: 14px;
+}
+
+QToolButton#navIconButton[plugin="true"] {
+    border: 1px solid rgba(255, 255, 255, 0.18);
+}
+"""
+
 THEME = ThemeSpec(
     id="glass",
     label="Glass",
@@ -46,4 +108,5 @@ THEME = ThemeSpec(
     radius_control=14,
     wallpaper_opacity=0.10,
     requires_wallpaper=True,
+    extra_qss=EXTRA_QSS,
 )

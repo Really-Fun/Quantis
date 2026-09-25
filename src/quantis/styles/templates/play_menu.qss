@@ -1,0 +1,35 @@
+QWidget#playerLeft,
+QWidget#playerCenter,
+QWidget#playerRight {
+    background: transparent;
+}
+
+#controlButton[accent=true] {
+    padding: 0;
+    margin: 0;
+    background: ${accent_fallback};
+    border-radius: 20px;
+    color: ${on_tint};
+}
+
+#PlayMenu QLabel {
+    background: transparent;
+}
+
+#controlButton[liked="true"] {
+    background: rgba(255, 77, 109, 0.18);
+}
+
+#repeatButton[repeatMode="track"] {
+    background: rgba(${tint_rgb}, 0.2);
+}
+
+#playerDock {
+    background: transparent;
+    border: none;
+    min-height: 80px;
+}
+
+#controlButton[accent=true]:hover {
+    background: rgba(108, 92, 231, 102);
+}

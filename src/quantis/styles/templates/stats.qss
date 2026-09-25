@@ -1,16 +1,11 @@
-/* Статистика прослушиваний */
-
-QWidget#statsPage {
-    background: transparent;
-}
-
+QWidget#statsPage,
 QWidget#statsMetrics {
     background: transparent;
 }
 
 QFrame#statsMetric {
     background-color: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(${ink_rgb}, 0.08);
     border-radius: 18px;
 }
 
@@ -18,14 +13,14 @@ QLabel#statsMetricValue {
     font-size: 22px;
     font-weight: 700;
     letter-spacing: -0.4px;
-    color: #f8fafc;
+    color: ${title};
     background: transparent;
 }
 
 QLabel#statsMetricLabel {
     font-size: 12px;
     font-weight: 500;
-    color: rgba(226, 232, 240, 0.48);
+    color: rgba(${mist_rgb}, 0.48);
     background: transparent;
 }
 

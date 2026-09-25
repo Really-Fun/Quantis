@@ -1,0 +1,35 @@
+#headerBrandWordmark {
+    color: ${text};
+}
+
+#searchInput:focus {
+    border-color: rgba(${tint_rgb}, 0.55);
+}
+
+QPushButton#searchButton {
+    background: ${tint};
+    border: none;
+    border-radius: ${radius_control};
+    color: ${on_tint};
+    font-weight: 700;
+    padding: 10px 18px;
+    font-family: ${font_label};
+}
+
+QPushButton#searchButton:hover {
+    background: ${tint_hover};
+}
+
+#searchStatus {
+    color: ${text_meta};
+    font-size: 11px;
+    font-family: ${font_label};
+}
+
+#sideNavRail {
+    border-color: rgba(108, 92, 231, 36);
+}
+
+QPushButton#featuredPlayBtn {
+    font-family: ${font_label};
+}

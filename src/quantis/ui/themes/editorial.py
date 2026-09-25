@@ -6,6 +6,126 @@ from quantis.ui.themes.spec import BackdropSpec, ThemeColors, ThemeFonts, ThemeS
 SERIF = ("Georgia", "Segoe UI", "serif")
 MONO = ("Cascadia Mono", "Consolas", "monospace")
 
+EXTRA_QSS = """
+/* Журнальная вёрстка: прямые углы, тонкие начертания, метки капсом. */
+QScrollBar:vertical {
+    width: 3px;
+    margin: 0;
+}
+
+QScrollBar::handle:vertical {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #00e5ff, stop:1 ${tint});
+}
+
+#playerDock {
+    min-height: 0;
+}
+
+QFrame#appHeader {
+    border-bottom: none;
+}
+
+#headerGreeting {
+    font-size: 22px;
+    font-weight: 400;
+    letter-spacing: -0.2px;
+}
+
+#sectionTitle {
+    font-size: 10px;
+    font-weight: 500;
+    color: #00e5ff;
+    letter-spacing: 2px;
+}
+
+#trackTitle {
+    font-size: 13px;
+    font-weight: 400;
+}
+
+#trackArtist {
+    font-size: 9px;
+    letter-spacing: 1px;
+}
+
+#controlButton,
+#seekSlider::groove:horizontal,
+#volSlider::groove:horizontal,
+#seekSlider::handle:horizontal,
+#volSlider::handle:horizontal,
+QFrame#glassPanel {
+    border-radius: 0;
+}
+
+#seekSlider::handle:horizontal:hover {
+    background: rgb(0, 220, 255);
+}
+
+#volSlider::sub-page:horizontal {
+    background: rgba(0, 220, 255, 220);
+}
+
+#searchInput {
+    border: none;
+    border-radius: 0;
+    selection-background-color: rgba(0, 220, 255, 120);
+}
+
+QFrame#PlayMenu {
+    border-radius: 0;
+    border-top: 2px solid rgba(0, 229, 255, 0.45);
+}
+
+QFrame#sideNavRail {
+    border: 1px solid rgba(46, 230, 255, 0.12);
+    border-radius: 0;
+    border-top: 2px solid rgba(0, 229, 255, 0.4);
+}
+
+QLabel#homeGreeting {
+    font-size: 34px;
+    font-weight: 400;
+    letter-spacing: -0.6px;
+}
+
+QLabel#homeSectionTitle {
+    font-size: 24px;
+    font-weight: 400;
+}
+
+QLabel#homeSectionSubtitle {
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+#searchStatus {
+    font-size: 10px;
+    letter-spacing: 1px;
+}
+
+QToolButton#featuredPlayBtn {
+    border-radius: 0;
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 500;
+    padding: 12px 22px;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+}
+
+QToolButton#featuredPlayBtn:disabled {
+    color: rgba(255, 255, 255, 0.35);
+}
+
+QPushButton#searchButton {
+    border-radius: 0;
+    font-weight: 500;
+    padding: 8px 16px;
+    letter-spacing: 1px;
+}
+"""
+
 THEME = ThemeSpec(
     id="editorial",
     label="Редакционная",
@@ -40,4 +160,5 @@ THEME = ThemeSpec(
     radius_control=0,
     wallpaper_opacity=0.0,
     card_style="magazine",
+    extra_qss=EXTRA_QSS,
 )

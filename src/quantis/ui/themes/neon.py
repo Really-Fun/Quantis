@@ -17,6 +17,80 @@ DARK_DEPTH = (
     (1.0, "rgba(0, 0, 0, 110)"),
 )
 
+EXTRA_QSS = """
+#headerGreeting {
+    letter-spacing: 0.15px;
+}
+
+#seekSlider::handle:horizontal:hover {
+    border-color: #ffffff;
+}
+
+QScrollBar::handle:vertical {
+    background: rgba(108, 92, 231, 0.55);
+    min-height: 48px;
+}
+
+#searchInput {
+    border-radius: 14px;
+    padding: 13px 16px;
+    selection-background-color: rgba(108, 92, 231, 0.35);
+}
+
+QFrame#glassPanel {
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+QToolButton#sourceFilterChip {
+    color: #8A92A6;
+}
+
+QToolButton#sourceFilterChip:checked {
+    color: #F2F4F8;
+}
+
+#pluginCardDesc {
+    color: #8A92A6;
+}
+
+QToolButton#navPinButton {
+    color: #8A92A6;
+}
+
+QToolButton#navPinButton:checked {
+    border-color: rgba(108, 92, 231, 0.45);
+    color: #F2F4F8;
+}
+
+QToolButton#advancedToggle:checked {
+    border-color: rgba(255, 255, 255, 0.28);
+}
+
+#searchStatus {
+    min-height: 16px;
+}
+
+QFrame#sideNavRail[expanded="true"] {
+    border: 1px solid rgba(108, 92, 231, 0.22);
+}
+
+QToolButton#navIconButton:hover {
+    color: #F2F4F8;
+}
+
+QToolButton#navIconButton:checked {
+    color: #F2F4F8;
+}
+
+QToolButton#navIconButton[plugin="true"] {
+    border: 1px solid rgba(138, 146, 166, 0.22);
+}
+
+#controlButton[plugin="true"] {
+    border: 1px solid rgba(138, 146, 166, 0.35);
+}
+"""
+
 THEME = ThemeSpec(
     id="neon",
     label="Aurora",
@@ -51,4 +125,5 @@ THEME = ThemeSpec(
     radius=16,
     radius_control=12,
     wallpaper_opacity=0.11,
+    extra_qss=EXTRA_QSS,
 )

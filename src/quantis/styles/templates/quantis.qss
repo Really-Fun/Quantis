@@ -1,7 +1,5 @@
-/* Глобальная типографика и каркас — геометричный display + чистый UI */
-
 * {
-    font-family: "Bahnschrift", "Segoe UI Variable Display", "Segoe UI", sans-serif;
+    font-family: ${font_ui};
 }
 
 QWidget#appShell,
@@ -45,6 +43,8 @@ QFrame#appHeader {
     border-top-left-radius: 12px;
     border-top-right-radius: 12px;
     min-height: 52px;
+    border: none;
+    border-bottom: 1px solid rgba(${ink_rgb}, 0.05);
 }
 
 QFrame#appHeader QLabel#headerGreeting {
@@ -55,7 +55,7 @@ QFrame#appHeader QLabel#headerGreeting {
 
 QLabel#headerSub {
     font-size: 11px;
-    color: rgba(226, 232, 240, 0.45);
+    color: rgba(${mist_rgb}, 0.45);
     letter-spacing: 0.4px;
 }
 
@@ -63,7 +63,7 @@ QLabel#headerBrandWordmark {
     font-size: 15px;
     font-weight: 700;
     letter-spacing: 2.4px;
-    color: #f8fafc;
+    color: ${title};
     background: transparent;
 }
 
@@ -81,7 +81,7 @@ QToolButton#windowCloseBtn {
 QToolButton#windowHideUiBtn:hover,
 QToolButton#windowMinBtn:hover,
 QToolButton#windowMaxBtn:hover {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(${ink_rgb}, 0.08);
 }
 
 QToolButton#windowCloseBtn:hover {
@@ -92,7 +92,6 @@ QToolButton#windowCloseBtn:pressed {
     background: #bf0f1d;
 }
 
-QLabel#headerBrandLogo,
 QLabel#headerBrandMark {
     background: transparent;
     border: none;

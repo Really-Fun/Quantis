@@ -1,0 +1,24 @@
+QToolButton#navIconButton {
+    background: transparent;
+    border: none;
+    border-radius: 12px;
+    padding: 10px 12px;
+    color: ${text_dim};
+    font-size: 13px;
+    font-weight: 600;
+    text-align: left;
+}
+
+QToolButton#navIconButton:hover {
+    background: rgba(${ink_rgb}, 0.07);
+    color: rgb(${ink_rgb});
+}
+
+QToolButton#navIconButton:checked {
+    background: rgba(${tint_rgb}, 0.14);
+    color: rgb(${ink_rgb});
+}
+
+QToolButton#navIconButton:pressed {
+    background: rgba(${tint_rgb}, 0.2);
+}

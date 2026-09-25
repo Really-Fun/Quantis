@@ -1,0 +1,122 @@
+QToolButton#sourceFilterChip {
+    background: ${chip_bg};
+    border: 1px solid rgba(${ink_rgb}, 0.08);
+    border-radius: 14px;
+    color: rgba(${ink_rgb}, 0.6);
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+QToolButton#sourceFilterChip:hover {
+    background: rgba(${ink_rgb}, 0.07);
+}
+
+QToolButton#sourceFilterChip:checked {
+    background: rgba(${tint_rgb}, 0.26);
+    border-color: rgba(${tint_rgb}, 0.55);
+    color: rgb(${ink_rgb});
+}
+
+QFrame#nowPlayingPanel {
+    background: rgba(20, 24, 33, 0.92);
+    border: 1px solid rgba(${ink_rgb}, 0.06);
+    border-radius: 16px;
+}
+
+#nowPlayingTitle {
+    color: ${text};
+    font-size: 16px;
+    font-weight: 700;
+}
+
+#nowPlayingArtist {
+    color: ${text_dim};
+    font-size: 13px;
+}
+
+#nowPlayingSourceBtn,
+#nowPlayingStubBtn {
+    background: rgba(${ink_rgb}, 0.05);
+    border: 1px solid rgba(${ink_rgb}, 0.08);
+    border-radius: 12px;
+    color: ${text};
+    padding: 8px 12px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+#nowPlayingSourceBtn:hover,
+#nowPlayingStubBtn:hover {
+    background: rgba(${tint_rgb}, 0.2);
+}
+
+QFrame#pluginCard {
+    background: rgba(28, 33, 45, 0.95);
+    border: 1px solid rgba(${ink_rgb}, 0.06);
+    border-radius: 16px;
+}
+
+#pluginCardTitle {
+    color: ${text};
+    font-size: 14px;
+    font-weight: 700;
+}
+
+#pluginCardAuthor {
+    color: ${text_dim};
+    font-size: 12px;
+}
+
+#pluginCardDesc {
+    color: rgba(${ink_rgb}, 0.55);
+    font-size: 12px;
+}
+
+QLabel#navBrandLabel {
+    color: ${text};
+    font-size: 14px;
+    font-weight: 700;
+    letter-spacing: 0.2px;
+}
+
+QToolButton#navPinButton {
+    background: ${chip_bg};
+    border: 1px solid rgba(${ink_rgb}, 0.06);
+    border-radius: 10px;
+    padding: 6px 10px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+QToolButton#navPinButton:hover {
+    background: rgba(${tint_rgb}, 0.18);
+    color: ${text};
+}
+
+QToolButton#navPinButton:checked {
+    background: rgba(${tint_rgb}, 0.26);
+    border-color: rgba(${tint_rgb}, 0.55);
+    color: rgb(${ink_rgb});
+}
+
+QToolButton#advancedToggle {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 14px;
+    color: rgba(${ink_rgb}, 0.6);
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+QToolButton#advancedToggle:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(${ink_rgb}, 0.95);
+}
+
+QToolButton#advancedToggle:checked {
+    background: rgba(${tint_rgb}, 0.26);
+    border-color: rgba(${tint_rgb}, 0.55);
+    color: rgb(${ink_rgb});
+}

@@ -63,3 +63,72 @@ def test_no_theme_ids_outside_themes_package() -> None:
                     f"{path.relative_to(SRC)}:{node.lineno} {node.value!r}"
                 )
     assert offenders == []
+
+
+def test_template_selectors_defined_once() -> None:
+    from string import Template
+
+    from quantis.ui.themes import qss
+
+    tokens = registry.default().tokens()
+    seen: dict[str, str] = {}
+    duplicates: list[str] = []
+    for name in qss.TEMPLATE_FILES:
+        raw = (qss.templates_dir() / f"{name}.qss").read_text(encoding="utf-8")
+        text = Template(raw).substitute(tokens)
+        for selectors, _decls in qss.parse(text):
+            for sel in selectors:
+                if sel in seen:
+                    duplicates.append(f"{sel}: {seen[sel]} и {name}")
+                seen[sel] = name
+    assert duplicates == []
+
+
+@pytest.mark.parametrize("theme", registry.all(), ids=lambda t: t.id)
+def test_rendered_qss_complete(theme) -> None:
+    from quantis.ui.themes import qss
+
+    sheet = qss.render(theme)
+    assert "${" not in sheet
+    selectors = [s for sels, _ in qss.parse(sheet) for s in sels]
+    assert len(selectors) == len(set(selectors))
+
+
+def test_extra_qss_overrides_template() -> None:
+    from quantis.ui.themes import qss
+
+    merged = qss.merge(
+        "#a,\n#b {\n    color: red;\n    margin: 0;\n}\n",
+        "#b { color: blue; }\n#c { x: 1; }",
+    )
+    rules = {s: dict(d) for sels, d in qss.parse(merged) for s in sels}
+    assert rules["#a"] == {"color": "red", "margin": "0"}
+    assert rules["#b"] == {"color": "blue", "margin": "0"}
+    assert rules["#c"] == {"x": "1"}
+
+
+def test_packaging_collects_all_templates() -> None:
+    import importlib.util
+
+    root = Path(quantis.__file__).parents[2]
+    spec = importlib.util.spec_from_file_location(
+        "quantis_collect_datas", root / "packaging" / "pyinstaller" / "collect_datas.py"
+    )
+    assert spec is not None and spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    from quantis.ui.themes import qss
+
+    items = mod.collect_styles(qss.templates_dir().parent)
+    collected = {Path(src).name for src, dest in items if dest.endswith("templates")}
+    assert collected == {f"{name}.qss" for name in qss.TEMPLATE_FILES}
+
+
+def test_settings_combo_lists_all_themes(qapp) -> None:
+    from quantis.ui.views.settings_page import SettingsPage
+
+    page = SettingsPage()
+    combo = page._theme_combo
+    listed = [combo.itemData(i) for i in range(combo.count())]
+    assert listed == list(registry.ids())

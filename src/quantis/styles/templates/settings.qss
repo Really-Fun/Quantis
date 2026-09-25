@@ -1,12 +1,66 @@
-/* Настройки / Member — читаемые стеклянные блоки */
+QLabel#settingsSectionLabel {
+    color: rgb(${hl_rgb});
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.8px;
+    text-transform: uppercase;
+    padding: 12px 0 4px 0;
+    background: transparent;
+    font-family: ${font_label};
+}
 
-QWidget#settingsPage {
+QLabel#settingsRowTitle {
+    color: ${title};
+    font-size: 15px;
+    font-weight: 650;
+    background: transparent;
+    font-family: ${font_display};
+}
+
+QLabel#settingsRowDesc {
+    color: rgba(${mist_rgb}, 0.68);
+    font-size: 12px;
     background: transparent;
 }
 
-QScrollArea#settingsScroll {
+QCheckBox#settingsCheck {
+    color: ${text_soft};
+    font-size: 14px;
+    font-weight: 560;
+    spacing: 10px;
+    padding: 4px 2px;
     background: transparent;
-    border: none;
+}
+
+QComboBox#themeCombo,
+QLineEdit#settingLineEdit {
+    background: ${field_bg};
+    border: 1px solid rgba(${ink_rgb}, 0.1);
+    border-radius: 12px;
+    padding: 10px 12px;
+    color: ${title};
+    font-size: 13px;
+    min-height: 20px;
+    font-family: ${font_display};
+}
+
+QComboBox#themeCombo:hover,
+QLineEdit#settingLineEdit:focus {
+    border-color: rgba(46, 230, 255, 0.55);
+    background: rgba(0, 0, 0, 0.52);
+}
+
+QComboBox#themeCombo QAbstractItemView {
+    background: #080e18;
+    color: ${title};
+    border: 1px solid rgba(${ink_rgb}, 0.1);
+    selection-background-color: rgba(46, 230, 255, 0.28);
+    outline: none;
+    padding: 4px;
+}
+
+QWidget#settingsPage {
+    background: transparent;
 }
 
 QFrame#settingsPanel {
@@ -15,43 +69,11 @@ QFrame#settingsPanel {
     border-radius: 24px;
 }
 
-QLabel#settingsSectionLabel {
-    color: #2ee6ff;
-    font-size: 11px;
-    font-weight: 700;
-    letter-spacing: 1.8px;
-    text-transform: uppercase;
-    padding: 12px 0 4px 0;
-    background: transparent;
-}
-
 QFrame#settingsRow {
-    background: rgba(255, 255, 255, 0.035);
-    border: 1px solid rgba(255, 255, 255, 0.07);
+    background: rgba(${ink_rgb}, 0.035);
+    border: 1px solid rgba(${ink_rgb}, 0.07);
     border-radius: 16px;
     padding: 14px 16px;
-}
-
-QLabel#settingsRowTitle {
-    color: #f8fafc;
-    font-size: 15px;
-    font-weight: 650;
-    background: transparent;
-}
-
-QLabel#settingsRowDesc {
-    color: rgba(226, 232, 240, 0.68);
-    font-size: 12px;
-    background: transparent;
-}
-
-QCheckBox#settingsCheck {
-    color: #e2e8f0;
-    font-size: 14px;
-    font-weight: 560;
-    spacing: 10px;
-    padding: 4px 2px;
-    background: transparent;
 }
 
 QCheckBox#settingsCheck::indicator {
@@ -63,26 +85,22 @@ QCheckBox#settingsCheck::indicator {
 }
 
 QCheckBox#settingsCheck::indicator:checked {
-    background: #2ee6ff;
-    border-color: #2ee6ff;
+    background: rgb(${hl_rgb});
+    border-color: rgb(${hl_rgb});
 }
 
-QComboBox#themeCombo,
-QSpinBox#settingSpin,
-QLineEdit#settingLineEdit {
+QSpinBox#settingSpin {
     background: rgba(0, 0, 0, 0.4);
     border: 1px solid rgba(255, 255, 255, 0.12);
     border-radius: 12px;
     padding: 10px 12px;
-    color: #f8fafc;
+    color: ${title};
     font-size: 13px;
     min-height: 20px;
 }
 
-QComboBox#themeCombo:hover,
 QSpinBox#settingSpin:hover,
-QSpinBox#settingSpin:focus,
-QLineEdit#settingLineEdit:focus {
+QSpinBox#settingSpin:focus {
     border-color: rgba(46, 230, 255, 0.55);
     background: rgba(0, 0, 0, 0.52);
 }
@@ -93,19 +111,19 @@ QComboBox#themeCombo::drop-down {
 }
 
 QPushButton#settingsButton {
-    background: rgba(255, 255, 255, 0.06);
+    background: rgba(${ink_rgb}, 0.05);
     border: 1px solid rgba(255, 255, 255, 0.14);
     border-radius: 12px;
     padding: 8px 14px;
-    color: #e2e8f0;
+    color: ${text_soft};
     font-size: 12px;
     font-weight: 600;
 }
 
 QPushButton#settingsButton:hover {
-    background: rgba(46, 230, 255, 0.16);
+    background: rgba(${hl_rgb}, 0.14);
     border-color: rgba(46, 230, 255, 0.55);
-    color: #f8fafc;
+    color: ${title};
 }
 
 QPushButton#settingsButton:pressed {
@@ -119,7 +137,7 @@ QFrame#updateBanner {
 }
 
 QLabel#updateBannerText {
-    color: #f8fafc;
+    color: ${title};
     font-size: 13px;
     font-weight: 600;
     background: transparent;
@@ -130,22 +148,13 @@ QPushButton#updateBannerButton {
     border: 1px solid rgba(255, 255, 255, 0.14);
     border-radius: 10px;
     padding: 6px 12px;
-    color: #e2e8f0;
+    color: ${text_soft};
     font-size: 12px;
     font-weight: 600;
 }
 
 QPushButton#updateBannerButton:hover {
-    background: rgba(46, 230, 255, 0.16);
+    background: rgba(${hl_rgb}, 0.14);
     border-color: rgba(46, 230, 255, 0.55);
-    color: #f8fafc;
-}
-
-QComboBox#themeCombo QAbstractItemView {
-    background: #080e18;
-    color: #f8fafc;
-    border: 1px solid rgba(255, 255, 255, 0.12);
-    selection-background-color: rgba(46, 230, 255, 0.28);
-    outline: none;
-    padding: 4px;
+    color: ${title};
 }

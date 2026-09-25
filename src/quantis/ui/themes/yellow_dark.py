@@ -10,6 +10,141 @@ from quantis.ui.themes.spec import (
     ThemeSpec,
 )
 
+EXTRA_QSS = """
+QScrollBar:vertical {
+    margin: 0;
+    width: 4px;
+}
+
+#playerDock {
+    min-height: 0;
+}
+
+QFrame#appHeader {
+    border-bottom: none;
+}
+
+QMessageBox QPushButton {
+    border: 1px solid rgba(255, 170, 0, 100);
+}
+
+QInputDialog QPushButton {
+    border: 1px solid rgba(255, 170, 0, 100);
+}
+
+QMessageBox QPushButton:hover {
+    background-color: rgba(255, 170, 0, 60);
+}
+
+QInputDialog QPushButton:hover {
+    background-color: rgba(255, 170, 0, 60);
+}
+
+QInputDialog QComboBox {
+    background-color: rgba(20, 15, 5, 80);
+    border: 1px solid rgba(255, 170, 0, 80);
+}
+
+QInputDialog QComboBox QAbstractItemView {
+    border: 1px solid rgba(255, 170, 0, 80);
+    selection-background-color: rgba(255, 170, 0, 80);
+}
+
+#headerGreeting {
+    font-size: 20px;
+    font-weight: 700;
+}
+
+#sectionTitle {
+    font-size: 13px;
+    font-weight: 600;
+    color: rgba(255, 170, 0, 0.7);
+    letter-spacing: 0.5px;
+}
+
+#headerSub {
+    color: rgba(255,255,255,40);
+}
+
+#trackArtist {
+    color: rgba(255, 170, 0, 0.65);
+}
+
+QScrollBar::handle:vertical {
+    background: rgba(255, 170, 0, 0.35);
+    border-radius: 2px;
+}
+
+#trackListView QScrollBar::handle:vertical {
+    background: rgba(255, 170, 0, 40);
+}
+
+#coverLabel {
+    border: none;
+}
+
+#settingLineEdit {
+    border: 1px solid rgba(255, 170, 0, 30);
+}
+
+#settingsScroll QScrollBar::handle:vertical {
+    background: rgba(255, 170, 0, 30);
+}
+
+#searchInput {
+    border: none;
+    border-radius: 10px;
+    selection-background-color: rgba(255, 170, 0, 80);
+}
+
+#searchInput::placeholder {
+    color: rgba(255, 255, 255, 70);
+}
+
+QFrame#PlayMenu {
+    border: none;
+}
+
+QFrame#sideNavRail {
+    border-radius: 22px;
+    border-top: 2px solid rgba(255, 170, 0, 0.35);
+}
+
+QToolButton#navPinButton {
+    color: rgba(250, 246, 238, 0.7);
+}
+
+QFrame#featuredPanel {
+    border-radius: 14px;
+}
+
+#TrackListPanel {
+    border-radius: 16px;
+}
+
+QWidget {
+    color: #f0e8d8;
+}
+
+QPushButton#searchButton {
+    font-weight: 600;
+    padding: 8px 16px;
+}
+
+QToolButton#navIconButton {
+    padding: 8px 10px;
+    color: rgba(250, 246, 238, 0.72);
+}
+
+#PlayMenu {
+    border-radius: 18px;
+}
+
+#seekSlider::sub-page:horizontal:hover {
+    background: rgb(255, 170, 0);
+}
+"""
+
 THEME = ThemeSpec(
     id="yellow_dark",
     label="Тёмно-жёлтая",
@@ -54,4 +189,5 @@ THEME = ThemeSpec(
     radius=14,
     radius_control=10,
     wallpaper_opacity=0.11,
+    extra_qss=EXTRA_QSS,
 )

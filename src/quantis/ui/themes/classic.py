@@ -10,6 +10,88 @@ from quantis.ui.themes.spec import (
     ThemeSpec,
 )
 
+EXTRA_QSS = """
+QScrollBar:vertical {
+    margin: 0;
+    width: 4px;
+}
+
+#playerDock {
+    min-height: 0;
+}
+
+QFrame#appHeader {
+    border-bottom: none;
+}
+
+#headerGreeting {
+    font-size: 20px;
+    font-weight: 700;
+    letter-spacing: 0;
+}
+
+#sectionTitle {
+    font-size: 12px;
+    font-weight: 600;
+    color: rgba(140, 165, 190, 0.9);
+    letter-spacing: 0.8px;
+}
+
+#volSlider::handle:horizontal {
+    background: #d8e4ee;
+}
+
+QScrollBar::handle:vertical {
+    background: rgba(58, 168, 216, 0.4);
+    border-radius: 2px;
+}
+
+#coverLabel {
+    border: none;
+}
+
+#searchInput {
+    border-radius: 10px;
+    selection-background-color: rgba(0, 220, 255, 120);
+}
+
+QFrame#PlayMenu {
+    border: none;
+}
+
+QFrame#sideNavRail {
+    border: 1px solid rgba(46, 230, 255, 0.12);
+    border-radius: 22px;
+    border-top: 2px solid rgba(58, 168, 216, 0.35);
+}
+
+QLabel#navBrandLabel {
+    color: #E8EEF5;
+}
+
+QToolButton#navPinButton {
+    color: rgba(232, 238, 245, 0.7);
+}
+
+QFrame#featuredPanel {
+    border-radius: 12px;
+}
+
+QWidget {
+    color: #dde2e8;
+}
+
+QPushButton#searchButton {
+    font-weight: 600;
+    padding: 8px 16px;
+}
+
+QToolButton#navIconButton {
+    padding: 8px 10px;
+    color: rgba(232, 238, 245, 0.72);
+}
+"""
+
 THEME = ThemeSpec(
     id="classic",
     label="Классическая",
@@ -49,4 +131,5 @@ THEME = ThemeSpec(
     radius=12,
     radius_control=10,
     wallpaper_opacity=0.12,
+    extra_qss=EXTRA_QSS,
 )
