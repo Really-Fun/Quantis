@@ -1,4 +1,4 @@
-"""Фон окна одной картинкой: слой темы, обои, кадр видео.
+"""Фон окна одной картинкой по режиму: цвета трека, обложка, картинка, клип.
 
 Весь фон под интерфейсом собирается здесь и кэшируется; ``BackgroundFrame``
 только блитит готовый кадр. Пересборка — лишь когда что-то поменялось
@@ -16,8 +16,9 @@ from __future__ import annotations
 
 import math
 from time import monotonic
+from typing import Literal
 
-from PySide6.QtCore import QObject, QPoint, QRect, QSize, Qt, QTimer, Signal
+from PySide6.QtCore import QObject, QPoint, QRect, QRectF, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import (
     QColor,
     QImage,
@@ -31,6 +32,9 @@ from quantis.ui.image_fx import blur_image, fill_crop, mean_luma
 from quantis.ui.themes import registry
 from quantis.ui.themes.spec import GlowSpec, ThemeSpec, qcolor
 
+BackdropMode = Literal["palette", "cover", "image", "video"]
+DRIFT_INTERVAL_MS = 66
+"""Дрейф обложки ~15 к/с: движение медленное, чаще — лишние кадры окна."""
 LUMA_SMOOTHING = 0.2
 """Доля нового кадра в сглаженной яркости клипа: автозатемнение без мигания."""
 GLASS_MIN_INTERVAL = 0.1
@@ -53,10 +57,13 @@ class BackdropCompositor(QObject):
         self._phase = 0.0
         self._cinematic = False
         self._content = QRect()
-        # статичные обои
+        self._mode: BackdropMode = "palette"
+        # своя картинка
         self._wallpaper = QImage()
-        self._wallpaper_fit = QImage()
-        self._dynamic = False
+        # обложка трека: мягкая копия и её дрейф
+        self._cover = QImage()
+        self._drift = 0.0
+        self._motion = True
         # видео-фон
         self._video_active = False
         self._video = QImage()
@@ -106,12 +113,21 @@ class BackdropCompositor(QObject):
             self._dim, self._blur = dim, blur
             self._invalidate()
 
+    @property
+    def mode(self) -> BackdropMode:
+        return self._mode
+
+    def set_mode(self, mode: BackdropMode) -> None:
+        if mode != self._mode:
+            self._mode = mode
+            self._luma = None
+            self._invalidate()
+
     def set_size(self, size: QSize, dpr: float = 1.0) -> None:
         if size == self._size and dpr == self._dpr:
             return
         self._size = QSize(size)
         self._dpr = dpr
-        self._wallpaper_fit = QImage()
         self._video_fit = QImage()
         self._invalidate(soft=True)
 
@@ -119,12 +135,11 @@ class BackdropCompositor(QObject):
         if theme is self._theme:
             return
         self._theme = theme
-        self._wallpaper_fit = QImage()
         self._glass = QImage()
         self._invalidate(soft=True)
 
     def set_eco(self, enabled: bool) -> None:
-        """Окно в фоне: стекло не пересчитываем (последнее остаётся)."""
+        """Окно в фоне: стекло не пересчитываем (последнее остаётся), обложка стоит."""
         self._eco = enabled
 
     def set_video_fps(self, fps: float) -> None:
@@ -159,14 +174,39 @@ class BackdropCompositor(QObject):
 
     def set_wallpaper(self, image: QImage | None) -> None:
         self._wallpaper = QImage() if image is None else image
-        self._wallpaper_fit = QImage()
+        if self._mode == "image":
+            self._invalidate()
+
+    def set_cover(self, image: QImage | None) -> None:
+        """Обложка трека → мягкая насыщенная копия для режима «Обложка» и для
+        клипа, пока он грузится или если его нет."""
+        self._cover = QImage() if image is None else soften_cover(image)
+        if self._shows_cover():
+            self._invalidate()
+
+    def set_motion(self, enabled: bool) -> None:
+        if enabled != self._motion:
+            self._motion = enabled
+            self._invalidate()
+
+    def needs_drift(self) -> bool:
+        """Хозяину пора крутить таймер дрейфа (~15 к/с)."""
+        return (
+            self._motion
+            and not self._eco
+            and not self._cinematic
+            and self._shows_cover()
+            and not self._cover.isNull()
+        )
+
+    def advance_drift(self, seconds: float) -> None:
+        self._drift += seconds
         self._invalidate()
 
-    def set_dynamic(self, enabled: bool) -> None:
-        """Видео-обои включены: статичная картинка не показывается."""
-        if enabled != self._dynamic:
-            self._dynamic = enabled
-            self._invalidate()
+    def _shows_cover(self) -> bool:
+        return self._mode == "cover" or (
+            self._mode == "video" and not self.has_video_frame()
+        )
 
     def set_video_active(self, active: bool) -> None:
         if active != self._video_active:
@@ -219,14 +259,19 @@ class BackdropCompositor(QObject):
             return image
 
         painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
-        if self.has_video_frame():
-            painter.drawImage(rect, self._media_layer(self._video, smooth_luma=True))
-        else:
-            painter.drawImage(rect, self._soft_layer())
-            if not self._dynamic:
-                self._paint_wallpaper(painter, rect)
+        painter.drawImage(rect, self._layer())
         painter.end()
         return image
+
+    def _layer(self) -> QImage:
+        """Слой под интерфейсом по режиму; чего нет — мягкий слой темы."""
+        if self._mode == "video" and self.has_video_frame():
+            return self._media_layer(self._video, smooth_luma=True)
+        if self._mode == "image" and not self._wallpaper.isNull():
+            return self._media_layer(self._wallpaper, smooth_luma=False)
+        if self._shows_cover() and not self._cover.isNull():
+            return self._cover_layer()
+        return self._soft_layer()
 
     # --- картинка/клип под интерфейсом -----------------------------------
 
@@ -257,6 +302,36 @@ class BackdropCompositor(QObject):
         image = blur_image(fill_crop(source, size), self._blur_amount(0.5))
         if image.format() != QImage.Format.Format_RGB32:
             image = image.convertToFormat(QImage.Format.Format_RGB32)
+        self._readable(image, base=0.1, smooth_luma=smooth_luma)
+        self._media, self._media_key = image, key
+        return image
+
+    def _cover_layer(self) -> QImage:
+        """Размытая насыщенная обложка: два слоя медленно плывут и вращаются."""
+        size = self._device_size(0.5)
+        image = QImage(size, QImage.Format.Format_RGB32)
+        image.fill(qcolor(self._theme.colors.bg))
+        w, h = size.width(), size.height()
+        t = self._drift if self._motion else 0.0
+        side = math.hypot(w, h) * 1.1  # с запасом: при повороте углы не оголяются
+        painter = QPainter(image)
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        for sign, opacity, ph in ((1, 1.0, 0.0), (-1, 0.55, 2.1)):
+            painter.save()
+            painter.translate(
+                w / 2 + math.sin(t * 0.11 + ph) * w * 0.05,
+                h / 2 + math.cos(t * 0.09 + ph) * h * 0.05,
+            )
+            painter.rotate(sign * (t * 3.0 + ph * 40))
+            painter.setOpacity(opacity)
+            painter.drawImage(QRectF(-side / 2, -side / 2, side, side), self._cover)
+            painter.restore()
+        painter.end()
+        self._readable(image, base=0.02, smooth_luma=False)
+        return image
+
+    def _readable(self, image: QImage, *, base: float, smooth_luma: bool) -> None:
+        """Затемнение для читаемости поверх картинки (на месте)."""
         luma = mean_luma(image)
         if self._theme.is_light:
             luma = 1 - luma  # на светлой теме мешает тёмный кадр
@@ -264,31 +339,29 @@ class BackdropCompositor(QObject):
             luma = (1 - LUMA_SMOOTHING) * self._luma + LUMA_SMOOTHING * luma
         self._luma = luma
 
-        base = qcolor(self._theme.colors.bg)
-        base.setAlpha(255)
+        bg = qcolor(self._theme.colors.bg)
+        bg.setAlpha(255)
         w, h = image.width(), image.height()
         painter = QPainter(image)
-        alpha = 0.1 + self._dim * 0.7
+        alpha = base + self._dim * 0.7
         need = 1 - 0.3 / max(0.3, luma * (1 - alpha))
         alpha = min(0.9, alpha + max(0.0, need) * (1 - alpha))
-        painter.fillRect(0, 0, w, h, _with_alpha(base, 255 * alpha))
+        painter.fillRect(0, 0, w, h, _with_alpha(bg, 255 * alpha))
         accent = self._palette.accent
         tint = QRadialGradient(w * 0.2, h * 0.3, w * 0.6)
         tint.setColorAt(0, _with_alpha(accent, 40))
         tint.setColorAt(1, _with_alpha(accent, 0))
         painter.fillRect(0, 0, w, h, tint)
         side = QLinearGradient(0, 0, w * 0.55, 0)
-        side.setColorAt(0, _with_alpha(base, 110))
-        side.setColorAt(1, _with_alpha(base, 0))
+        side.setColorAt(0, _with_alpha(bg, 110))
+        side.setColorAt(1, _with_alpha(bg, 0))
         painter.fillRect(0, 0, w, h, side)
         veil = QLinearGradient(0, 0, 0, h)
-        veil.setColorAt(0, _with_alpha(base, 70))
-        veil.setColorAt(0.55, _with_alpha(base, 40))
-        veil.setColorAt(1, _with_alpha(base, 150))
+        veil.setColorAt(0, _with_alpha(bg, 70))
+        veil.setColorAt(0.55, _with_alpha(bg, 40))
+        veil.setColorAt(1, _with_alpha(bg, 150))
         painter.fillRect(0, 0, w, h, veil)
         painter.end()
-        self._media, self._media_key = image, key
-        return image
 
     def _paint_video(self, painter: QPainter, rect: QRect) -> None:
         target = QSize(
@@ -306,18 +379,6 @@ class BackdropCompositor(QObject):
         painter.setClipRect(rect)
         painter.drawImage(QPoint(round(x), round(y)), fit)
         painter.restore()
-
-    def _paint_wallpaper(self, painter: QPainter, rect: QRect) -> None:
-        opacity = self._theme.wallpaper_opacity
-        if self._wallpaper.isNull() or opacity <= 0:
-            return
-        target = self._device_size()
-        if self._wallpaper_fit.isNull() or self._wallpaper_fit.size() != target:
-            self._wallpaper_fit = fill_crop(self._wallpaper, target, _FAST)
-            self._wallpaper_fit.setDevicePixelRatio(self._dpr)
-        painter.setOpacity(opacity)
-        painter.drawImage(rect.topLeft(), self._wallpaper_fit)
-        painter.setOpacity(1.0)
 
     # --- стекло ----------------------------------------------------------
 
@@ -416,6 +477,34 @@ class BackdropCompositor(QObject):
         coral.setColorAt(0.5, QColor(r, g, b, 8))
         coral.setColorAt(1.0, QColor(r, g, b, 0))
         painter.fillRect(0, 0, w, h, coral)
+
+
+def soften_cover(image: QImage) -> QImage:
+    """Обложка → 14×14 насыщеннее и темнее → плавно растянута до 320: мягкие
+    пятна цветов обложки, без деталей."""
+    small = image.scaled(
+        14, 14, Qt.AspectRatioMode.IgnoreAspectRatio, _SMOOTH
+    ).convertToFormat(QImage.Format.Format_ARGB32)
+    for y in range(small.height()):
+        for x in range(small.width()):
+            c = small.pixelColor(x, y)
+            small.setPixelColor(
+                x,
+                y,
+                QColor.fromHsvF(
+                    max(c.hsvHueF(), 0.0),
+                    min(1.0, c.hsvSaturationF() * 1.3),
+                    min(c.valueF(), 0.72),
+                ),
+            )
+    while small.width() < 320:
+        small = small.scaled(
+            small.width() * 2,
+            small.height() * 2,
+            Qt.AspectRatioMode.IgnoreAspectRatio,
+            _SMOOTH,
+        )
+    return small
 
 
 def _with_alpha(color: QColor, alpha: float) -> QColor:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+from time import monotonic
 
 from PySide6.QtCore import QRect, Qt, QTimer
 from PySide6.QtGui import QPainter
@@ -9,7 +10,10 @@ from PySide6.QtWidgets import QFrame, QWidget
 from quantis.ui.cover_accent import CoverPalette
 from quantis.ui.themes import registry
 from quantis.ui.themes.spec import ThemeSpec
-from quantis.ui.views.widgets.backdrop_compositor import BackdropCompositor
+from quantis.ui.views.widgets.backdrop_compositor import (
+    DRIFT_INTERVAL_MS,
+    BackdropCompositor,
+)
 
 
 class BackgroundFrame(QFrame):
@@ -30,7 +34,11 @@ class BackgroundFrame(QFrame):
         self._phase = 0.0
         _ = wallpaper
         self._compositor = BackdropCompositor(self._theme, self)
-        self._compositor.frame_changed.connect(self.update)
+        self._compositor.frame_changed.connect(self._on_frame_changed)
+        self._drift_timer = QTimer(self)
+        self._drift_timer.setInterval(DRIFT_INTERVAL_MS)
+        self._drift_timer.timeout.connect(self._drift_tick)
+        self._drift_at = 0.0
 
         self._content = QWidget(self)
         self._content.setObjectName("appContent")
@@ -70,6 +78,7 @@ class BackgroundFrame(QFrame):
         self._eco = enabled
         self._sync_timer()
         self._compositor.set_eco(enabled)
+        self._sync_drift()
 
     def set_cinematic(self, enabled: bool) -> None:
         if self._cinematic == enabled:
@@ -77,6 +86,7 @@ class BackgroundFrame(QFrame):
         self._cinematic = enabled
         self._sync_timer()
         self._compositor.set_cinematic(enabled)
+        self._sync_drift()
 
     def set_theme(self, theme: ThemeSpec) -> None:
         if self._theme is not theme:
@@ -87,6 +97,24 @@ class BackgroundFrame(QFrame):
     def set_palette(self, palette: CoverPalette) -> None:
         """Палитра трека (и кадры перехода между треками)."""
         self._compositor.set_palette(palette)
+
+    def _on_frame_changed(self) -> None:
+        self.update()
+        self._sync_drift()
+
+    def _sync_drift(self) -> None:
+        """Дрейф обложки идёт, только пока его видно и окно не в эко."""
+        if self._compositor.needs_drift():
+            if not self._drift_timer.isActive():
+                self._drift_at = monotonic()
+                self._drift_timer.start()
+        elif self._drift_timer.isActive():
+            self._drift_timer.stop()
+
+    def _drift_tick(self) -> None:
+        now = monotonic()
+        step, self._drift_at = now - self._drift_at, now
+        self._compositor.advance_drift(min(step, 0.25))
 
     def _tick(self) -> None:
         if self._eco or self._cinematic or not self._animated():

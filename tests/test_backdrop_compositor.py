@@ -19,6 +19,7 @@ def _solid(color: str, w: int = 64, h: int = 40) -> QImage:
 def _compositor() -> tuple[BackdropCompositor, list[int]]:
     comp = BackdropCompositor(registry.get("classic"))
     comp.set_size(QSize(200, 120))
+    comp.set_mode("video")
     hits: list[int] = []
     comp.frame_changed.connect(lambda: hits.append(1))
     return comp, hits
@@ -119,6 +120,7 @@ def test_glass_panel_paints_blurred_backdrop(qapp) -> None:
         shell = BackgroundFrame(theme=registry.get(theme_id))
         shell.resize(300, 200)
         comp = shell.compositor
+        comp.set_mode("video")
         comp.set_video_frame(_solid("#ff0000"))
         comp.set_video_active(True)
         panel = QWidget(shell.content_host())
@@ -171,6 +173,7 @@ def test_clip_luma_is_smoothed_between_frames(qapp) -> None:
 def test_light_theme_lightens_instead_of_darkening(qapp) -> None:
     comp = BackdropCompositor(registry.get("light"))
     comp.set_size(QSize(200, 120))
+    comp.set_mode("video")
     comp.set_look(dim=0.5, blur=0.0)
     assert _video_luma(comp, "#202020") > mean_luma(_solid("#202020"))
 
@@ -193,3 +196,74 @@ def test_no_glass_in_theater_mode(qapp) -> None:
     shell.set_cinematic(True)
     assert paint_glass(panel, painter, path) is False
     painter.end()
+
+
+def _cover() -> QImage:
+    img = QImage(96, 96, QImage.Format.Format_RGB32)
+    img.fill(QColor("#e02090"))
+    return img
+
+
+def test_cover_mode_and_clip_fallback_show_cover(qapp) -> None:
+    comp, _ = _compositor()
+    comp.set_mode("palette")
+    soft = comp.frame().pixelColor(100, 60)
+    comp.set_cover(_cover())
+    assert comp.frame().pixelColor(100, 60) == soft  # цвета трека: обложку не видно
+    comp.set_mode("cover")
+    assert comp.frame().pixelColor(100, 60).red() > soft.red() + 20
+    # клип ещё грузится — вместо него та же обложка
+    comp.set_mode("video")
+    assert comp.frame().pixelColor(100, 60).red() > soft.red() + 20
+    comp.set_video_frame(_solid("#20e040"))
+    comp.set_video_active(True)
+    assert (
+        comp.frame().pixelColor(100, 60).green()
+        > comp.frame().pixelColor(100, 60).red()
+    )
+
+
+def test_drift_runs_only_when_cover_is_visible(qapp) -> None:
+    comp, _ = _compositor()
+    comp.set_mode("cover")
+    assert not comp.needs_drift()  # нет обложки — нечему плыть
+    comp.set_cover(_cover())
+    assert comp.needs_drift()
+    before = comp.frame().cacheKey()
+    comp.advance_drift(1.0)
+    assert comp.frame().cacheKey() != before
+    comp.set_motion(False)
+    assert not comp.needs_drift()
+    comp.set_motion(True)
+    comp.set_eco(True)
+    assert not comp.needs_drift()
+    comp.set_eco(False)
+    comp.set_mode("image")
+    assert not comp.needs_drift()
+
+
+def test_backdrop_mode_maps_to_existing_wallpaper_settings(qapp) -> None:
+    from PySide6.QtCore import QSettings
+
+    from quantis.ui.preferences import UiPreferences
+
+    QSettings("ReallyFun", "Quantis").clear()
+    UiPreferences._instance = None
+    prefs = UiPreferences()
+    try:
+        assert prefs.backdrop_mode == "palette"
+        prefs.set_backdrop_mode("video")
+        assert prefs.dynamic_wallpaper_enabled and not prefs.wallpaper_enabled
+        prefs.set_backdrop_mode("image")
+        assert prefs.wallpaper_enabled and not prefs.dynamic_wallpaper_enabled
+        prefs.set_backdrop_mode("cover")
+        assert prefs.backdrop_mode == "cover"
+        assert not prefs.wallpaper_enabled and not prefs.dynamic_wallpaper_enabled
+        # раздел «Обои» включил видео — панель «Фон» видит «Клип»
+        prefs.set_dynamic_wallpaper_enabled(True)
+        assert prefs.backdrop_mode == "video"
+        prefs.set_dynamic_wallpaper_enabled(False)
+        assert prefs.backdrop_mode == "cover"  # выбор «обложка» запомнился
+    finally:
+        UiPreferences._instance = None
+        QSettings("ReallyFun", "Quantis").clear()

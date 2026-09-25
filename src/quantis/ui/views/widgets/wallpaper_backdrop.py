@@ -252,7 +252,6 @@ class WallpaperBackdrop(QWidget):
 
     def set_dynamic_wallpaper_enabled(self, enabled: bool) -> None:
         self._dynamic_enabled = enabled
-        self._compositor.set_dynamic(enabled)
         if not enabled:
             self.stop_video()
 
@@ -293,6 +292,8 @@ class WallpaperBackdrop(QWidget):
             player.pause()
 
     def show_still(self, path: str) -> None:
+        """Обложка вместо клипа (грузится или не нашёлся): компоновщик рисует её
+        размытой и дрейфующей, как режим «Обложка», а не резким кадром."""
         if not self._dynamic_enabled or not path:
             return
         reader = QImageReader(path)
@@ -317,7 +318,8 @@ class WallpaperBackdrop(QWidget):
         if self._video_player is not None:
             self._video_player.stop()
             self._video_player.setSource(QUrl())
-        self._video_feed.set_still(image)
+        self._video_feed.clear()
+        self._compositor.set_cover(image)
         self._set_video_active(True)
 
     def has_picture(self) -> bool:

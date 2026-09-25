@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from PySide6.QtCore import QByteArray, QObject, QSettings, Signal, SignalInstance
 
 from quantis.models.repeat_mode import RepeatMode
 from quantis.ui.resources import normalize_ui_theme
 from quantis.ui.themes import registry
 from quantis.ui.themes.spec import ThemeSpec
+
+BackdropMode = Literal["palette", "cover", "image", "video"]
+BACKDROP_MODES: tuple[BackdropMode, ...] = ("palette", "cover", "image", "video")
 
 
 class UiPreferences(QObject):
@@ -38,6 +43,8 @@ class UiPreferences(QObject):
     _KEY_WALLPAPER_AV_DELAY = "ui/dynamic_wallpaper_av_delay_ms"
     _KEY_WALLPAPER = "ui/wallpaper_path"
     _KEY_WALLPAPER_ENABLED = "ui/wallpaper_enabled"
+    _KEY_BACKDROP_MODE = "ui/backdrop_mode"
+    _KEY_BACKDROP_MOTION = "ui/backdrop_motion"
     _KEY_BACKDROP_DIM = "ui/backdrop_dim"
     _KEY_BACKDROP_BLUR = "ui/backdrop_blur"
     _KEY_NOW_PLAYING = "ui/show_now_playing_panel"
@@ -235,6 +242,42 @@ class UiPreferences(QObject):
         if self.wallpaper_enabled == value:
             return
         self._settings.setValue(self._KEY_WALLPAPER_ENABLED, value)
+        self._emit(self.wallpaper_changed)
+
+    @property
+    def backdrop_mode(self) -> BackdropMode:
+        """Что лежит под интерфейсом: цвета трека / обложка / картинка / клип.
+
+        «Клип» и «картинка» — это существующие ``dynamic_wallpaper_enabled`` и
+        ``wallpaper_enabled`` (их же показывает раздел «Обои»); хранится только
+        выбор между цветами трека и обложкой, когда ни то ни другое не включено."""
+        if self.dynamic_wallpaper_enabled:
+            return "video"
+        if self.wallpaper_enabled:
+            return "image"
+        raw = str(self._settings.value(self._KEY_BACKDROP_MODE, "palette"))
+        return "cover" if raw == "cover" else "palette"
+
+    def set_backdrop_mode(self, mode: BackdropMode) -> None:
+        if mode not in BACKDROP_MODES or mode == self.backdrop_mode:
+            return
+        self._settings.setValue(self._KEY_DYNAMIC_WALLPAPER, mode == "video")
+        self._settings.setValue(self._KEY_WALLPAPER_ENABLED, mode == "image")
+        if mode in ("palette", "cover"):
+            self._settings.setValue(self._KEY_BACKDROP_MODE, mode)
+        self._emit(self.wallpaper_changed)
+
+    @property
+    def backdrop_motion(self) -> bool:
+        """Медленный дрейф обложки в режиме «Обложка»."""
+        return self._read_bool(
+            self._settings.value(self._KEY_BACKDROP_MOTION, True), True
+        )
+
+    def set_backdrop_motion(self, value: bool) -> None:
+        if self.backdrop_motion == value:
+            return
+        self._settings.setValue(self._KEY_BACKDROP_MOTION, value)
         self._emit(self.wallpaper_changed)
 
     @property

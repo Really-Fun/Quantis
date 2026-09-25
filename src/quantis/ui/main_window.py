@@ -29,8 +29,9 @@ from quantis.ui.cover_accent import (
     CoverPalette,
     fallback_accent,
     fallback_palette,
+    load_cover_image,
     palette_from_accent,
-    palette_from_cover_path,
+    palette_from_image,
 )
 from quantis.ui.fonts import register_bundled_fonts, theme_font
 from quantis.ui.live_palette import LivePalette
@@ -720,7 +721,9 @@ class QuantisMainWindow(QMainWindow):
         if self._eco.active:
             return
         path = Path(self._bundle.music.provider.get_cover_path(track))
-        self._cover_palette = palette_from_cover_path(path if path.is_file() else None)
+        cover = load_cover_image(path if path.is_file() else None)
+        self._cover_palette = palette_from_image(cover)
+        self._shell.compositor.set_cover(cover)
         self.apply_palette(
             self._cover_palette or fallback_palette(registry.get(self._applied_theme))
         )
@@ -814,9 +817,10 @@ class QuantisMainWindow(QMainWindow):
             )
 
     def _apply_backdrop_look(self) -> None:
-        self._shell.compositor.set_look(
-            self._ui_prefs.backdrop_dim, self._ui_prefs.backdrop_blur
-        )
+        compositor = self._shell.compositor
+        compositor.set_mode(self._ui_prefs.backdrop_mode)
+        compositor.set_motion(self._ui_prefs.backdrop_motion)
+        compositor.set_look(self._ui_prefs.backdrop_dim, self._ui_prefs.backdrop_blur)
 
     def _apply_wallpaper(self) -> None:
         path = resources.wallpaper_path()

@@ -157,7 +157,8 @@ def accent_from_image(image: QImage | None) -> QColor:
     return color
 
 
-def _read_cover(path: str | Path | None) -> QImage | None:
+def load_cover_image(path: str | Path | None) -> QImage | None:
+    """Обложка с диска, уменьшенная до 96 px: на палитру и мягкий фон хватает."""
     if not path:
         return None
     file_path = Path(path)
@@ -175,11 +176,11 @@ def _read_cover(path: str | Path | None) -> QImage | None:
 
 
 def accent_from_cover_path(path: str | Path | None) -> QColor:
-    return accent_from_image(_read_cover(path))
+    return accent_from_image(load_cover_image(path))
 
 
 def palette_from_cover_path(path: str | Path | None) -> CoverPalette | None:
-    return palette_from_image(_read_cover(path))
+    return palette_from_image(load_cover_image(path))
 
 
 def accent_css(color: QColor) -> str:
