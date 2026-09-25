@@ -76,10 +76,13 @@ def paint_glass(
     )
     offset = widget.mapTo(host, QPoint(0, 0))
     # Одна заливка контура текстурой вместо клипа по контуру + drawImage +
-    # заливки тонировкой: сглаженный клип в raster-движке дорогой. DPR картинки
-    # Qt учитывает сам: текстура уже покрывает окно в логических пикселях.
+    # заливки тонировкой: сглаженный клип в raster-движке дорогой. Масштаб по
+    # DPR картинки Qt делает сам, но сдвиг кисти считает в пикселях текстуры.
+    scale = glass.devicePixelRatio()
     brush = QBrush(glass)
-    brush.setTransform(QTransform().translate(-offset.x(), -offset.y()))
+    brush.setTransform(
+        QTransform().translate(-offset.x() * scale, -offset.y() * scale)
+    )
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
     painter.fillPath(path, brush)

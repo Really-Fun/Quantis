@@ -274,35 +274,38 @@ def test_backdrop_mode_maps_to_existing_wallpaper_settings(qapp) -> None:
 
 
 def test_glass_samples_backdrop_under_the_panel(qapp) -> None:
-    """Стекло берёт из фона ровно то, что под панелью (без сдвига и масштаба)."""
-    from PySide6.QtGui import QPainter, QPainterPath
+    """Стекло берёт из фона ровно то, что под панелью: без сдвига, масштаба и
+    повторов текстуры (панель далеко от края, фон — горизонтальный градиент)."""
+    from PySide6.QtGui import QLinearGradient, QPainter, QPainterPath
 
     from quantis.ui.views.widgets.background_frame import BackgroundFrame
     from quantis.ui.views.widgets.glass import paint_glass
 
     shell = BackgroundFrame(theme=registry.get("neon"))
-    shell.resize(400, 200)
+    shell.resize(800, 200)
     shell.show()  # иначе resizeEvent не придёт и кадр будет 1×1
     qapp.processEvents()
     comp = shell.compositor
-    comp.set_theme(replace(registry.get("neon"), glass_blur=0.02))  # почти без размытия
+    comp.set_theme(replace(registry.get("neon"), glass_blur=0.011))  # почти без размытия
     comp.set_look(dim=0.0, blur=0.0)
-    halves = QImage(400, 200, QImage.Format.Format_RGB32)
-    halves.fill(QColor("#ff0000"))
-    fill = QPainter(halves)
-    fill.fillRect(200, 0, 200, 200, QColor("#0000ff"))
+    ramp = QImage(800, 200, QImage.Format.Format_RGB32)
+    fill = QPainter(ramp)
+    gradient = QLinearGradient(0, 0, 800, 0)
+    gradient.setColorAt(0, QColor(0, 0, 0))
+    gradient.setColorAt(1, QColor(255, 255, 255))
+    fill.fillRect(ramp.rect(), gradient)
     fill.end()
     comp.set_mode("image")
-    comp.set_wallpaper(halves)
+    comp.set_wallpaper(ramp)
     panel = QWidget(shell.content_host())
-    panel.setGeometry(40, 50, 320, 100)  # и над красным, и над синим
+    panel.setGeometry(300, 50, 400, 100)
     path = QPainterPath()
-    path.addRect(0, 0, 320, 100)
-    out = QImage(320, 100, QImage.Format.Format_RGB32)
+    path.addRect(0, 0, 400, 100)
+    out = QImage(400, 100, QImage.Format.Format_RGB32)
     painter = QPainter(out)
     assert paint_glass(panel, painter, path, QColor(0, 0, 0, 0), sheen=False)
     painter.end()
-    # окно x=150 (красная половина) и x=250 (синяя); при лишнем масштабе
-    # стекло взяло бы 300 и 500 — наоборот
-    left, right = out.pixelColor(110, 50), out.pixelColor(210, 50)
-    assert left.red() > left.blue() and right.blue() > right.red()
+    frame = comp.frame()
+    for x in (10, 150, 300, 390):
+        got, want = out.pixelColor(x, 50), frame.pixelColor(300 + x, 100)
+        assert abs(got.lightness() - want.lightness()) < 12, (x, got, want)
