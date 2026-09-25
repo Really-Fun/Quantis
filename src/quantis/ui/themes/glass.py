@@ -4,6 +4,7 @@ from quantis.ui.themes.neon import MONO_FONTS, UI_FONTS
 from quantis.ui.themes.spec import (
     BackdropSpec,
     GlowSpec,
+    GlowSpot,
     ThemeColors,
     ThemeFonts,
     ThemeSpec,
@@ -102,7 +103,20 @@ THEME = ThemeSpec(
     fonts=ThemeFonts(ui=UI_FONTS, display=UI_FONTS, mono=MONO_FONTS),
     backdrop=BackdropSpec(
         depth=((0.0, "rgba(20, 24, 33, 30)"), (1.0, "rgba(0, 0, 0, 80)")),
-        glow=GlowSpec("cover"),
+        # Без обоев стеклу нужно, что просвечивать: свои цветные пятна
+        # под полупрозрачными панелями, а не свечение обложки как у neon.
+        glow=GlowSpec(
+            "spots",
+            spots=(
+                GlowSpot(0.12, 0.08, 0.55, "0, 217, 163", alpha=70, pulse_alpha=14),
+                GlowSpot(
+                    0.92, 0.85, 0.6, "64, 120, 255", alpha=64, pulse_alpha=12, phase=2.1
+                ),
+                GlowSpot(
+                    0.6, 0.35, 0.35, "150, 90, 255", alpha=34, pulse_alpha=10, phase=4.0
+                ),
+            ),
+        ),
     ),
     radius=20,
     radius_control=14,
