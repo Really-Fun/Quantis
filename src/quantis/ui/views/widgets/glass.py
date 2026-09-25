@@ -71,18 +71,16 @@ def paint_glass(
     theme = compositor.theme
     if not theme.has_glass or compositor.cinematic:
         return False  # театральный режим — как раньше: без стекла поверх клипа
-    glass = _tinted(
-        compositor.glass(), tint if tint is not None else theme.glass_tint_color()
-    )
+    source = compositor.glass()
+    scale = source.devicePixelRatio()  # пикселей стекла на логический пиксель
+    glass = _tinted(source, tint if tint is not None else theme.glass_tint_color())
     offset = widget.mapTo(host, QPoint(0, 0))
     # Одна заливка контура текстурой вместо клипа по контуру + drawImage +
-    # заливки тонировкой: сглаженный клип в raster-движке дорогой. Масштаб по
-    # DPR картинки Qt делает сам, но сдвиг кисти считает в пикселях текстуры.
-    scale = glass.devicePixelRatio()
+    # заливки тонировкой: сглаженный клип в raster-движке дорогой. Текстура — с
+    # DPR 1, масштаб и сдвиг заданы явно: DPR текстуры кисти Qt учитывает
+    # по-разному при рисовании в виджет и в QImage.
     brush = QBrush(glass)
-    brush.setTransform(
-        QTransform().translate(-offset.x() * scale, -offset.y() * scale)
-    )
+    brush.setTransform(QTransform(1 / scale, 0, 0, 1 / scale, -offset.x(), -offset.y()))
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
     painter.fillPath(path, brush)
@@ -106,10 +104,10 @@ def _tinted(glass: QImage, tint: QColor) -> QImage:
     if _TINTED is not None and _TINTED[0] == key:
         return _TINTED[1]
     image = glass.copy()
+    image.setDevicePixelRatio(1.0)  # масштаб — в матрице кисти
     painter = QPainter(image)
     painter.fillRect(image.rect(), tint)
     painter.end()
-    image.setDevicePixelRatio(glass.devicePixelRatio())
     _TINTED = (key, image)
     return image
 

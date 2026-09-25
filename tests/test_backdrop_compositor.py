@@ -286,7 +286,9 @@ def test_glass_samples_backdrop_under_the_panel(qapp) -> None:
     shell.show()  # иначе resizeEvent не придёт и кадр будет 1×1
     qapp.processEvents()
     comp = shell.compositor
-    comp.set_theme(replace(registry.get("neon"), glass_blur=0.011))  # почти без размытия
+    comp.set_theme(
+        replace(registry.get("neon"), glass_blur=0.011)
+    )  # почти без размытия
     comp.set_look(dim=0.0, blur=0.0)
     ramp = QImage(800, 200, QImage.Format.Format_RGB32)
     fill = QPainter(ramp)
@@ -309,3 +311,47 @@ def test_glass_samples_backdrop_under_the_panel(qapp) -> None:
     for x in (10, 150, 300, 390):
         got, want = out.pixelColor(x, 50), frame.pixelColor(300 + x, 100)
         assert abs(got.lightness() - want.lightness()) < 12, (x, got, want)
+
+
+def test_glass_in_real_widget_paint_has_no_seams(qapp) -> None:
+    """То же, но через настоящую отрисовку виджета (не в QImage): у широкой
+    панели далеко от края нет шва/повтора текстуры."""
+    from PySide6.QtGui import QLinearGradient, QPainter
+
+    from quantis.ui.views.widgets.background_frame import BackgroundFrame
+    from quantis.ui.views.widgets.glass import install_glass
+
+    theme = replace(
+        registry.get("neon"), glass_blur=0.011, glass_tint="rgba(0, 0, 0, 0)"
+    )
+    shell = BackgroundFrame(theme=theme)
+    shell.resize(1000, 600)
+    comp = shell.compositor
+    comp.set_look(dim=0.0, blur=0.0)
+    ramp = QImage(1000, 600, QImage.Format.Format_RGB32)
+    fill = QPainter(ramp)
+    gradient = QLinearGradient(0, 0, 1000, 600)
+    gradient.setColorAt(0, QColor(0, 0, 0))
+    gradient.setColorAt(1, QColor(255, 255, 255))
+    fill.fillRect(ramp.rect(), gradient)
+    fill.end()
+    comp.set_mode("image")
+    comp.set_wallpaper(ramp)
+    panel = QWidget(shell.content_host())
+    panel.setObjectName("glassPanel")
+    panel.setGeometry(400, 250, 560, 330)
+    install_glass(panel, "QFrame#glassPanel")
+    shell.show()
+    qapp.processEvents()
+    shot, frame = shell.grab().toImage(), comp.frame()
+    worst = 0
+    for x in range(420, 950, 37):
+        for y in range(270, 570, 41):
+            worst = max(
+                worst,
+                abs(
+                    shot.pixelColor(x, y).lightness()
+                    - frame.pixelColor(x, y).lightness()
+                ),
+            )
+    assert worst < 16  # блик сверху чуть светлее, но не «чужой кусок» фона
