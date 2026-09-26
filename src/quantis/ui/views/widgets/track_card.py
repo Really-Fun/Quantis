@@ -15,7 +15,11 @@ from PySide6.QtWidgets import QStyle, QStyledItemDelegate
 from quantis.models import Track
 from quantis.ui.models import TrackListModel
 from quantis.ui.preferences import UiPreferences
-from quantis.ui.views.widgets.cover_art import load_track_cover, paint_rounded_cover
+from quantis.ui.views.widgets.cover_art import (
+    CoverDecoder,
+    paint_rounded_cover,
+    request_track_cover,
+)
 from quantis.ui.views.widgets.delegate_paint_kit import (
     SOURCE_LABELS,
     paint_colors,
@@ -47,6 +51,12 @@ class TrackCardDelegate(QStyledItemDelegate):
         self._prefs = UiPreferences()
         self._editorial = self._prefs.theme.card_style == "magazine"
         self._prefs.theme_changed.connect(self._on_theme_changed)
+        CoverDecoder.instance().ready.connect(self._on_cover_ready)
+
+    def _on_cover_ready(self) -> None:
+        view = self.parent()
+        if view is not None and hasattr(view, "viewport"):
+            view.viewport().update()
 
     def _on_theme_changed(self) -> None:
         self._editorial = self._prefs.theme.card_style == "magazine"
@@ -159,7 +169,7 @@ class TrackCardDelegate(QStyledItemDelegate):
             self.COVER_SIZE,
             self.COVER_SIZE,
         )
-        cover = load_track_cover(track, self.COVER_SIZE)
+        cover = request_track_cover(track, self.COVER_SIZE)
         paint_rounded_cover(
             painter,
             cover_rect,

@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 from PySide6.QtGui import QColor, QImage, QPainter
 
 from quantis.ui.views.widgets.cover_art import (
+    CoverDecoder,
     clear_cover_cache,
     load_cover_pixmap,
 )
@@ -65,3 +67,40 @@ def test_load_cover_crops_youtube_letterbox(qapp, tmp_path: Path) -> None:
     pixel = image.pixelColor(40, 40)
     assert pixel.green() > 120
     assert pixel.red() < 80
+
+
+def test_decoder_decodes_off_paint_and_signals_ready(qapp, tmp_path: Path) -> None:
+    """Списки не декодируют JPEG в paint(): сначала None, потом ready и кэш."""
+    path = tmp_path / "cover.jpg"
+    _write_banded_jpeg(path)
+    clear_cover_cache()
+    decoder = CoverDecoder.instance()
+    ready = []
+    decoder.ready.connect(lambda: ready.append(True))
+
+    assert decoder.request(path, 40) is None
+    deadline = time.monotonic() + 5
+    while not ready and time.monotonic() < deadline:
+        qapp.processEvents()
+        time.sleep(0.01)
+    assert ready
+    pixmap = decoder.request(path, 40)
+    assert pixmap is not None and pixmap.width() == 40
+    # тот же результат, что и у синхронной загрузки: целый кадр, не полоса
+    image = pixmap.toImage()
+    assert image.pixelColor(20, 5).red() > 150
+    assert image.pixelColor(20, 35).blue() > 150
+
+
+def test_decoder_missing_file_is_cached_as_none(qapp, tmp_path: Path) -> None:
+    clear_cover_cache()
+    decoder = CoverDecoder.instance()
+    missing = tmp_path / "nope.jpg"
+    assert decoder.request(missing, 40) is None
+    deadline = time.monotonic() + 5
+    while decoder._pending and time.monotonic() < deadline:
+        qapp.processEvents()
+        time.sleep(0.01)
+    assert not decoder._pending
+    assert decoder.request(missing, 40) is None
+    assert not decoder._pending  # второй раз — из кэша, без новой задачи

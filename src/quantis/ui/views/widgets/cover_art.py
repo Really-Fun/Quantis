@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections import OrderedDict
 from pathlib import Path
 
-from PySide6.QtCore import QSize, Qt
+from PySide6.QtCore import QObject, QRunnable, QSize, Qt, QThreadPool, QTimer, Signal
 from PySide6.QtGui import (
     QColor,
     QFont,
@@ -113,54 +113,122 @@ def _crop_letterbox(image: QImage) -> QImage:
     return image.copy(0, bar, width, inner)
 
 
-def _square_pixmap(pixmap: QPixmap, size: int) -> QPixmap:
-    if pixmap.width() == size and pixmap.height() == size:
-        return pixmap
-    pixmap = pixmap.scaled(
-        size,
-        size,
-        Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-        Qt.TransformationMode.SmoothTransformation,
-    )
-    if pixmap.width() > size or pixmap.height() > size:
-        x = max(0, (pixmap.width() - size) // 2)
-        y = max(0, (pixmap.height() - size) // 2)
-        pixmap = pixmap.copy(x, y, size, size)
-    return pixmap
+def _cover_key(file_path: Path, size: int) -> str:
+    return f"{file_path.resolve() if file_path.exists() else file_path}|{size}"
 
 
-def load_cover_pixmap(path: str | Path | None, size: int) -> QPixmap | None:
-    """Декодирует обложку целиком, затем режет в квадрат по центру."""
-    if not path:
+def _decode_cover(file_path: Path, size: int) -> QImage | None:
+    """Декодирует обложку целиком и режет в квадрат по центру. Без QPixmap —
+    можно звать из пула потоков."""
+    if not file_path.is_file() or not cover_file_ok(file_path):
         return None
-    file_path = Path(path)
-    cache_key = f"{file_path.resolve() if file_path.exists() else file_path}|{size}"
-    cached = _cache_get(cache_key)
-    if cached is not _MISSING:
-        return cached  # type: ignore[return-value]
-
-    if not file_path.is_file():
-        return _cache_put(cache_key, None)
-    if file_path.suffix.lower() != ".svg" and not cover_file_ok(file_path):
-        return _cache_put(cache_key, None)
-
-    if file_path.suffix.lower() == ".svg":
-        pixmap = QIcon(str(file_path)).pixmap(QSize(size, size))
-        return _cache_put(cache_key, None if pixmap.isNull() else pixmap)
-
     reader = QImageReader(str(file_path))
     reader.setAutoTransform(True)
     # setScaledSize на JPEG в Qt часто работает как clip с (0,0) — в UI
     # остаётся только верхняя полоса обложки. Файлы обложек маленькие.
     image = reader.read()
     if image.isNull():
-        return _cache_put(cache_key, None)
-
+        return None
     image = _crop_letterbox(image)
     if image.format() != QImage.Format.Format_RGB32:
         image = image.convertToFormat(QImage.Format.Format_RGB32)
-    pixmap = _square_pixmap(QPixmap.fromImage(image), size)
-    return _cache_put(cache_key, pixmap)
+    if image.width() != size or image.height() != size:
+        image = image.scaled(
+            size,
+            size,
+            Qt.AspectRatioMode.KeepAspectRatioByExpanding,
+            Qt.TransformationMode.SmoothTransformation,
+        )
+        x = max(0, (image.width() - size) // 2)
+        y = max(0, (image.height() - size) // 2)
+        image = image.copy(x, y, size, size)
+    return image
+
+
+def load_cover_pixmap(path: str | Path | None, size: int) -> QPixmap | None:
+    """Обложка квадратом ``size`` (декодирует сразу, в вызывающем потоке)."""
+    if not path:
+        return None
+    file_path = Path(path)
+    cache_key = _cover_key(file_path, size)
+    cached = _cache_get(cache_key)
+    if cached is not _MISSING:
+        return cached  # type: ignore[return-value]
+    if file_path.suffix.lower() == ".svg":
+        return _cache_put(cache_key, _svg_pixmap(file_path, size))
+    image = _decode_cover(file_path, size)
+    return _cache_put(cache_key, None if image is None else QPixmap.fromImage(image))
+
+
+def _svg_pixmap(file_path: Path, size: int) -> QPixmap | None:
+    if not file_path.is_file():
+        return None
+    pixmap = QIcon(str(file_path)).pixmap(QSize(size, size))
+    return None if pixmap.isNull() else pixmap
+
+
+class _DecodeJob(QRunnable):
+    def __init__(self, decoder: CoverDecoder, key: str, path: Path, size: int) -> None:
+        super().__init__()
+        self._decoder, self._key, self._path, self._size = decoder, key, path, size
+
+    def run(self) -> None:
+        try:
+            image = _decode_cover(self._path, self._size)
+        except Exception:
+            image = None
+        self._decoder._decoded.emit(self._key, image if image is not None else QImage())
+
+
+class CoverDecoder(QObject):
+    """Обложки для списков: декодируются в пуле потоков, а не в paint().
+    Пока обложки нет, делегат рисует заглушку; ``ready`` — пора перерисовать."""
+
+    ready = Signal()
+    _decoded = Signal(str, QImage)
+    _instance: CoverDecoder | None = None
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._pending: set[str] = set()
+        self._pool = QThreadPool(self)
+        self._pool.setMaxThreadCount(2)
+        self._decoded.connect(self._on_decoded)
+        self._notify = QTimer(self)  # пачка обложек → одна перерисовка
+        self._notify.setSingleShot(True)
+        self._notify.setInterval(16)
+        self._notify.timeout.connect(self.ready.emit)
+
+    @classmethod
+    def instance(cls) -> CoverDecoder:
+        if cls._instance is None:
+            cls._instance = CoverDecoder()
+        return cls._instance
+
+    def request(self, path: str | Path | None, size: int) -> QPixmap | None:
+        """Из кэша; если обложки там нет — None и декодирование в фоне."""
+        if not path:
+            return None
+        file_path = Path(path)
+        key = _cover_key(file_path, size)
+        cached = _cache_get(key)
+        if cached is not _MISSING:
+            return cached  # type: ignore[return-value]
+        if file_path.suffix.lower() == ".svg":
+            return _cache_put(key, _svg_pixmap(file_path, size))
+        if key not in self._pending:
+            self._pending.add(key)
+            self._pool.start(_DecodeJob(self, key, file_path, size))
+        return None
+
+    def _on_decoded(self, key: str, image: QImage) -> None:
+        self._pending.discard(key)
+        _cache_put(key, None if image.isNull() else QPixmap.fromImage(image))
+        self._notify.start()
+
+
+def request_track_cover(track: Track, size: int) -> QPixmap | None:
+    return CoverDecoder.instance().request(track_cover_file(track), size)
 
 
 def load_track_cover(track: Track, size: int) -> QPixmap | None:

@@ -7,7 +7,11 @@ from PySide6.QtWidgets import QStyle, QStyledItemDelegate
 from quantis.models.track import Track
 from quantis.ui.models import TrackListModel
 from quantis.ui.preferences import UiPreferences
-from quantis.ui.views.widgets.cover_art import load_track_cover, paint_rounded_cover
+from quantis.ui.views.widgets.cover_art import (
+    CoverDecoder,
+    paint_rounded_cover,
+    request_track_cover,
+)
 from quantis.ui.views.widgets.delegate_paint_kit import (
     SOURCE_LABELS,
     paint_colors,
@@ -23,7 +27,13 @@ class PlaylistTrackDelegate(QStyledItemDelegate):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self._prefs = UiPreferences()
+        CoverDecoder.instance().ready.connect(self._on_cover_ready)
         self._prefs.theme_changed.connect(self._on_theme_changed)
+
+    def _on_cover_ready(self) -> None:
+        view = self.parent()
+        if view is not None and hasattr(view, "viewport"):
+            view.viewport().update()
 
     def _on_theme_changed(self) -> None:
         parent = self.parent()
@@ -40,7 +50,7 @@ class PlaylistTrackDelegate(QStyledItemDelegate):
         return QSize(width, self.ROW_HEIGHT)
 
     def _cover_pixmap(self, track: Track):
-        return load_track_cover(track, self.COVER_SIZE)
+        return request_track_cover(track, self.COVER_SIZE)
 
     def paint(self, painter: QPainter, option, index) -> None:
         track = index.data(TrackListModel.TrackRole)

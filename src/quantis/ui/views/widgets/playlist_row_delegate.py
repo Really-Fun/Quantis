@@ -9,7 +9,7 @@ from PySide6.QtWidgets import QStyle, QStyledItemDelegate
 from quantis.models.playlist import Playlist
 from quantis.ui.models.playlist_list_model import PlaylistListModel
 from quantis.ui.preferences import UiPreferences
-from quantis.ui.views.widgets.cover_art import load_cover_pixmap, playlist_cover_path
+from quantis.ui.views.widgets.cover_art import CoverDecoder, playlist_cover_path
 from quantis.ui.views.widgets.delegate_paint_kit import (
     paint_colors,
     paint_fonts,
@@ -24,7 +24,13 @@ class PlaylistRowDelegate(QStyledItemDelegate):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self._prefs = UiPreferences()
+        CoverDecoder.instance().ready.connect(self._on_cover_ready)
         self._prefs.theme_changed.connect(self._on_theme_changed)
+
+    def _on_cover_ready(self) -> None:
+        view = self.parent()
+        if view is not None and hasattr(view, "viewport"):
+            view.viewport().update()
 
     def _on_theme_changed(self) -> None:
         parent = self.parent()
@@ -68,7 +74,9 @@ class PlaylistRowDelegate(QStyledItemDelegate):
             self.COVER_SIZE,
             self.COVER_SIZE,
         )
-        pixmap = load_cover_pixmap(playlist_cover_path(playlist), self.COVER_SIZE)
+        pixmap = CoverDecoder.instance().request(
+            playlist_cover_path(playlist), self.COVER_SIZE
+        )
         painter.save()
         clip = QPainterPath()
         clip.addRoundedRect(cover, 8, 8)
