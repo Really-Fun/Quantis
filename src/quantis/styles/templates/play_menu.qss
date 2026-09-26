@@ -16,10 +16,6 @@ QWidget#playerRight {
     background: transparent;
 }
 
-#controlButton[liked="true"] {
-    background: rgba(255, 77, 109, 0.18);
-}
-
 #repeatButton[repeatMode="track"] {
     background: rgba(${tint_rgb}, 0.2);
 }
