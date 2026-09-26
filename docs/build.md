@@ -51,6 +51,40 @@ poetry run python packaging/scripts/build_exe.py vlc --vlc-home "C:\Program File
 В сборку **Quantis-VLC** дополнительно копируются `libvlc.dll` и `plugins/`
 из `VLC_HOME`.
 
+### Что попадает в сборку
+
+Qt кладут штатные хуки PyInstaller: только импортированные модули (QtCore,
+QtGui, QtWidgets, QtMultimedia) и плагины к ним. `collect_all("PySide6")` не
+используем — он тащил весь Qt (QML-инструменты, 3D, WebEngine, Designer…):
+на Linux сборка была 840 МБ, стала ~300 МБ. Quick/Qml остаются — от них
+зависит плагин FFmpeg из Qt Multimedia, то есть звук. Виртуальная клавиатура
+и PDF-плагин картинок вырезаются фильтром в `main.spec`.
+
+### Проверка сборки
+
+Скрипт запускает собранное приложение с плагином-проверкой
+([packaging/smoke/plugin.py](../packaging/smoke/plugin.py)), который исполняется
+Python-ом самого exe: проигрывает mp3/m4a/webm через FFmpeg, рисует SVG-иконку,
+грузит темы и стили, проверяет импорты, экстракторы yt-dlp и сертификаты.
+Данные — во временной папке. Итог — `PASS` или список `FAIL`.
+
+```powershell
+# Закройте Quantis: настройки на Windows общие (реестр), скрипт на время
+# включает плагин-проверку и потом возвращает значение как было.
+.\packaging\scripts\smoke_bundle.ps1                  # dist\Quantis\Quantis.exe
+.\packaging\scripts\smoke_bundle.ps1 -Media D:\Music  # где взять mp3/m4a/webm
+
+# Установщик: тихая установка во временный каталог → проверка → удаление.
+# Только на машине без установленного Quantis (тот же AppId) — скрипт проверит.
+.\packaging\scripts\smoke_bundle.ps1 -Installer .\dist\installer\Quantis-<версия>-setup.exe
+```
+
+```bash
+packaging/scripts/smoke_bundle.sh                        # Linux: dist/Quantis/Quantis
+```
+
+По умолчанию аудио берётся из `music/` в корне проекта.
+
 ### VERSIONINFO (Windows)
 
 При сборке `packaging/pyinstaller/main.spec` пишет
@@ -136,7 +170,8 @@ poetry run python packaging/scripts/build_installer.py --backend vlc
 при установке «только для меня» — тогда UAC не появляется).
 
 При удалении установщик чистит кэш и спрашивает, удалять ли данные
-пользователя. Скачанная музыка не удаляется никогда.
+пользователя (по умолчанию — «Нет»; тихое удаление `/VERYSILENT` данные не
+трогает). Скачанная музыка не удаляется никогда.
 
 ## Каталоги данных
 
