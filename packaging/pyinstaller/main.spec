@@ -159,14 +159,9 @@ if (SITE / "ytmusicapi").is_dir():
     except Exception:
         pass
 
-for pkg in ("PySide6", "shiboken6", "yt_dlp", "certifi"):
-    try:
-        pkg_datas, pkg_binaries, pkg_hidden = collect_all(pkg)
-        datas += pkg_datas
-        binaries += pkg_binaries
-        hiddenimports += pkg_hidden
-    except Exception:
-        pass
+# PySide6, yt-dlp и certifi собирают свои хуки PyInstaller: у Qt — только
+# импортированные модули и их плагины. collect_all("PySide6") тащил весь Qt
+# (QML, Quick, 3D, WebEngine, Designer…) — ~580 МБ, которые приложение не грузит.
 
 if sys.platform == "win32":
     for pkg in (
@@ -204,9 +199,6 @@ hiddenimports += [
     "PySide6.QtGui",
     "PySide6.QtWidgets",
     "PySide6.QtMultimedia",
-    "PySide6.QtMultimediaWidgets",
-    "PySide6.QtNetwork",
-    "PySide6.QtSvg",
 ]
 
 excludes = [
@@ -300,6 +292,22 @@ a = Analysis(
     noarchive=False,
     optimize=0,
 )
+
+# Хуки Qt кладут все плагины категории. Виртуальная клавиатура (тянет свой
+# QML-модуль) и PDF как формат картинок приложению не нужны. Quick/Qml
+# оставляем: от них зависит плагин FFmpeg из Qt Multimedia, то есть звук.
+_DROP_QT = ("qtvirtualkeyboardplugin", "Qt6VirtualKeyboard", "qpdf", "Qt6Pdf")
+
+
+def _needed(entry) -> bool:
+    name = os.path.basename(entry[0])
+    return not any(part in name for part in _DROP_QT)
+
+
+_before = len(a.binaries)
+a.binaries = [b for b in a.binaries if _needed(b)]
+a.datas = [d for d in a.datas if _needed(d)]
+print(f"[Quantis] dropped {_before - len(a.binaries)} unused Qt binaries")
 
 pyz = PYZ(a.pure)
 
