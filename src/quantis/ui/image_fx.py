@@ -49,7 +49,9 @@ def mean_luma(image: QImage) -> float:
     """Средняя яркость 0..1 по сетке 8×8."""
     if image.isNull():
         return 0.0
-    small = image.scaled(8, 8, _IGNORE, _SMOOTH)
+    # сначала грубо (дёшево), потом сгладить: полный кадр сразу в 8×8 — ~1 мс
+    small = image.scaled(64, 64, _IGNORE, Qt.TransformationMode.FastTransformation)
+    small = small.scaled(8, 8, _IGNORE, _SMOOTH)
     total = 0.0
     for y in range(8):
         for x in range(8):

@@ -71,6 +71,8 @@ class UiPreferences(QObject):
             return
         super().__init__()
         self._settings = QSettings("ReallyFun", "Quantis")
+        # тему читают из paintEvent — QSettings на каждый кадр дорого
+        self._ui_theme: str | None = None
         self._initialized = True
 
     def _emit(self, signal: SignalInstance) -> None:
@@ -114,8 +116,10 @@ class UiPreferences(QObject):
 
     @property
     def ui_theme(self) -> str:
-        raw = self._settings.value(self._KEY_UI_THEME, registry.DEFAULT_ID)
-        return normalize_ui_theme(str(raw) if raw is not None else None)
+        if self._ui_theme is None:
+            raw = self._settings.value(self._KEY_UI_THEME, registry.DEFAULT_ID)
+            self._ui_theme = normalize_ui_theme(str(raw) if raw is not None else None)
+        return self._ui_theme
 
     @property
     def theme(self) -> ThemeSpec:
@@ -127,6 +131,7 @@ class UiPreferences(QObject):
         if self.ui_theme == theme_id:
             return
         self._settings.setValue(self._KEY_UI_THEME, theme_id)
+        self._ui_theme = theme_id
         self._emit(self.theme_changed)
 
     @property

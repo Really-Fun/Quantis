@@ -118,8 +118,16 @@ class Spectrum(QWidget):
         self.update()
 
     def paintEvent(self, event: QPaintEvent) -> None:
+        # кадры фона перерисовывают спектр и между его тиками — берём из кэша
+        key = (self.t, self._palette.accent.rgba(), self._palette.accent2.rgba())
+        pixmap = cached(
+            self, "_pm", key, self.size(), self.devicePixelRatioF(), self._paint_bars
+        )
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.drawPixmap(0, 0, pixmap)
+        painter.end()
+
+    def _paint_bars(self, painter: QPainter) -> None:
         painter.setPen(Qt.PenStyle.NoPen)
         w, h = self.width(), self.height()
         step, bar = 7, 3.6
@@ -149,7 +157,6 @@ class Spectrum(QWidget):
             painter.drawRoundedRect(
                 QRectF(x, base + 3, bar, bh * 0.3), bar / 2, bar / 2
             )
-        painter.end()
 
 
 class SourceChip(QWidget):

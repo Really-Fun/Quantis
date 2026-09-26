@@ -4,7 +4,7 @@ import math
 import random
 
 from PySide6.QtCore import QRectF, Qt
-from PySide6.QtGui import QBrush, QLinearGradient, QPainter, QPaintEvent
+from PySide6.QtGui import QBrush, QLinearGradient, QPainter, QPaintEvent, QPixmap
 from PySide6.QtWidgets import QSlider, QStyle, QStyleOptionSlider, QWidget
 
 from quantis.ui.cover_accent import CoverPalette
@@ -33,6 +33,8 @@ class WaveformSeekSlider(QSlider):
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self._palette = LivePalette.instance().current
         self._peaks: list[float] = []
+        self._cache = QPixmap()
+        self._cache_key: tuple | None = None
         self._prefs = UiPreferences()
         self._prefs.theme_changed.connect(self._on_theme)
         self._on_theme()
@@ -78,13 +80,44 @@ class WaveformSeekSlider(QSlider):
         )
         if groove.width() <= 0:
             groove = self.rect()
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        painter.setPen(Qt.PenStyle.NoPen)
         span = max(1, self.maximum() - self.minimum())
         progress = (self.value() - self.minimum()) / span if self.maximum() > 0 else 0.0
-        left, width, h = groove.left(), groove.width(), self.height()
-        head = left + width * progress
+        left, width = groove.left(), groove.width()
+        dpr = self.devicePixelRatioF()
+        head = round((left + width * progress) * dpr) / dpr
+        # Кадры фона перерисовывают ползунок 30 раз в секунду, а позиция
+        # меняется реже — ~140 полосок рисуем, только когда сдвинулась голова.
+        key = (
+            self.width(),
+            self.height(),
+            dpr,
+            left,
+            width,
+            head,
+            id(self._peaks),
+            self._palette.accent.rgba(),
+            self._palette.accent2.rgba(),
+            self._rest.rgba(),
+            self._handle.rgba(),
+        )
+        if self._cache_key != key:
+            pixmap = QPixmap(round(self.width() * dpr), round(self.height() * dpr))
+            pixmap.setDevicePixelRatio(dpr)
+            pixmap.fill(Qt.GlobalColor.transparent)
+            painter = QPainter(pixmap)
+            self._paint_bars(painter, left, width, head)
+            painter.end()
+            self._cache, self._cache_key = pixmap, key
+        painter = QPainter(self)
+        painter.drawPixmap(0, 0, self._cache)
+        painter.end()
+
+    def _paint_bars(
+        self, painter: QPainter, left: int, width: int, head: float
+    ) -> None:
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+        h = self.height()
         gradient = QLinearGradient(left, 0, max(left + 1.0, head), 0)
         gradient.setColorAt(0, self._palette.accent2)
         gradient.setColorAt(1, self._palette.accent)
@@ -100,4 +133,3 @@ class WaveformSeekSlider(QSlider):
             )
         painter.setBrush(self._handle)
         painter.drawRoundedRect(QRectF(head - 1, 0, 2, h), 1, 1)
-        painter.end()
