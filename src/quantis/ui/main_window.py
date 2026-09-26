@@ -322,7 +322,6 @@ class QuantisMainWindow(QMainWindow):
         app = QApplication.instance()
         if app is not None:
             app.applicationStateChanged.connect(self._on_app_state_changed)
-            app.installEventFilter(self)
             app.focusChanged.connect(self._sync_shortcut_enabled)
         self._install_shortcuts()
         self._refresh_eco_state()
@@ -340,6 +339,24 @@ class QuantisMainWindow(QMainWindow):
 
         QTimer.singleShot(0, lambda: self._home_vm.request_load(self._bridge))
         QTimer.singleShot(0, self._maybe_check_for_update)
+        # Первый заход на страницу — создание и полировка стилей (20–40 мс,
+        # заметный рывок). Создаём их заранее, по одной, пока окно простаивает.
+        self._prewarm_queue = [
+            self._ensure_search_page,
+            self._ensure_library_page,
+            self._ensure_stats_page,
+            self._ensure_settings_page,
+        ]
+        QTimer.singleShot(3000, self._prewarm_next_page)
+
+    def _prewarm_next_page(self) -> None:
+        if not self._prewarm_queue:
+            return
+        self._prewarm_queue.pop(0)()
+        if self._prewarm_queue:
+            from PySide6.QtCore import QTimer
+
+            QTimer.singleShot(400, self._prewarm_next_page)
 
     def _on_app_state_changed(self, state) -> None:
         self._refresh_eco_state()
@@ -377,6 +394,14 @@ class QuantisMainWindow(QMainWindow):
         if self._chrome_hidden == hidden:
             return
         self._chrome_hidden = hidden
+        # Клик «вернуть интерфейс» ловится фильтром на всём приложении — ставим
+        # его только на время режима: иначе через Python идёт каждое событие.
+        app = QApplication.instance()
+        if app is not None:
+            if hidden:
+                app.installEventFilter(self)
+            else:
+                app.removeEventFilter(self)
         self._nav.setVisible(not hidden)
         self._content_host.setVisible(not hidden)
         if hidden:
@@ -696,6 +721,11 @@ class QuantisMainWindow(QMainWindow):
         anim.setDuration(180)
         anim.setStartValue(0.0)
         anim.setEndValue(1.0)
+        # Эффект рисует страницу через отдельный буфер — после появления он
+        # не нужен, а висящий на странице лишь мешает частичной перерисовке.
+        anim.finished.connect(
+            lambda p=page, e=effect: p.graphicsEffect() is e and p.setGraphicsEffect(None)
+        )
         anim.start()
         page._quantis_fade = anim  # type: ignore[attr-defined]
 
