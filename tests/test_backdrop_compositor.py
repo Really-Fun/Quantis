@@ -57,7 +57,8 @@ def test_cinematic_keeps_video_inside_content(qapp) -> None:
     comp.set_content_rect(QRect(0, 20, 200, 80))
     comp.set_cinematic(True)
     frame = comp.frame()
-    assert frame.pixelColor(100, 5) == QColor(0, 0, 0)  # шапка — чёрная
+    header = frame.pixelColor(100, 5).lightness()
+    assert 40 < header < frame.pixelColor(100, 50).lightness()  # тот же клип, темнее
     assert frame.pixelColor(100, 50).lightness() > 150  # контент — видео
 
 

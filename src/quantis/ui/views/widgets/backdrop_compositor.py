@@ -270,9 +270,19 @@ class BackdropCompositor(QObject):
         rect = QRect(QPoint(0, 0), self._size)
         if self._cinematic:
             painter.fillRect(rect, QColor(0, 0, 0))
-            if self.has_video_frame() and not self._content.isEmpty():
-                self._paint_video(painter, self._content)
-                _paint_cinematic_dim(painter, self._content)
+            if self.has_video_frame():
+                # один клип на всё окно — шапка без шва, только затемнена
+                self._paint_video(painter, rect)
+                _paint_cinematic_dim(painter, rect, header=self._content.top())
+            elif not self._content.isEmpty() and self._content.top() > 0:
+                # клипа нет — в шапке тот же фон, что и с интерфейсом
+                painter.save()
+                painter.setClipRect(
+                    QRect(rect.left(), rect.top(), rect.width(), self._content.top())
+                )
+                painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+                painter.drawImage(rect, self._layer())
+                painter.restore()
             painter.end()
             return image
 
@@ -531,8 +541,15 @@ def _with_alpha(color: QColor, alpha: float) -> QColor:
     return out
 
 
-def _paint_cinematic_dim(painter: QPainter, rect: QRect) -> None:
+def _paint_cinematic_dim(painter: QPainter, rect: QRect, *, header: int = 0) -> None:
     painter.fillRect(rect, QColor(0, 0, 0, 28))
+    if header > 0:
+        # затемнение под шапкой плавно сходит на нет ниже неё — без края
+        top = QLinearGradient(0, rect.top(), 0, rect.top() + header * 2.5)
+        top.setColorAt(0.0, QColor(0, 0, 0, 150))
+        top.setColorAt(0.4, QColor(0, 0, 0, 90))
+        top.setColorAt(1.0, QColor(0, 0, 0, 0))
+        painter.fillRect(rect, top)
     vignette = QRadialGradient(rect.center(), max(rect.width(), rect.height()) * 0.74)
     vignette.setColorAt(0.0, QColor(0, 0, 0, 0))
     vignette.setColorAt(0.42, QColor(0, 0, 0, 18))
