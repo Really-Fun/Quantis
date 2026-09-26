@@ -49,6 +49,7 @@ QFrame#appHeader {
 }
 
 #controlButton,
+#controlButton[compact="true"],
 #seekSlider::groove:horizontal,
 #volSlider::groove:horizontal,
 #seekSlider::handle:horizontal,

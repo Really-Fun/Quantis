@@ -12,6 +12,10 @@ QWidget#playerRight {
     color: ${on_tint};
 }
 
+#controlButton[compact="true"] {
+    border-radius: 16px;
+}
+
 #PlayMenu QLabel {
     background: transparent;
 }

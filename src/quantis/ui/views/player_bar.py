@@ -302,6 +302,7 @@ class PlayerBar(QFrame):
             btn = QToolButton()
             btn.setObjectName("controlButton")
             btn.setProperty("plugin", True)
+            btn.setProperty("compact", True)
             btn.setIcon(action.icon or resources.load_icon("puzzle.svg"))
             btn.setIconSize(QSize(16, 16))
             btn.setToolTip(action.tooltip + " · плагин")
@@ -324,6 +325,7 @@ class PlayerBar(QFrame):
         button = QToolButton()
         button.setObjectName(object_name)
         button.setProperty("accent", accent)
+        button.setProperty("compact", size <= 32)  # скругление 16 px — круг
         button.setToolButtonStyle(Qt.ToolButtonStyle.ToolButtonIconOnly)
         button.setAutoRaise(True)
         button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
