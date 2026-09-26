@@ -95,10 +95,12 @@ begin
     DataDir := ExpandConstant('{localappdata}\Quantis');
     if DirExists(DataDir) then
     begin
-      if MsgBox('Удалить данные Quantis (история, плейлисты, токены, плагины)?' + #13#10 +
+      // Тихое удаление (/SILENT, /VERYSILENT /SUPPRESSMSGBOXES) данные не
+      // трогает: ответ по умолчанию — «Нет», и кнопка «Нет» — по умолчанию.
+      if SuppressibleMsgBox('Удалить данные Quantis (история, плейлисты, токены, плагины)?' + #13#10 +
                 DataDir + #13#10#13#10 +
                 'Скачанная музыка останется на месте.',
-                mbConfirmation, MB_YESNO) = IDYES then
+                mbConfirmation, MB_YESNO or MB_DEFBUTTON2, IDNO) = IDYES then
         DelTree(DataDir, True, True, True);
     end;
   end;
