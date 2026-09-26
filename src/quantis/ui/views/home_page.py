@@ -4,10 +4,11 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QFrame,
-    QHBoxLayout,
+    QGridLayout,
     QHeaderView,
     QLabel,
     QScrollArea,
+    QStyle,
     QTableView,
     QToolButton,
     QVBoxLayout,
@@ -36,8 +37,13 @@ from quantis.ui.views.widgets.playlist_card import PlaylistShelf, QuickPickShelf
 from quantis.ui.views.widgets.track_card import TrackCardDelegate
 
 _MAX_VISIBLE_TRACKS = 12
-_UP_NEXT_FROM = 900
-"""Уже этого — панель «Дальше» прячем, сцене нужно место."""
+_SIDE_MARGIN = 28
+_STAGE_GAP = 24
+_STAGE_TEXT_MIN = 240
+"""Колонка названия трека — уже этого сцена не сжимается."""
+_STAGE_SHARE = 0.5
+"""Сцена — не выше половины страницы: под ней должны быть видны полки."""
+_UP_NEXT_BESIDE_ROWS = 3
 
 
 class HomePage(QWidget):
@@ -75,24 +81,26 @@ class HomePage(QWidget):
         content = QWidget()
         content.setObjectName("homeScrollContent")
         self._layout = QVBoxLayout(content)
-        self._layout.setContentsMargins(28, 20, 28, 40)
+        self._layout.setContentsMargins(_SIDE_MARGIN, 20, _SIDE_MARGIN, 40)
         self._layout.setSpacing(26)
 
         # Сцена «Сейчас играет» и «Дальше». «Продолжить слушать» — состояние
         # сцены, «Моя волна» — первая плитка быстрого доступа.
         self._now_track: Track | None = None
         self._playing = False
-        stage_row = QHBoxLayout()
-        stage_row.setSpacing(28)
+        # «Дальше» справа от сцены, а на узком окне — под ней (_relayout_stage)
+        stage_row = QGridLayout()
+        stage_row.setSpacing(_STAGE_GAP)
+        self._stage_row = stage_row
+        self._up_next_below: bool | None = None
         self._stage = NowPlayingStage()
         self._stage.resume_requested.connect(lambda: self._on_featured_play(0))
         self._stage.wave_requested.connect(self._on_wave_play)
         self._stage.search_requested.connect(self.search_requested.emit)
-        stage_row.addWidget(self._stage, 1)
+        stage_row.addWidget(self._stage, 0, 0, Qt.AlignmentFlag.AlignTop)
         self._up_next = UpNextPanel()
         self._up_next.track_activated.connect(self.up_next_activated.emit)
         self._up_next.queue_requested.connect(self.queue_requested.emit)
-        stage_row.addWidget(self._up_next, 0, Qt.AlignmentFlag.AlignTop)
         self._layout.addLayout(stage_row)
 
         self._quick_section = HomeSection("Быстрый доступ")
@@ -159,6 +167,7 @@ class HomePage(QWidget):
         self._layout.addStretch(1)
         scroll.setWidget(content)
         outer.addWidget(scroll)
+        self._scroll = scroll
 
         self._vm.home_changed.connect(self._rebuild)
         self._vm.recent_changed.connect(self._on_recent_changed)
@@ -262,6 +271,7 @@ class HomePage(QWidget):
 
     def set_up_next(self, items: list[UpNextItem]) -> None:
         self._up_next.set_items(items)
+        self._relayout_stage()
 
     def set_eco(self, enabled: bool) -> None:
         self._stage.set_eco(enabled)
@@ -285,7 +295,51 @@ class HomePage(QWidget):
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
-        self._up_next.setVisible(self.width() >= _UP_NEXT_FROM)
+        self._relayout_stage()
+
+    def _relayout_stage(self) -> None:
+        """Размер сцены и место «Дальше» — от ширины и высоты страницы.
+
+        На Windows со 125–150 % окно в логических пикселях маленькое
+        (1920×1080 при 150 % — 1280×720): сцена ужимается, пока колонке текста
+        хватает места, дальше «Дальше» уходит под сцену."""
+        bar = self.style().pixelMetric(QStyle.PixelMetric.PM_ScrollBarExtent)
+        width = self.width() - 2 * _SIDE_MARGIN - bar
+        stage = NowPlayingStage
+        per_cover = (stage.COVER + stage.OUT + 40) / stage.COVER
+        by_height = int(self.height() * _STAGE_SHARE) - stage.height_for(0)
+        panel_w = max(UpNextPanel.MIN_W, min(UpNextPanel.W, int(width * 0.28)))
+        stage_min = stage.MIN_COVER * per_cover + _STAGE_TEXT_MIN
+        below = width - panel_w - _STAGE_GAP < stage_min
+        stage_w = width if below else width - panel_w - _STAGE_GAP
+        by_width = int((stage_w - _STAGE_TEXT_MIN) / per_cover)
+        self._stage.set_cover_size(min(by_width, by_height))
+
+        count = len(self._up_next.items())
+        # под сценой пустая очередь только отнимает высоту
+        self._up_next.setVisible(not below or count > 0)
+        if below:
+            self._up_next.setMinimumWidth(0)
+            self._up_next.setMaximumWidth(16777215)
+            cols = 2 if width >= 560 else 1
+            rows = max(1, -(-min(4, count) // cols))
+            self._up_next.setFixedHeight(UpNextPanel.height_for(rows))
+        else:
+            rows = min(_UP_NEXT_BESIDE_ROWS, max(1, count))
+            self._up_next.setFixedSize(
+                panel_w,
+                max(self._stage.height(), UpNextPanel.height_for(rows)),
+            )
+        if below == self._up_next_below:
+            return
+        self._up_next_below = below
+        self._stage_row.removeWidget(self._up_next)
+        if below:
+            self._stage_row.addWidget(self._up_next, 1, 0)
+        else:
+            self._stage_row.addWidget(self._up_next, 0, 1, Qt.AlignmentFlag.AlignTop)
+        self._stage_row.setColumnStretch(0, 1)
+        self._stage_row.setColumnStretch(1, 0)
 
     def _on_playlist(self, playlist: Playlist) -> None:
         if getattr(playlist, "kind", None) == "wave":

@@ -44,6 +44,11 @@ class ElidedLabel(QLabel):
         self._full = text
         self._refresh()
 
+    def set_max_lines(self, max_lines: int) -> None:
+        if max_lines != self._max_lines:
+            self._max_lines = max_lines
+            self._refresh()
+
     def fullText(self) -> str:  # noqa: N802
         return self._full
 

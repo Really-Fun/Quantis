@@ -41,6 +41,7 @@ from PySide6.QtWidgets import (
     QLabel,
     QPushButton,
     QSizePolicy,
+    QSpacerItem,
     QVBoxLayout,
     QWidget,
 )
@@ -214,9 +215,15 @@ class SourceChip(QWidget):
 
 
 class NowPlayingStage(QWidget):
-    """Сцена вверху главной."""
+    """Сцена вверху главной. Размер задаёт главная (``set_cover_size``): от
+    обложки считаются высота, пластинка и отступ текста — на маленьком окне
+    (Windows 150 %) сцена ужимается, а не выталкивает «Дальше» за край."""
 
     H, COVER, OUT = 316, 292, 122
+    """Полный размер; ``H - COVER`` — поля сверху и снизу."""
+    MIN_COVER = 200
+    COMPACT_BELOW = 250
+    """Обложка меньше — заголовок мельче (qss ``[compact="true"]``)."""
     resume_requested = Signal()
     wave_requested = Signal()
     search_requested = Signal()
@@ -224,7 +231,9 @@ class NowPlayingStage(QWidget):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setObjectName("nowPlayingStage")
-        self.setFixedHeight(self.H)
+        self._cover_px, self._out, self._h = self.COVER, self.OUT, self.H
+        self._compact = False
+        self.setFixedHeight(self._h)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self._track: Track | None = None
         self._mode: StageMode = "empty"
@@ -241,25 +250,30 @@ class NowPlayingStage(QWidget):
         self._timer.timeout.connect(self._tick)
 
         row = QHBoxLayout(self)
-        row.setContentsMargins(self.COVER + self.OUT + 40, 6, 0, 0)
+        self._row = row
+        row.setContentsMargins(self._text_left(), 6, 0, 0)
         col = QVBoxLayout()
         col.setSpacing(0)
         self._kicker = QLabel()
         self._kicker.setObjectName("stageKicker")
+        # длинный текст режется, а не раздвигает сцену шире окна
+        self._kicker.setSizePolicy(
+            QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
+        )
         col.addWidget(self._kicker)
-        col.addSpacing(8)
+        self._gaps = [self._gap(col, 8)]
         self._title = ElidedLabel(max_lines=2)
         self._title.setObjectName("stageTitle")
         self._title.setMaximumHeight(112)
         col.addWidget(self._title)
-        col.addSpacing(8)
-        self._artist = QLabel()
+        self._gaps.append(self._gap(col, 8))
+        self._artist = ElidedLabel(max_lines=2)
         self._artist.setObjectName("stageArtist")
         col.addWidget(self._artist)
         col.addStretch(1)
         self._spectrum = Spectrum()
         col.addWidget(self._spectrum)
-        col.addSpacing(12)
+        self._gaps.append(self._gap(col, 12))
         self._chip_label = QLabel("Источник")
         self._chip_label.setObjectName("stageChipLabel")
         col.addWidget(self._chip_label)
@@ -280,6 +294,52 @@ class NowPlayingStage(QWidget):
 
         LivePalette.instance().palette_changed.connect(self._on_palette)
         self._apply_mode()
+
+    @staticmethod
+    def _gap(col: QVBoxLayout, size: int) -> tuple[QSpacerItem, int]:
+        col.addSpacing(size)
+        spacer = col.itemAt(col.count() - 1).spacerItem()
+        assert spacer is not None
+        return spacer, size
+
+    # --- размер ----------------------------------------------------------
+
+    def _text_left(self) -> int:
+        return self._cover_px + self._out + round(40 * self._cover_px / self.COVER)
+
+    @property
+    def cover_size(self) -> int:
+        return self._cover_px
+
+    @classmethod
+    def height_for(cls, cover: int) -> int:
+        return cover + cls.H - cls.COVER
+
+    def set_cover_size(self, cover: int) -> None:
+        """Обложка ``cover`` px (в пределах MIN_COVER…COVER), остальное — от неё."""
+        cover = max(self.MIN_COVER, min(self.COVER, int(cover)))
+        if cover == self._cover_px:
+            return
+        self._cover_px = cover
+        self._out = round(self.OUT * cover / self.COVER)
+        self._h = self.height_for(cover)
+        self.setFixedHeight(self._h)
+        self._grooves = self._make_grooves(round(268 * cover / self.COVER))
+        self._row.setContentsMargins(self._text_left(), 6, 0, 0)
+        compact = cover < self.COMPACT_BELOW
+        self._compact = compact
+        # на низкой сцене колонке текста не хватает высоты: спектр ниже,
+        # подпись «Источник» лишняя — чип и так говорит сам за себя
+        self._spectrum.setFixedHeight(round(58 * max(0.62, self._k())))
+        self._chip_label.setVisible(self._has_track() and not compact)
+        for spacer, size in self._gaps:
+            spacer.changeSize(0, size // 2 if compact else size)
+        self._row.invalidate()
+        if self._title.property("compact") != compact:
+            self._title.setProperty("compact", compact)
+            self._title.style().unpolish(self._title)
+            self._title.style().polish(self._title)
+        self.update()
 
     def _pill(self, text: str, slot: Callable[[], None]) -> QPushButton:
         button = QPushButton(text)
@@ -303,6 +363,7 @@ class NowPlayingStage(QWidget):
         self._track, self._mode = track, mode
         if not changed:
             return
+        # грузим в полный размер: сцена может вырасти, рисуем в прямоугольник
         self._cover = load_track_cover(track, self.COVER) if track is not None else None
         self._apply_mode()
         self.update()
@@ -328,22 +389,27 @@ class NowPlayingStage(QWidget):
         if mode == "empty" or track is None:
             self._kicker.setText(self._greeting)
             self._title.setText("Выбери трек")
+            self._artist.set_max_lines(2)
             self._artist.setText("Найди что-нибудь в поиске или включи «Мою волну»")
         else:
             self._kicker.setText(
                 "Сейчас играет" if mode == "playing" else "Продолжить слушать"
             )
             self._title.setText(track.title)
+            self._artist.set_max_lines(1)  # под ним спектр — высота на счету
             self._artist.setText(track.author)
             self._chip.set_source(str(track.source))
-        has_track = mode != "empty" and track is not None
+        has_track = self._has_track()
         self._spectrum.setVisible(has_track)
-        self._chip_label.setVisible(has_track)
+        self._chip_label.setVisible(has_track and not self._compact)
         self._chip.setVisible(has_track)
         self._resume_btn.setVisible(mode == "resume")
         self._wave_btn.setVisible(mode == "empty")
         self._search_btn.setVisible(mode == "empty")
         self._sync_timer()
+
+    def _has_track(self) -> bool:
+        return self._mode != "empty" and self._track is not None
 
     def _sync_timer(self) -> None:
         run = (
@@ -382,12 +448,17 @@ class NowPlayingStage(QWidget):
     # --- рисование -------------------------------------------------------
 
     def _art_rect(self) -> QRect:
-        return QRect(0, 0, self.COVER + self.OUT + 4, self.H)
+        return QRect(0, 0, self._cover_px + self._out + 4, self._h)
+
+    def _k(self) -> float:
+        """Масштаб сцены относительно полного размера."""
+        return self._cover_px / self.COVER
 
     def _geom(self) -> tuple[QRectF, float, QPointF]:
-        cover = QRectF(0, (self.H - self.COVER) / 2, self.COVER, self.COVER)
+        c = self._cover_px
+        cover = QRectF(0, (self._h - c) / 2, c, c)
         d = self._grooves.width() / self._grooves.devicePixelRatio()
-        return cover, d, QPointF(cover.right() + self.OUT - d / 2, cover.center().y())
+        return cover, d, QPointF(cover.right() + self._out - d / 2, cover.center().y())
 
     @staticmethod
     def _make_grooves(d: int) -> QPixmap:
@@ -416,7 +487,7 @@ class NowPlayingStage(QWidget):
         return pixmap
 
     def paintEvent(self, event: QPaintEvent) -> None:
-        area = QSize(self.COVER + self.OUT + 60, self.H)
+        area = QSize(self._cover_px + self._out + 60, self._h)
         dpr = self.devicePixelRatioF()
         accent = self._palette.accent
         painter = QPainter(self)
@@ -430,14 +501,15 @@ class NowPlayingStage(QWidget):
         painter.translate(center)
         painter.rotate(self._angle)
         painter.drawPixmap(QPointF(-d / 2, -d / 2), self._grooves)
-        label = QRadialGradient(QPointF(0, 0), 46)
+        k = self._k()
+        label = QRadialGradient(QPointF(0, 0), 46 * k)
         label.setColorAt(0, self._palette.accent2)
         label.setColorAt(1, accent)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(label)
-        painter.drawEllipse(QPointF(0, 0), 44, 44)
+        painter.drawEllipse(QPointF(0, 0), 44 * k, 44 * k)
         painter.setBrush(QColor(255, 255, 255, 200))
-        painter.drawEllipse(QPointF(0, -26), 3, 3)
+        painter.drawEllipse(QPointF(0, -26 * k), 3, 3)
         painter.setBrush(qcolor(_theme().colors.bg))
         painter.drawEllipse(QPointF(0, 0), 4, 4)
         painter.restore()
@@ -449,15 +521,17 @@ class NowPlayingStage(QWidget):
 
     def _paint_back(self, painter: QPainter) -> None:
         cover, _, _ = self._geom()
-        center = QPointF(cover.center().x() + 60, cover.center().y())
-        halo = QRadialGradient(center, 150)
+        k = self._k()
+        r = 150 * k
+        center = QPointF(cover.center().x() + 60 * k, cover.center().y())
+        halo = QRadialGradient(center, r)
         accent = self._palette.accent
         halo.setColorAt(0, _alpha(accent, 110))
         halo.setColorAt(0.6, _alpha(accent, 35))
         halo.setColorAt(1, _alpha(accent, 0))
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(halo)
-        painter.drawEllipse(center, 150, 150)
+        painter.drawEllipse(center, r, r)
 
     def _paint_front(self, painter: QPainter) -> None:
         cover, d, center = self._geom()
@@ -512,7 +586,7 @@ class NowPlayingStage(QWidget):
         gradient.setColorAt(1, _alpha(palette.deep, 230))
         painter.fillPath(path, gradient)
         font = QFont(QApplication.font())
-        font.setPixelSize(96)
+        font.setPixelSize(round(96 * self._k()))
         painter.setFont(font)
         painter.setPen(QColor(255, 255, 255, 190))
         painter.drawText(cover, Qt.AlignmentFlag.AlignCenter, "♪")
@@ -544,10 +618,15 @@ def upcoming(
 
 
 class UpNextPanel(QWidget):
-    """Стеклянная панель «Дальше»: 4 трека очереди."""
+    """Стеклянная панель «Дальше»: до 4 треков очереди — сколько влезает.
 
-    W = 304
+    Размер задаёт главная: рядом со сценой — её высоты, под сценой (узкое
+    окно) — во всю ширину, треки в две колонки."""
+
+    W, MIN_W = 304, 264
     ROW = 60
+    TOP = 62
+    """Шапка «Дальше» / «Вся очередь»."""
     track_activated = Signal(int)
     """Индекс трека в текущем плейлисте."""
     queue_requested = Signal()
@@ -562,6 +641,26 @@ class UpNextPanel(QWidget):
         self._palette = LivePalette.instance().current
         self._hover = -1
         LivePalette.instance().palette_changed.connect(self._on_palette)
+
+    @classmethod
+    def height_for(cls, rows: int) -> int:
+        return cls.TOP + rows * cls.ROW + 8
+
+    def columns(self) -> int:
+        return 2 if self.width() >= 560 else 1
+
+    def visible_count(self) -> int:
+        rows = max(1, (self.height() - self.TOP - 8) // self.ROW)
+        return min(len(self._items), rows * self.columns())
+
+    def _item_rect(self, index: int) -> QRectF:
+        """Строка трека ``index`` (с подсветкой): колонки сверху вниз."""
+        cols = self.columns()
+        count = self.visible_count()
+        rows = max(1, -(-count // cols))
+        col, row = divmod(index, rows)
+        col_w = (self.width() - 24) / cols
+        return QRectF(12 + col * col_w, self.TOP - 6 + row * self.ROW, col_w, 56)
 
     def set_items(self, items: list[UpNextItem]) -> None:
         keys = [(i.track, i.index) for i in items]
@@ -579,12 +678,14 @@ class UpNextPanel(QWidget):
         if not LivePalette.instance().is_animating():
             self.update()  # ссылка «Вся очередь» цветом акцента — без покадровой анимации
 
-    def _row_at(self, y: float) -> int:
-        index = int((y - 62) // self.ROW)
-        return index if 0 <= index < len(self._items) and y >= 62 else -1
+    def _row_at(self, pos: QPointF) -> int:
+        for index in range(self.visible_count()):
+            if self._item_rect(index).contains(pos):
+                return index
+        return -1
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
-        hover = self._row_at(event.position().y())
+        hover = self._row_at(event.position())
         on_link = bool(self._items) and self._link_rect().contains(event.position())
         self.setCursor(
             Qt.CursorShape.PointingHandCursor
@@ -605,7 +706,7 @@ class UpNextPanel(QWidget):
         if self._items and self._link_rect().contains(event.position()):
             self.queue_requested.emit()
             return
-        row = self._row_at(event.position().y())
+        row = self._row_at(event.position())
         if row >= 0:
             self.track_activated.emit(self._items[row].index)
 
@@ -653,7 +754,7 @@ class UpNextPanel(QWidget):
         if not self._items:
             painter.setPen(dim)
             painter.drawText(
-                QRectF(22, 62, rect.width() - 44, 60),
+                QRectF(22, self.TOP, rect.width() - 44, 60),
                 Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop,
                 "Очередь пуста",
             )
@@ -663,17 +764,17 @@ class UpNextPanel(QWidget):
         name_font.setWeight(QFont.Weight.DemiBold)
         meta_font = QFont(QApplication.font())
         meta_font.setPixelSize(12)
-        y = 62.0
+        count = self.visible_count()
         for row, (item, cover) in enumerate(
-            zip(self._items, self._covers, strict=True)
+            zip(self._items[:count], self._covers[:count], strict=True)
         ):
+            cell = self._item_rect(row)
             if row == self._hover:
                 painter.setPen(Qt.PenStyle.NoPen)
                 painter.setBrush(_alpha(qcolor(colors.ink_rgb), 14))
-                painter.drawRoundedRect(
-                    QRectF(12, y - 6, rect.width() - 24, 56), 12, 12
-                )
-            box = QRectF(22, y, 44, 44)
+                painter.drawRoundedRect(cell, 12, 12)
+            x, y, right = cell.x() + 10, cell.y() + 6, cell.right() - 10
+            box = QRectF(x, y, 44, 44)
             clip = QPainterPath()
             clip.addRoundedRect(box, 9, 9)
             if cover is not None and not cover.isNull():
@@ -686,11 +787,12 @@ class UpNextPanel(QWidget):
                 gradient.setColorAt(0, self._palette.accent)
                 gradient.setColorAt(1, self._palette.deep)
                 painter.fillPath(clip, gradient)
-            text_w = rect.width() - 78 - 84
+            text_x = x + 56
+            text_w = right - text_x - 62
             painter.setFont(name_font)
             painter.setPen(text)
             painter.drawText(
-                QRectF(78, y + 2, text_w, 20),
+                QRectF(text_x, y + 2, text_w, 20),
                 Qt.AlignmentFlag.AlignVCenter,
                 QFontMetrics(name_font).elidedText(
                     item.track.title, Qt.TextElideMode.ElideRight, int(text_w)
@@ -699,13 +801,13 @@ class UpNextPanel(QWidget):
             painter.setFont(meta_font)
             painter.setPen(dim)
             painter.drawText(
-                QRectF(78, y + 22, text_w, 20),
+                QRectF(text_x, y + 22, text_w, 20),
                 Qt.AlignmentFlag.AlignVCenter,
                 QFontMetrics(meta_font).elidedText(
                     item.track.author, Qt.TextElideMode.ElideRight, int(text_w)
                 ),
             )
-            dot = QPointF(rect.width() - 70, y + 22)
+            dot = QPointF(right - 48, y + 22)
             painter.setPen(Qt.PenStyle.NoPen)
             painter.setBrush(source_badge_color(str(item.track.source)))
             painter.drawEllipse(dot, 3.2, 3.2)
@@ -713,8 +815,7 @@ class UpNextPanel(QWidget):
             if duration > 0:
                 painter.setPen(dim)
                 painter.drawText(
-                    QRectF(rect.width() - 62, y, 40, 44),
+                    QRectF(right - 40, y, 40, 44),
                     Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
                     f"{duration // 60}:{duration % 60:02d}",
                 )
-            y += self.ROW

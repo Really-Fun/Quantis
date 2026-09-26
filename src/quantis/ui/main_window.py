@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, QPropertyAnimation, QRect, Qt, QUrl
+from PySide6.QtCore import QEvent, QPoint, QPropertyAnimation, QRect, QSize, Qt, QUrl
 from PySide6.QtGui import (
     QColor,
     QDesktopServices,
@@ -114,7 +114,7 @@ class QuantisMainWindow(QMainWindow):
         self._bridge = bundle.async_bridge
         self.setWindowTitle("Quantis")
         self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint)
-        self.setMinimumSize(1024, 640)
+        self._fit_minimum_to_screen()
         self._ui_prefs = UiPreferences()
         self._restore_window_geometry()
         self._resize_grips = WindowResizeGrips(self)
@@ -724,7 +724,9 @@ class QuantisMainWindow(QMainWindow):
         # Эффект рисует страницу через отдельный буфер — после появления он
         # не нужен, а висящий на странице лишь мешает частичной перерисовке.
         anim.finished.connect(
-            lambda p=page, e=effect: p.graphicsEffect() is e and p.setGraphicsEffect(None)
+            lambda p=page, e=effect: (
+                p.graphicsEffect() is e and p.setGraphicsEffect(None)
+            )
         )
         anim.start()
         page._quantis_fade = anim  # type: ignore[attr-defined]
@@ -960,9 +962,45 @@ class QuantisMainWindow(QMainWindow):
         self._body_shell.set_theme(theme)
         self._player_bar.refresh_theme()
 
+    MIN_SIZE = QSize(1024, 640)
+
+    def _fit_minimum_to_screen(self) -> None:
+        """Минимум окна не больше экрана: 1366×768 при 150 % на Windows —
+        это ~910×480 логических точек, окно 1024×640 туда не влезает."""
+        screen = self.screen() or QGuiApplication.primaryScreen()
+        if screen is None:
+            self.setMinimumSize(self.MIN_SIZE)
+            return
+        available = screen.availableGeometry().size()
+        self.setMinimumSize(self.MIN_SIZE.boundedTo(available))
+
     def _restore_window_geometry(self) -> None:
         saved = self._ui_prefs.window_geometry
         if saved is not None and self.restoreGeometry(saved):
+            # сохранено на другом масштабе/экране — окно могло стать больше экрана
+            screen = self.screen() or QGuiApplication.primaryScreen()
+            if screen is not None:
+                available = screen.availableGeometry()
+                frame = self.geometry()
+                if not available.contains(frame):
+                    frame.setSize(frame.size().boundedTo(available.size()))
+                    frame.moveTopLeft(
+                        QPoint(
+                            max(
+                                available.left(),
+                                min(
+                                    frame.left(), available.right() - frame.width() + 1
+                                ),
+                            ),
+                            max(
+                                available.top(),
+                                min(
+                                    frame.top(), available.bottom() - frame.height() + 1
+                                ),
+                            ),
+                        )
+                    )
+                    self.setGeometry(frame)
             return
         screen = self.screen() or QGuiApplication.primaryScreen()
         if screen is None:

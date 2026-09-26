@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from PySide6.QtCore import QPointF
+
 from quantis.models.playlist import Playlist
 from quantis.models.track import YandexTrack, YoutubeTrack
 from quantis.ui.views.widgets.now_playing_stage import (
@@ -76,7 +78,7 @@ def test_up_next_click_plays_by_playlist_index(qapp) -> None:
     panel.set_items(upcoming(tracks, tracks[1], 0))
     hits: list[int] = []
     panel.track_activated.connect(hits.append)
-    assert panel._row_at(62 + UpNextPanel.ROW * 1 + 10) == 1
+    assert panel._row_at(QPointF(40, 62 + UpNextPanel.ROW * 1 + 10)) == 1
     panel.track_activated.emit(panel.items()[1].index)
     assert hits == [3]
 

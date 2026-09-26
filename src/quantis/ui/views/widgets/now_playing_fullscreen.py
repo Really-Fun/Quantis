@@ -107,7 +107,8 @@ class NowPlayingFullscreen(QFrame):
             paint_source_badge(painter, painted.rect(), str(track.source), size=22)
             painter.end()
             self._cover.setPixmap(painted)
-            self._bg = pix
+            self._bg = QPixmap(pix)
+            self._bg.setDevicePixelRatio(1.0)  # размытый фон: пиксели = точки
             self._bg_scaled = QPixmap()
             self._bg_size = (0, 0)
         else:

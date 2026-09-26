@@ -59,13 +59,16 @@ class _CoverWithBadge(QLabel):
             painter.drawText(rect, Qt.AlignmentFlag.AlignCenter, "♪")
 
         if not self._pixmap.isNull():
+            dpr = self._pixmap.devicePixelRatio()
             scaled = self._pixmap.scaled(
-                rect.size(),
+                rect.size() * dpr,
                 Qt.AspectRatioMode.KeepAspectRatioByExpanding,
                 Qt.TransformationMode.SmoothTransformation,
             )
-            x = rect.x() + (rect.width() - scaled.width()) // 2
-            y = rect.y() + (rect.height() - scaled.height()) // 2
+            scaled.setDevicePixelRatio(dpr)
+            size = scaled.deviceIndependentSize()
+            x = rect.x() + (rect.width() - round(size.width())) // 2
+            y = rect.y() + (rect.height() - round(size.height())) // 2
             clip = QPainterPath()
             clip.addRoundedRect(rect, 16, 16)
             painter.setClipPath(clip)
@@ -175,7 +178,9 @@ class NowPlayingPanel(QFrame):
         label = (
             "YouTube"
             if source.lower() == "youtube"
-            else "Яндекс" if source.lower() == "yandex" else "Источник"
+            else "Яндекс"
+            if source.lower() == "yandex"
+            else "Источник"
         )
         self._source_btn.setText(f"Источник · {label}")
         self._apply_cover(track)

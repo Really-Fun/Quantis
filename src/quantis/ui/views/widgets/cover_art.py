@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from collections import OrderedDict
 from pathlib import Path
 
@@ -9,6 +10,7 @@ from PySide6.QtCore import QObject, QRunnable, QSize, Qt, QThreadPool, QTimer, S
 from PySide6.QtGui import (
     QColor,
     QFont,
+    QGuiApplication,
     QIcon,
     QImage,
     QImageReader,
@@ -113,8 +115,23 @@ def _crop_letterbox(image: QImage) -> QImage:
     return image.copy(0, bar, width, inner)
 
 
+def screen_dpr() -> float:
+    """Наибольший масштаб экранов (Windows 125 % → 1.25): обложки декодируются
+    в физических пикселях, иначе на таком экране они мыльные."""
+    app = QGuiApplication.instance()
+    if app is None:
+        return 1.0
+    return max((s.devicePixelRatio() for s in QGuiApplication.screens()), default=1.0)
+
+
 def _cover_key(file_path: Path, size: int) -> str:
     return f"{file_path.resolve() if file_path.exists() else file_path}|{size}"
+
+
+def _to_pixmap(image: QImage, dpr: float) -> QPixmap:
+    pixmap = QPixmap.fromImage(image)
+    pixmap.setDevicePixelRatio(dpr)
+    return pixmap
 
 
 def _decode_cover(file_path: Path, size: int) -> QImage | None:
@@ -150,14 +167,16 @@ def load_cover_pixmap(path: str | Path | None, size: int) -> QPixmap | None:
     if not path:
         return None
     file_path = Path(path)
-    cache_key = _cover_key(file_path, size)
+    dpr = screen_dpr()
+    px = math.ceil(size * dpr)
+    cache_key = _cover_key(file_path, px)
     cached = _cache_get(cache_key)
     if cached is not _MISSING:
         return cached  # type: ignore[return-value]
     if file_path.suffix.lower() == ".svg":
         return _cache_put(cache_key, _svg_pixmap(file_path, size))
-    image = _decode_cover(file_path, size)
-    return _cache_put(cache_key, None if image is None else QPixmap.fromImage(image))
+    image = _decode_cover(file_path, px)
+    return _cache_put(cache_key, None if image is None else _to_pixmap(image, dpr))
 
 
 def _svg_pixmap(file_path: Path, size: int) -> QPixmap | None:
@@ -168,15 +187,20 @@ def _svg_pixmap(file_path: Path, size: int) -> QPixmap | None:
 
 
 class _DecodeJob(QRunnable):
-    def __init__(self, decoder: CoverDecoder, key: str, path: Path, size: int) -> None:
+    def __init__(
+        self, decoder: CoverDecoder, key: str, path: Path, size: int, dpr: float
+    ) -> None:
         super().__init__()
         self._decoder, self._key, self._path, self._size = decoder, key, path, size
+        self._dpr = dpr
 
     def run(self) -> None:
         try:
             image = _decode_cover(self._path, self._size)
         except Exception:
             image = None
+        if image is not None:
+            image.setDevicePixelRatio(self._dpr)
         self._decoder._decoded.emit(self._key, image if image is not None else QImage())
 
 
@@ -210,7 +234,9 @@ class CoverDecoder(QObject):
         if not path:
             return None
         file_path = Path(path)
-        key = _cover_key(file_path, size)
+        dpr = screen_dpr()
+        px = math.ceil(size * dpr)
+        key = _cover_key(file_path, px)
         cached = _cache_get(key)
         if cached is not _MISSING:
             return cached  # type: ignore[return-value]
@@ -218,12 +244,15 @@ class CoverDecoder(QObject):
             return _cache_put(key, _svg_pixmap(file_path, size))
         if key not in self._pending:
             self._pending.add(key)
-            self._pool.start(_DecodeJob(self, key, file_path, size))
+            self._pool.start(_DecodeJob(self, key, file_path, px, dpr))
         return None
 
     def _on_decoded(self, key: str, image: QImage) -> None:
         self._pending.discard(key)
-        _cache_put(key, None if image.isNull() else QPixmap.fromImage(image))
+        _cache_put(
+            key,
+            None if image.isNull() else _to_pixmap(image, image.devicePixelRatio()),
+        )
         self._notify.start()
 
 

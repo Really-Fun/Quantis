@@ -177,6 +177,10 @@ QLabel#stageTitle {
     background: transparent;
 }
 
+QLabel#stageTitle[compact="true"] {
+    font-size: 30px;
+}
+
 QLabel#stageArtist {
     color: ${text_soft};
     font-size: 15px;

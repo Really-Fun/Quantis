@@ -39,6 +39,7 @@ from quantis.ui.preferences import UiPreferences
 from quantis.ui.ui_extensions import UiExtensionHost
 from quantis.ui.viewmodels.player_vm import PlayerViewModel
 from quantis.ui.views.widgets.cover_art import load_cover_pixmap
+from quantis.ui.views.widgets.elided_label import ElidedLabel
 from quantis.ui.views.widgets.glass import install_glass
 from quantis.ui.views.widgets.source_badge import paint_source_badge
 from quantis.ui.views.widgets.waveform_seek import WaveformSeekSlider
@@ -76,6 +77,9 @@ class _PlayerCover(QLabel):
 
 class PlayerBar(QFrame):
     """Нижняя панель ~80px: meta | transport+seek | actions."""
+
+    SIDE, MIN_SIDE = 300, 220
+    """Ширина колонок обложки и кнопок; на узком окне — до MIN_SIDE."""
 
     now_playing_toggle_requested = Signal()
     hide_ui_requested = Signal()
@@ -134,8 +138,8 @@ class PlayerBar(QFrame):
         meta = QVBoxLayout()
         meta.setSpacing(2)
         meta.setContentsMargins(0, 0, 0, 0)
-        self._title = QLabel("Ничего не играет")
-        self._author = QLabel("")
+        self._title = ElidedLabel("Ничего не играет", max_lines=1)
+        self._author = ElidedLabel("", max_lines=1)
         self._title.setObjectName("trackTitle")
         self._author.setObjectName("trackArtist")
         self._title.setMaximumWidth(220)
@@ -146,7 +150,8 @@ class PlayerBar(QFrame):
 
         left = QWidget()
         left.setObjectName("playerLeft")
-        left.setFixedWidth(300)
+        left.setFixedWidth(self.SIDE)
+        self._left = left
         left_layout = QHBoxLayout(left)
         left_layout.setContentsMargins(0, 0, 0, 0)
         left_layout.setSpacing(12)
@@ -238,7 +243,8 @@ class PlayerBar(QFrame):
 
         right = QWidget()
         right.setObjectName("playerRight")
-        right.setFixedWidth(300)
+        right.setFixedWidth(self.SIDE)
+        self._right = right
         self._right_layout = QHBoxLayout(right)
         self._right_layout.setContentsMargins(0, 0, 0, 0)
         self._right_layout.setSpacing(4)
@@ -291,6 +297,21 @@ class PlayerBar(QFrame):
         self._update_like_button()
         self._update_repeat_button(self._vm.repeat_mode)
 
+    def resizeEvent(self, event) -> None:  # type: ignore[no-untyped-def]
+        super().resizeEvent(event)
+        self._fit_sides()
+
+    def _fit_sides(self) -> None:
+        """Боковые колонки капсулы уже на узком окне (Windows 150 % — 1280
+        логических точек и меньше): иначе волне перемотки не остаётся места."""
+        side = max(self.MIN_SIDE, min(self.SIDE, (self.width() - 700) // 2))
+        self._left.setFixedWidth(side)
+        text_w = side - 56 - 12
+        self._title.setMaximumWidth(text_w)
+        self._author.setMaximumWidth(text_w)
+        need = self._right_layout.sizeHint().width()
+        self._right.setFixedWidth(max(side, need))
+
     def _rebuild_plugin_actions(self) -> None:
         while self._plugin_slot.count():
             item = self._plugin_slot.takeAt(0)
@@ -312,6 +333,7 @@ class PlayerBar(QFrame):
             self._repolish(btn)
             self._plugin_slot.addWidget(btn)
             self._plugin_buttons.append(btn)
+        self._fit_sides()
 
     def _make_button(
         self,
@@ -501,10 +523,7 @@ class PlayerBar(QFrame):
     def _sync_cinematic_card(self) -> None:
         if self._cinematic:
             self._card.setStyleSheet(
-                "QFrame#PlayMenu {"
-                " background: rgba(0, 0, 0, 0.38);"
-                " border: none;"
-                "}"
+                "QFrame#PlayMenu { background: rgba(0, 0, 0, 0.38); border: none;}"
             )
         else:
             self._card.setStyleSheet("")
