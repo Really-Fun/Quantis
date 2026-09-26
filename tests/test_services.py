@@ -142,6 +142,32 @@ async def test_finder_tries_yandex_for_numeric_id() -> None:
 
 
 @pytest.mark.asyncio
+async def test_finder_search_source_uses_only_that_source() -> None:
+    finder = AsyncFinder()
+    track = YoutubeTrack(track_id="dQw4w9WgXcQ", title="Never", author="Rick")
+
+    with (
+        patch.object(
+            finder._yandex_finder, "get_tracks", new_callable=AsyncMock
+        ) as yandex_mock,
+        patch.object(
+            finder._youtube_finder,
+            "get_tracks",
+            new_callable=AsyncMock,
+            return_value=[track],
+        ) as youtube_mock,
+    ):
+        result = await finder.search_source("youtube", "rick never", 3)
+        unknown = await finder.search_source("spotify", "rick never", 3)
+
+    assert result == [track]
+    assert unknown == []
+    youtube_mock.assert_awaited_once_with("rick never", 3)
+    yandex_mock.assert_not_awaited()
+    finder.shutdown()
+
+
+@pytest.mark.asyncio
 async def test_yandex_finder_get_track_rejects_non_numeric_id() -> None:
     finder = AsyncYandexFinder()
     result = await finder.get_track("not-a-number")

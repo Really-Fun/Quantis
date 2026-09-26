@@ -338,6 +338,16 @@ class AsyncFinder(AsyncFinderInterface):
             logger.exception("Ошибка поиска %s", source, exc_info=exc)
             return source, []
 
+    async def search_source(
+        self, source: str, title: str, value: int = 5
+    ) -> list[Track]:
+        """Поиск в одном источнике (yandex|youtube|soundcloud): с таймаутом,
+        ошибки и неизвестный источник — пустой список. Для плагинов."""
+        if source not in self.SEARCH_SOURCES:
+            return []
+        _source, tracks = await self._fetch_source(source, title, value)
+        return tracks
+
     async def iter_track_batches(
         self, title: str, value: int | None = None
     ) -> AsyncIterator[tuple[str, list[Track]]]:
