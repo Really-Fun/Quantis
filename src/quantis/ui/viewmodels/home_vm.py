@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 
 from PySide6.QtCore import QObject, Signal
@@ -64,6 +64,21 @@ class HomeSnapshot:
     wave_source: str = "yandex"
 
 
+def _with_user_playlists(
+    snapshot: HomeSnapshot, user_playlists: list[UserPlaylist]
+) -> HomeSnapshot:
+    """Тот же снимок, но с другим списком плейлистов пользователя."""
+    library = [
+        pl for pl in snapshot.library_playlists if not isinstance(pl, UserPlaylist)
+    ]
+    library.extend(user_playlists)
+    return replace(
+        snapshot,
+        quick_playlists=tuple(library[:6]),
+        library_playlists=tuple(library),
+    )
+
+
 class HomeViewModel(BaseViewModel):
     home_changed = Signal()
     recent_changed = Signal()
@@ -97,6 +112,9 @@ class HomeViewModel(BaseViewModel):
         self._wave_playlist: WavePlaylist | None = None
         self._load_started = False
         self._bridge: AsyncBridge | None = None
+        # Поколение списка плейлистов: долгая загрузка главной (волна, рекомендации)
+        # не должна затирать плейлисты, перечитанные после её старта.
+        self._playlists_gen = 0
 
     @property
     def recent_model(self) -> TrackListModel:
@@ -138,6 +156,8 @@ class HomeViewModel(BaseViewModel):
         if bridge is None:
             return
         bridge.invoke_main(lambda: self.set_loading(True))
+        self._playlists_gen += 1
+        gen = self._playlists_gen
         try:
             recent_task = self._history.get_recent_playlist(limit=24)
             liked_task = self._liked.get_playlist()
@@ -164,7 +184,7 @@ class HomeViewModel(BaseViewModel):
             )
 
             def apply_fast() -> None:
-                self._snapshot = snapshot
+                self._snapshot = self._keep_fresh_playlists(snapshot, gen)
                 self._recent_model.set_tracks(recent_tracks)
                 self._liked_model.set_tracks(liked_tracks)
                 self._downloaded_model.set_tracks(list(downloaded))
@@ -196,7 +216,7 @@ class HomeViewModel(BaseViewModel):
             )
 
             def apply_recommendations() -> None:
-                self._snapshot = full_snapshot
+                self._snapshot = self._keep_fresh_playlists(full_snapshot, gen)
                 self._recommendation_playlist = recommendation_playlist
                 self._recommendation_model.set_tracks(list(recommendation_tracks))
                 self._wave_playlist = wave_playlist
@@ -677,22 +697,42 @@ class HomeViewModel(BaseViewModel):
         bridge.invoke_main(apply)
 
     async def refresh_user_playlists(self, bridge: AsyncBridge | None = None) -> None:
+        """Перечитывает только плейлисты пользователя — без сети и волны."""
         bridge = bridge or self._bridge
         if bridge is None:
             return
-        self.refresh(bridge)
+        self._bridge = bridge
+        self._playlists_gen += 1
+        gen = self._playlists_gen
+        user_playlists = await self._user_playlists.load_all(include_empty=True)
+
+        def apply() -> None:
+            if gen != self._playlists_gen:
+                return
+            self._snapshot = _with_user_playlists(self._snapshot, user_playlists)
+            self.home_changed.emit()
+
+        bridge.invoke_main(apply)
+
+    def _keep_fresh_playlists(self, snapshot: HomeSnapshot, gen: int) -> HomeSnapshot:
+        if gen == self._playlists_gen:
+            return snapshot
+        current = [
+            pl
+            for pl in self._snapshot.library_playlists
+            if isinstance(pl, UserPlaylist)
+        ]
+        return _with_user_playlists(snapshot, current)
 
     async def create_user_playlist(self, name: str) -> None:
         await self._user_playlists.create(name)
-        if self._bridge is not None:
-            self.refresh(self._bridge)
+        await self.refresh_user_playlists()
 
     async def add_track_to_user_playlist(
         self, playlist_name: str, track: Track
     ) -> bool:
         added = await self._user_playlists.add_track(playlist_name, track)
-        if self._bridge is not None:
-            self.refresh(self._bridge)
+        await self.refresh_user_playlists()
         return added
 
     async def _play_from_model(self, model: TrackListModel, index: int) -> None:

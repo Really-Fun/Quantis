@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -34,13 +32,11 @@ class SearchPage(QWidget):
         view_model: SearchViewModel,
         bridge: AsyncBridge | None = None,
         *,
-        on_playlists_changed: Callable[[], None] | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
         self._vm = view_model
         self._bridge = bridge
-        self._on_playlists_changed = on_playlists_changed
         self.setObjectName("searchPage")
 
         layout = QVBoxLayout(self)
@@ -296,5 +292,4 @@ class SearchPage(QWidget):
             track,
             bridge=self._bridge,
             parent=self,
-            on_done=self._on_playlists_changed,
         )

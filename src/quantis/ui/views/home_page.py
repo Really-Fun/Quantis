@@ -429,10 +429,7 @@ class HomePage(QWidget):
         if self._bridge is None:
             return
 
-        def done() -> None:
-            schedule(self._vm.refresh_user_playlists(self._bridge), self._bridge)
-
-        create_playlist_and_add(None, self._bridge, self, on_done=done)
+        create_playlist_and_add(None, self._bridge, self)
 
     def _on_track_context(self, table: QTableView, model: TrackListModel, pos) -> None:
         if self._bridge is None:
@@ -444,10 +441,7 @@ class HomePage(QWidget):
         if track is None:
             return
 
-        def done() -> None:
-            schedule(self._vm.refresh_user_playlists(self._bridge), self._bridge)
-
-        show_add_to_playlist_menu(track, bridge=self._bridge, parent=self, on_done=done)
+        show_add_to_playlist_menu(track, bridge=self._bridge, parent=self)
 
     def refresh_featured(self) -> None:
         self._sync_stage()

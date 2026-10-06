@@ -11,6 +11,20 @@ from quantis.core.async_bridge import AsyncBridge
 from quantis.models import Track
 from quantis.services.user_playlists import UserPlaylistsService
 
+_event_bus = None
+
+
+def bind_event_bus(event_bus) -> None:
+    """Шина, через которую главное окно узнаёт об изменении плейлистов."""
+    global _event_bus
+    _event_bus = event_bus
+
+
+def _announce_playlists_updated() -> None:
+    # Главное окно обновляет главную и открытый плейлист — откуда бы ни добавили.
+    if _event_bus is not None:
+        _event_bus.playlists_updated.emit()
+
 
 def prompt_new_playlist_name(parent: QWidget | None = None) -> str | None:
     name, ok = QInputDialog.getText(
@@ -30,16 +44,9 @@ def show_add_to_playlist_menu(
     bridge: AsyncBridge,
     parent: QWidget | None = None,
     on_done: Callable[[], None] | None = None,
-    event_bus=None,
 ) -> None:
     """Меню плейлистов → добавить трек (или создать новый)."""
     service = UserPlaylistsService()
-
-    def _notify() -> None:
-        if on_done is not None:
-            on_done()
-        if event_bus is not None:
-            event_bus.playlists_updated.emit()
 
     async def load_and_show() -> None:
         names = await service.list_names()
@@ -52,7 +59,7 @@ def show_add_to_playlist_menu(
 
                 def _pick(checked: bool = False, n: str = name) -> None:
                     bridge.schedule(
-                        add_track_to_named(n, track, bridge, parent, _notify)
+                        add_track_to_named(n, track, bridge, parent, on_done)
                     )
 
                 action.triggered.connect(_pick)
@@ -61,7 +68,7 @@ def show_add_to_playlist_menu(
                 menu.addSeparator()
             create_action = QAction("Новый плейлист…", menu)
             create_action.triggered.connect(
-                lambda: create_playlist_and_add(track, bridge, parent, _notify)
+                lambda: create_playlist_and_add(track, bridge, parent, on_done)
             )
             menu.addAction(create_action)
             menu.exec(QCursor.pos())
@@ -111,8 +118,13 @@ async def _create_async(
             )
         )
         return
-    if on_done is not None:
-        bridge.invoke_main(on_done)
+
+    def notify() -> None:
+        _announce_playlists_updated()
+        if on_done is not None:
+            on_done()
+
+    bridge.invoke_main(notify)
 
 
 async def add_track_to_named(
@@ -135,7 +147,9 @@ async def add_track_to_named(
         return
 
     def notify() -> None:
-        if not added:
+        if added:
+            _announce_playlists_updated()
+        else:
             QMessageBox.information(
                 parent,
                 "Плейлист",

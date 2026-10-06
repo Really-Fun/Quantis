@@ -35,6 +35,7 @@ from quantis.ui.cover_accent import (
 )
 from quantis.ui.fonts import register_bundled_fonts, theme_font
 from quantis.ui.live_palette import LivePalette
+from quantis.ui.playlist_actions import bind_event_bus as bind_playlist_event_bus
 from quantis.ui.preferences import UiPreferences
 from quantis.ui.shortcuts import (
     ALT_PAGE_IDS,
@@ -273,9 +274,6 @@ class QuantisMainWindow(QMainWindow):
             on_liked_changed=lambda: self._bridge.schedule(
                 self._home_vm.refresh_liked(self._bridge)
             ),
-            on_playlists_changed=lambda: self._bridge.schedule(
-                self._home_vm.refresh_user_playlists(self._bridge)
-            ),
         )
         self._player_bar.now_playing_toggle_requested.connect(self._toggle_now_playing)
         self._player_bar.hide_ui_requested.connect(self._toggle_chrome_hidden)
@@ -296,6 +294,7 @@ class QuantisMainWindow(QMainWindow):
         LivePalette.instance().palette_changed.connect(self._on_live_palette)
         bundle.event_bus.history_updated.connect(self._on_history_updated)
         bundle.event_bus.playlists_updated.connect(self._on_playlists_updated)
+        bind_playlist_event_bus(bundle.event_bus)
         bundle.event_bus.queue_extended.connect(self._on_queue_extended)
         bundle.event_bus.error_occurred.connect(self._show_error)
         self._search_vm.download_finished.connect(
@@ -545,9 +544,6 @@ class QuantisMainWindow(QMainWindow):
             self._search_page = SearchPage(
                 self._search_vm,
                 self._bridge,
-                on_playlists_changed=lambda: self._bridge.schedule(
-                    self._home_vm.refresh_user_playlists(self._bridge)
-                ),
             )
             self._replace_stack_page(self.PAGE_SEARCH, self._search_page)
         return self._search_page

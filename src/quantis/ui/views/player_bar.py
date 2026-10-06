@@ -92,7 +92,6 @@ class PlayerBar(QFrame):
         bridge: AsyncBridge | None = None,
         music: MusicService | None = None,
         on_liked_changed: Callable[[], None] | None = None,
-        on_playlists_changed: Callable[[], None] | None = None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -102,7 +101,6 @@ class PlayerBar(QFrame):
         self._music = music
         self._liked = LikedTracksService()
         self._on_liked_changed = on_liked_changed
-        self._on_playlists_changed = on_playlists_changed
         self._current_track: Track | None = None
         self._seeking = False
         self._is_playing = False
@@ -455,7 +453,6 @@ class PlayerBar(QFrame):
             track,
             bridge=self._bridge,
             parent=self,
-            on_done=self._on_playlists_changed,
         )
 
     def _on_download_clicked(self) -> None:
