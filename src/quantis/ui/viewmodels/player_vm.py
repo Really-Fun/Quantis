@@ -34,6 +34,7 @@ class PlayerViewModel(BaseViewModel):
         self._event_bus = event_bus
         self._eco = False
         self._last_duration = -1
+        self._catalog_duration = 0
         self._stall_last_pos = -1
         self._stall_last_move = 0.0
         self._end_ticks = 0
@@ -116,6 +117,11 @@ class PlayerViewModel(BaseViewModel):
         if getattr(self._playback, "is_seeking", False):
             return
         position = max(0, self._player.time)
+        catalog = self._track_catalog_ms(self._playback.current_track)
+        if catalog != self._catalog_duration:
+            # Источник уточнил длину (Яндекс API, yt-dlp) — это не шум буфера.
+            self._catalog_duration = catalog
+            self._last_duration = -1
         duration = max(0, self._player.duration)
         self.position_changed.emit(position)
         self._publish_duration(duration)
@@ -157,6 +163,10 @@ class PlayerViewModel(BaseViewModel):
         self._stall_last_move = now
         self._playback.request_playback_recovery(position)
 
+    @staticmethod
+    def _track_catalog_ms(track: Track | None) -> int:
+        return max(0, int(getattr(track, "duration_ms", 0) or 0))
+
     def _publish_duration(self, duration: int) -> None:
         if duration <= 0:
             return
@@ -176,7 +186,8 @@ class PlayerViewModel(BaseViewModel):
         self._end_ticks = 0
         self.track_changed.emit(track)
         self.position_changed.emit(0)
-        catalog = max(0, int(getattr(track, "duration_ms", 0) or 0))
+        catalog = self._track_catalog_ms(track)
+        self._catalog_duration = catalog
         self._last_duration = catalog if catalog > 0 else -1
         self.duration_changed.emit(catalog)
         self.start_updates()

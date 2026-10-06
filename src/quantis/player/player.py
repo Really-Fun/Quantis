@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from pathlib import Path
 from time import monotonic
 from typing import Callable
 
@@ -37,6 +38,16 @@ def resolve_playback_duration(engine_ms: int, catalog_ms: int) -> int:
     return catalog_ms
 
 
+def is_complete_local_file(source: str | None) -> bool:
+    """Скачанный файл целиком: его длине от движка можно верить.
+
+    Буфер потока (quantis_stream во временной папке) растёт — там движок врёт.
+    """
+    if not source or "://" in source:
+        return False
+    return Path(source).parent.name != "quantis_stream"
+
+
 class Player:
     """Плеер. Работает со строками (локальные файлы / URL потока)."""
 
@@ -44,7 +55,10 @@ class Player:
         self._engine: MediaEngine = engine or create_media_engine()
 
         self.current_source: str | None = None
-        self.current_track: Track | None = None
+        self._current_track: Track | None = None
+        # Трек сменили, а движок ещё держит прошлый источник (и его длину).
+        self._engine_duration_stale: bool = False
+        self._stale_duration_ms: int = 0
         self.on_pause: bool = False
         self._paused_at_ms: int = 0
         self._paused_at_mono: float = 0.0
@@ -69,6 +83,16 @@ class Player:
         self._engine.on_ended(self._on_engine_ended)
         self._stream_retry_used = False
         self._engine.on_error(self._on_engine_error)
+
+    @property
+    def current_track(self) -> Track | None:
+        return self._current_track
+
+    @current_track.setter
+    def current_track(self, track: Track | None) -> None:
+        if track is not self._current_track and self.current_source:
+            self._engine_duration_stale = True
+        self._current_track = track
 
     @property
     def media_player(self):
@@ -124,7 +148,10 @@ class Player:
         self._paused_at_ms = 0
         self._paused_at_mono = 0.0
         self.current_source = source
+        stale_duration = max(0, int(self._engine.get_duration_ms()))
         self._engine.play_media(source)
+        self._engine_duration_stale = False
+        self._stale_duration_ms = stale_duration
         if start_ms > 0:
             self._request_seek(start_ms)
         for callback in self._source_changed_callbacks:
@@ -383,8 +410,15 @@ class Player:
     @property
     def duration(self) -> int:
         engine_ms = max(0, int(self._engine.get_duration_ms()))
+        if self._engine_duration_stale or (
+            self._loading_source and 0 < engine_ms == self._stale_duration_ms
+        ):
+            # Длина прошлого трека: иначе она прилипает к новому (и в историю).
+            engine_ms = 0
         catalog_ms = 0
         track = self.current_track
         if track is not None:
             catalog_ms = max(0, int(getattr(track, "duration_ms", 0) or 0))
+        if engine_ms > 0 and is_complete_local_file(self.current_source):
+            return engine_ms
         return resolve_playback_duration(engine_ms, catalog_ms)

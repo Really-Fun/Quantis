@@ -61,6 +61,10 @@ class AsyncYandexStreamer(AsyncStreamerInterface):
             track_info = client.tracks(track_id)
             if not track_info:
                 return None
+            # Длина из каталога: у треков из плейлистов и истории её нет или она неверна.
+            catalog_ms = int(getattr(track_info[0], "duration_ms", 0) or 0)
+            if catalog_ms > 0:
+                track.duration_ms = catalog_ms
             download_info = track_info[0].get_download_info()
             chosen = self.pick_best_download_info(list(download_info or []))
             if chosen is None:

@@ -356,3 +356,45 @@ def test_http_pause_reset_to_zero_refreshes_source() -> None:
     assert errors == ["resume-after-pause"]
     assert engine.resume_calls == 0
     assert player.paused_at_ms == 42_000
+
+
+def test_duration_ignores_previous_track_until_new_source_loads() -> None:
+    engine = StubEngine()
+    engine._duration = 187_872
+    player = Player(engine=engine)
+    player.current_track = YandexTrack(track_id="1", title="A", author="A")
+    player.play("http://127.0.0.1/a.mp3")
+
+    # Новый трек объявлен (без длины в каталоге), движок ещё на прошлом.
+    player.current_track = YandexTrack(track_id="2", title="B", author="B")
+    assert player.duration == 0
+
+    player.play("http://127.0.0.1/b.mp3")
+    assert player.duration == 0  # движок отдаёт всё ту же длину прошлого трека
+
+    engine._duration = 238_000
+    assert player.duration == 238_000
+
+
+def test_duration_trusts_engine_for_downloaded_file(tmp_path) -> None:
+    engine = StubEngine()
+    engine._duration = 238_000
+    player = Player(engine=engine)
+    player.current_track = YandexTrack(
+        track_id="1", title="T", author="A", duration_ms=187_872
+    )
+    player.play(str(tmp_path / "creep.mp3"))
+    engine._duration = 238_001
+    assert player.duration == 238_001
+
+
+def test_duration_keeps_catalog_for_stream_buffer_file(tmp_path) -> None:
+    engine = StubEngine()
+    engine._duration = 0
+    player = Player(engine=engine)
+    player.current_track = YandexTrack(
+        track_id="1", title="T", author="A", duration_ms=180_000
+    )
+    player.play(str(tmp_path / "quantis_stream" / "yandex_1.mp3"))
+    engine._duration = 6_000
+    assert player.duration == 180_000
