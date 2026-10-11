@@ -20,6 +20,14 @@ from quantis.models import (
 )
 from quantis.models.playlist import Playlist, RecommendationPlaylist
 from quantis.services import MusicService, TrackHistoryService
+from quantis.services.async_wave import (
+    DEFAULT_WAVE_MOOD,
+    DEFAULT_WAVE_SEEDS,
+    WAVE_ACTIVITIES,
+    WAVE_CHARACTER,
+    WAVE_MOODS,
+    WaveMood,
+)
 from quantis.services.liked_tracks import LikedTracksService
 from quantis.services.user_playlists import UserPlaylistsService
 from quantis.ui.cover_prefetch import schedule_cover_prefetch
@@ -83,6 +91,8 @@ class HomeViewModel(BaseViewModel):
     home_changed = Signal()
     recent_changed = Signal()
     downloaded_changed = Signal()
+    wave_moods_changed = Signal()
+    """Колесо настроений «Моей волны» перечитано или сменилась активная волна."""
 
     def __init__(
         self,
@@ -110,6 +120,8 @@ class HomeViewModel(BaseViewModel):
         )
         self._recommendation_playlist: RecommendationPlaylist | None = None
         self._wave_playlist: WavePlaylist | None = None
+        self._wave_moods: tuple[WaveMood, ...] = ()
+        self._wave_mood_busy = False
         self._load_started = False
         self._bridge: AsyncBridge | None = None
         # Поколение списка плейлистов: долгая загрузка главной (волна, рекомендации)
@@ -238,6 +250,7 @@ class HomeViewModel(BaseViewModel):
                     on_done=lambda: self.home_changed.emit(),
                     limit=12,
                 )
+                await self.refresh_wave_moods()
         except Exception as exc:
             logger.exception("Не удалось загрузить главную страницу")
             message = str(exc)
@@ -511,7 +524,8 @@ class HomeViewModel(BaseViewModel):
                 tracks,
                 playlist.cover_path,
                 source=playlist.source,
-                station=playlist.station,
+                seeds=playlist.seeds,
+                session_id=playlist.session_id,
                 batch_id=playlist.batch_id,
             )
         elif isinstance(playlist, RecommendationPlaylist):
@@ -555,6 +569,85 @@ class HomeViewModel(BaseViewModel):
         if playlist is None:
             return
         await self.play_playlist(playlist, start_index=0)
+
+    # --- настроения «Моей волны» ------------------------------------------
+
+    @property
+    def wave_moods(self) -> tuple[WaveMood, ...]:
+        return self._wave_moods
+
+    @property
+    def wave_mood_busy(self) -> bool:
+        """Идёт переключение волны — карточки колеса неактивны."""
+        return self._wave_mood_busy
+
+    @property
+    def active_wave_seeds(self) -> tuple[str, ...]:
+        wave = self._wave_playlist
+        return wave.seeds if wave is not None else DEFAULT_WAVE_SEEDS
+
+    @property
+    def active_wave_mood(self) -> WaveMood:
+        """Карточка текущей волны — для шапки страницы «Моя волна»."""
+        seeds = self.active_wave_seeds
+        if seeds == DEFAULT_WAVE_SEEDS:
+            return DEFAULT_WAVE_MOOD
+        known = (*self._wave_moods, *WAVE_MOODS, *WAVE_ACTIVITIES, *WAVE_CHARACTER)
+        for mood in known:
+            if mood.seeds == seeds and not mood.is_control:
+                return mood
+        wave = self._wave_playlist
+        name = wave.name if wave is not None else DEFAULT_WAVE_MOOD.name
+        return WaveMood(id=",".join(seeds), name=name, seeds=seeds)
+
+    @property
+    def wave_is_current(self) -> bool:
+        """Сейчас в плеере волна (а не плейлист)."""
+        current = self._playback.playlist_manager.current_playlist
+        return isinstance(current, WavePlaylist)
+
+    async def refresh_wave_moods(self) -> None:
+        """Перечитать колесо: список персональный и меняется после переключения."""
+        if not yandex_token():
+            return
+        try:
+            moods = await self._music.wave.fetch_wheel(self.active_wave_seeds)
+        except Exception:
+            logger.exception("Не удалось загрузить настроения волны")
+            return
+        self._run_main(lambda: self._set_wave_moods(tuple(moods)))
+
+    async def play_wave_mood(self, mood: WaveMood) -> None:
+        """Новая сессия волны по сидам карточки — и сразу играть."""
+        if self._wave_mood_busy:
+            return
+        self._run_main(lambda: self._set_wave_mood_busy(True))
+        try:
+            playlist = await self._music.wave.start_yandex_wave(mood.seeds)
+            if playlist is None or not len(playlist):
+                self._run_main(
+                    lambda: self.emit_error(f"Не удалось включить «{mood.name}»")
+                )
+                return
+            self._wave_playlist = playlist
+            await self.play_playlist(playlist, start_index=0)
+        finally:
+            self._run_main(lambda: self._set_wave_mood_busy(False))
+        await self.refresh_wave_moods()
+
+    def _set_wave_moods(self, moods: tuple[WaveMood, ...]) -> None:
+        self._wave_moods = moods
+        self.wave_moods_changed.emit()
+
+    def _set_wave_mood_busy(self, busy: bool) -> None:
+        self._wave_mood_busy = busy
+        self.wave_moods_changed.emit()
+
+    def _run_main(self, fn) -> None:
+        if self._bridge is not None:
+            self._bridge.invoke_main(fn)
+        else:
+            fn()
 
     async def ensure_recommendations(self) -> RecommendationPlaylist | None:
         current = self._recommendation_playlist

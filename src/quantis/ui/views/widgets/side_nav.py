@@ -92,6 +92,7 @@ class SideNavRail(QFrame):
 
     CORE_TOP = (
         ("recent.svg", "Главная", 0),
+        ("radio.svg", "Моя волна", 8),
         ("search.svg", "Поиск", 1),
         ("download.svg", "Библиотека", 2),
         ("stats.svg", "Статистика", 3),

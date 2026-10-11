@@ -344,12 +344,15 @@ class WavePlaylist(Playlist):
         cover_path: str = get_asset_path("assets/icons/radio.svg"),
         *,
         source: str = "yandex",
-        station: str = "user:onyourwave",
+        seeds: Iterable[str] = ("user:onyourwave",),
+        session_id: str | None = None,
         batch_id: str | None = None,
     ) -> None:
         super().__init__(name, tracks or (), cover_path)
         self.source = source
-        self.station = station
+        # Сиды сессии: ``user:onyourwave``, ``mood:calm``, ``activity:run``…
+        self.seeds: tuple[str, ...] = tuple(seeds)
+        self.session_id = session_id
         self.batch_id = batch_id
 
     def get_tracks(self) -> Tuple[Track, ...]:

@@ -226,7 +226,8 @@ class PlaylistViewModel(BaseViewModel):
                 tracks,
                 playlist.cover_path,
                 source=playlist.source,
-                station=playlist.station,
+                seeds=playlist.seeds,
+                session_id=playlist.session_id,
                 batch_id=playlist.batch_id,
             )
         return RecommendationPlaylist(playlist.name, tracks, playlist.cover_path)

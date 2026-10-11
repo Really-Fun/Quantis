@@ -233,3 +233,78 @@ QToolButton#waveQuickPlay:disabled {
     background: rgba(${ink_rgb}, 0.1);
     color: rgba(${ink_rgb}, 0.35);
 }
+
+QScrollArea#waveMoodScroll,
+QWidget#waveMoodRow {
+    background: transparent;
+}
+
+QToolButton#waveMoodChip {
+    background: ${chip_bg};
+    border: 1px solid rgba(${ink_rgb}, 0.10);
+    border-radius: 15px;
+    color: ${text_soft};
+    padding: 6px 14px;
+    font-size: 12px;
+    font-weight: 600;
+}
+
+QToolButton#waveMoodChip[control="true"] {
+    border-color: rgba(${tint_rgb}, 0.45);
+    color: ${title};
+}
+
+QToolButton#waveMoodChip:hover {
+    background: rgba(${hl_rgb}, 0.14);
+    border-color: rgba(${hl_rgb}, 0.55);
+    color: ${title};
+}
+
+QToolButton#waveMoodChip:checked {
+    background: rgba(${tint_rgb}, 0.26);
+    border-color: rgba(${tint_rgb}, 0.60);
+    color: ${title};
+}
+
+QToolButton#waveMoodChip:disabled {
+    color: rgba(${ink_rgb}, 0.35);
+}
+
+QScrollArea#waveScroll,
+QWidget#waveScrollContent {
+    background: transparent;
+}
+
+QToolButton#waveHeroPlay {
+    background: rgb(${tint_rgb});
+    border: none;
+    border-radius: 20px;
+    padding: 10px 22px;
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+QToolButton#waveHeroPlay:hover {
+    background: rgba(${tint_rgb}, 0.85);
+}
+
+QToolButton#waveHeroAction {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    border-radius: 20px;
+    padding: 10px 18px;
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+QToolButton#waveHeroAction:hover {
+    background: rgba(255, 255, 255, 0.16);
+    border-color: rgba(255, 255, 255, 0.35);
+}
+
+QToolButton#waveHeroPlay:disabled,
+QToolButton#waveHeroAction:disabled {
+    color: rgba(255, 255, 255, 0.45);
+}

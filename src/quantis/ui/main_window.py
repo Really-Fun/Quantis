@@ -59,6 +59,7 @@ from quantis.ui.views.plugins_page import PluginsPage
 from quantis.ui.views.search_page import SearchPage
 from quantis.ui.views.settings_page import SettingsPage
 from quantis.ui.views.stats_page import StatsPage
+from quantis.ui.views.wave_page import WavePage
 from quantis.ui.views.widgets.app_header import AppHeader
 from quantis.ui.views.widgets.backdrop_panel import (
     BackdropPanel,
@@ -80,7 +81,7 @@ class QuantisMainWindow(QMainWindow):
 
     Страницы в QStackedWidget (индексы):
       0 Home, 1 Search, 2 Library, 3 Stats, 4 Plugins, 5 Member, 6 Settings,
-      7 Playlist (overlay, не в боковом nav), 8+ — страницы плагинов.
+      7 Playlist (overlay, не в боковом nav), 8 Моя волна, 9+ — страницы плагинов.
 
     Страницы 1–6 и 7 создаются лениво через ``_ensure_*_page`` при первом
     переходе (в stack изначально стоят пустые QWidget-заглушки).
@@ -94,7 +95,8 @@ class QuantisMainWindow(QMainWindow):
     PAGE_MEMBER = 5
     PAGE_SETTINGS = 6
     PAGE_PLAYLIST = 7
-    _CORE_STACK_COUNT = 8
+    PAGE_WAVE = 8
+    _CORE_STACK_COUNT = 9
 
     _PAGE_META = {
         PAGE_HOME: ("Главная", ""),
@@ -104,6 +106,7 @@ class QuantisMainWindow(QMainWindow):
         PAGE_PLUGINS: ("Плагины", ""),
         PAGE_MEMBER: ("Member", ""),
         PAGE_SETTINGS: ("Настройки", ""),
+        PAGE_WAVE: ("Моя волна", ""),
     }
 
     def __init__(self, bundle: ApplicationBundle, parent=None) -> None:
@@ -212,6 +215,7 @@ class QuantisMainWindow(QMainWindow):
         self._member_page: MemberPage | None = None
         self._settings_page: SettingsPage | None = None
         self._playlist_page: PlaylistPage | None = None
+        self._wave_page: WavePage | None = None
 
         self._stack.addWidget(self._home_page)  # 0
         self._stack.addWidget(QWidget())  # 1 SEARCH
@@ -221,6 +225,7 @@ class QuantisMainWindow(QMainWindow):
         self._stack.addWidget(QWidget())  # 5 MEMBER
         self._stack.addWidget(QWidget())  # 6 SETTINGS
         self._stack.addWidget(QWidget())  # 7 PLAYLIST
+        self._stack.addWidget(QWidget())  # 8 WAVE
 
         self._home_page.playlist_open_requested.connect(self._open_playlist_page)
         self._home_page.search_requested.connect(
@@ -371,6 +376,8 @@ class QuantisMainWindow(QMainWindow):
     def _apply_eco(self, active: bool) -> None:
         self._shell.set_eco(active)
         self._home_page.set_eco(active)
+        if self._wave_page is not None:
+            self._wave_page.set_eco(active)
         self._player_vm.set_eco(active)
         self._bundle.history_watcher.set_eco(active)
         self._bundle.music.streamer.set_eco(active)
@@ -517,9 +524,10 @@ class QuantisMainWindow(QMainWindow):
             self._now_playing.hide()
             return
         wide = self.width() >= 1100
-        # на главной трек показывает сцена, справа — «Дальше»
-        on_home = self._stack.currentIndex() == self.PAGE_HOME
-        show = self._ui_prefs.show_now_playing_panel and wide and not on_home
+        # на главной трек показывает сцена, справа — «Дальше»; у волны своя шапка
+        page = self._stack.currentIndex()
+        own_stage = page in (self.PAGE_HOME, self.PAGE_WAVE)
+        show = self._ui_prefs.show_now_playing_panel and wide and not own_stage
         self._now_playing.setVisible(show)
 
     def _on_page_changed(self, page_id: int) -> None:
@@ -582,6 +590,20 @@ class QuantisMainWindow(QMainWindow):
             self._settings_page.update_checked.connect(self._sync_update_banner)
             self._replace_stack_page(self.PAGE_SETTINGS, self._settings_page)
         return self._settings_page
+
+    def _ensure_wave_page(self) -> WavePage:
+        if self._wave_page is None:
+            self._wave_page = WavePage(self._home_vm, self._bridge)
+            self._wave_page.toggle_pause_requested.connect(self._player_vm.toggle_pause)
+            self._player_vm.is_playing_changed.connect(self._wave_page.set_playing)
+            self._player_vm.track_changed.connect(
+                lambda _track: self._wave_page.set_playing(
+                    self._bundle.player.is_playing()
+                )
+            )
+            self._wave_page.set_eco(self._eco.active)
+            self._replace_stack_page(self.PAGE_WAVE, self._wave_page)
+        return self._wave_page
 
     def _ensure_playlist_page(self) -> PlaylistPage:
         """Ленивая инициализация детальной страницы плейлиста (index 7, вне nav)."""
@@ -690,6 +712,8 @@ class QuantisMainWindow(QMainWindow):
             self._ensure_member_page()
         elif page_id == self.PAGE_SETTINGS:
             self._ensure_settings_page()
+        elif page_id == self.PAGE_WAVE:
+            self._ensure_wave_page()
         previous = self._current_page
         self._current_page = page_id
         self._stack.setCurrentIndex(page_id)

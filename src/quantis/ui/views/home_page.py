@@ -35,6 +35,7 @@ from quantis.ui.views.widgets.now_playing_stage import (
 )
 from quantis.ui.views.widgets.playlist_card import PlaylistShelf, QuickPickShelf
 from quantis.ui.views.widgets.track_card import TrackCardDelegate
+from quantis.ui.views.widgets.wave_moods import WaveMoodStrip
 
 _MAX_VISIBLE_TRACKS = 12
 _SIDE_MARGIN = 28
@@ -110,6 +111,13 @@ class HomePage(QWidget):
         self._quick_section.add_widget_block(self._quick_shelf)
         self._layout.addWidget(self._quick_section)
 
+        self._wave_moods_section = HomeSection("Моя волна по настроению")
+        self._wave_moods = WaveMoodStrip()
+        self._wave_moods.mood_activated.connect(self._on_wave_mood)
+        self._wave_moods_section.add_widget_block(self._wave_moods)
+        self._wave_moods_section.hide()
+        self._layout.addWidget(self._wave_moods_section)
+
         self._library_section = HomeSection("Плейлисты")
         create_btn = QToolButton()
         create_btn.setObjectName("homeSectionAction")
@@ -171,6 +179,7 @@ class HomePage(QWidget):
 
         self._vm.home_changed.connect(self._rebuild)
         self._vm.recent_changed.connect(self._on_recent_changed)
+        self._vm.wave_moods_changed.connect(self._sync_wave_moods)
         self._sync_stage()
 
     def _make_track_table(
@@ -389,6 +398,20 @@ class HomePage(QWidget):
         self._quick_shelf.set_wave_state(
             available=bool(yandex_token()), track_count=count
         )
+
+    def _sync_wave_moods(self) -> None:
+        moods = self._vm.wave_moods
+        self._wave_moods.set_moods(
+            moods,
+            active_seeds=self._vm.active_wave_seeds,
+            busy=self._vm.wave_mood_busy,
+        )
+        self._wave_moods_section.setVisible(bool(moods))
+
+    def _on_wave_mood(self, mood) -> None:
+        if self._bridge is None:
+            return
+        schedule(self._vm.play_wave_mood(mood), self._bridge)
 
     def _on_recommendations_open(self) -> None:
         if self._bridge is None:
