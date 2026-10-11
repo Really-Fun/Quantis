@@ -165,3 +165,48 @@ async def test_prefetch_next_track_uses_upgrade_cycle() -> None:
         manager.set_playlist(previous)
 
     music.streamer.prefetch_stream.assert_awaited_once_with(t2)
+
+
+def _controller() -> PlaybackController:
+    return PlaybackController(
+        player=MagicMock(),
+        playlist_manager=PlaylistManager(),
+        music_service=MagicMock(),
+        event_bus=EventBus(),
+        history=None,
+        async_bridge=None,
+    )
+
+
+@pytest.mark.asyncio
+async def test_next_track_provider_goes_before_playlist() -> None:
+    playback = _controller()
+    queued = YandexTrack(track_id="9", title="Queued", author="A")
+    provider_calls: list[bool] = []
+
+    async def provider():
+        provider_calls.append(True)
+        return queued if len(provider_calls) == 1 else None
+
+    playback.set_next_track_provider(provider)
+    playback.play_track = AsyncMock()  # type: ignore[method-assign]
+
+    await playback.play_next()
+    playback.play_track.assert_awaited_once_with(queued)
+
+    # Очередь пуста — без плейлиста играть нечего, но и падать нельзя.
+    await playback.play_next()
+    assert playback.play_track.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_broken_provider_falls_back_to_playlist() -> None:
+    playback = _controller()
+
+    async def provider():
+        raise RuntimeError("boom")
+
+    playback.set_next_track_provider(provider)
+    playback.play_track = AsyncMock()  # type: ignore[method-assign]
+    await playback.play_next()
+    playback.play_track.assert_not_awaited()

@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
 
 from quantis.core.async_bridge import AsyncBridge
 from quantis.ui.async_ui import schedule
-from quantis.ui.playlist_actions import show_add_to_playlist_menu
+from quantis.ui.playlist_actions import add_track_actions, show_add_to_playlist_menu
 from quantis.ui.viewmodels.home_vm import HomeViewModel
 from quantis.ui.views.widgets.home_section import HomeSection
 from quantis.ui.views.widgets.track_card import TrackCardDelegate
@@ -104,6 +104,7 @@ class LibraryPage(QWidget):
             lambda: show_add_to_playlist_menu(track, bridge=self._bridge, parent=self)
         )
         menu.addAction(add_action)
+        add_track_actions(menu, track)
         menu.addSeparator()
         remove_action = QAction("Удалить скачанный файл", menu)
         remove_action.triggered.connect(

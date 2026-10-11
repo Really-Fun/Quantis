@@ -65,3 +65,33 @@ def test_add_from_any_page_announces_playlists_updated(monkeypatch) -> None:
     )
 
     assert seen == [True]
+
+
+def test_plugin_track_actions_in_menu(qapp) -> None:
+    from PySide6.QtWidgets import QMenu
+
+    from quantis.ui.ui_extensions import TrackActionExtension, UiExtensionHost
+
+    host = UiExtensionHost.instance()
+    picked: list[str] = []
+    host.register_track_action(
+        TrackActionExtension(
+            action_id="t.show",
+            label=lambda t: f"В комнату: {t.title}",
+            callback=lambda t: picked.append(t.title),
+        )
+    )
+    host.register_track_action(
+        TrackActionExtension(action_id="t.hidden", label=lambda t: None, callback=print)
+    )
+    try:
+        menu = QMenu()
+        track = YandexTrack(track_id="1", title="Song", author="A")
+        assert playlist_actions.add_track_actions(menu, track) is True
+        actions = menu.actions()
+        assert [a.text() for a in actions] == ["В комнату: Song"]
+        actions[0].trigger()
+        assert picked == ["Song"]
+    finally:
+        host.unregister_track_action("t.show")
+        host.unregister_track_action("t.hidden")

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 
 from PySide6.QtGui import QAction, QCursor
@@ -10,6 +11,8 @@ from PySide6.QtWidgets import QInputDialog, QMenu, QMessageBox, QWidget
 from quantis.core.async_bridge import AsyncBridge
 from quantis.models import Track
 from quantis.services.user_playlists import UserPlaylistsService
+
+logger = logging.getLogger(__name__)
 
 _event_bus = None
 
@@ -38,6 +41,26 @@ def prompt_new_playlist_name(parent: QWidget | None = None) -> str | None:
     return clean or None
 
 
+def add_track_actions(menu: QMenu, track: Track) -> bool:
+    """Пункты плагинов для трека (например, «Предложить в комнату»). True — что-то добавили."""
+    from quantis.ui.ui_extensions import UiExtensionHost
+
+    added = False
+    for extension in UiExtensionHost.instance().track_actions():
+        try:
+            label = extension.label(track)
+        except Exception:
+            logger.exception("Пункт меню трека %s сломался", extension.action_id)
+            continue
+        if not label:
+            continue
+        action = QAction(label, menu)
+        action.triggered.connect(lambda checked=False, cb=extension.callback: cb(track))
+        menu.addAction(action)
+        added = True
+    return added
+
+
 def show_add_to_playlist_menu(
     track: Track,
     *,
@@ -54,6 +77,8 @@ def show_add_to_playlist_menu(
         def show_menu() -> None:
             menu = QMenu(parent)
             menu.setObjectName("playlistPickMenu")
+            if add_track_actions(menu, track):
+                menu.addSeparator()
             for name in names:
                 action = QAction(name, menu)
 

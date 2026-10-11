@@ -12,6 +12,7 @@ from PySide6.QtWidgets import QWidget
 if TYPE_CHECKING:
     from quantis.controllers.playback_controller import PlaybackController
     from quantis.core.async_bridge import AsyncBridge
+    from quantis.models import Track
     from quantis.plugins.event_bus import EventBus
     from quantis.services.music_service import MusicService
 
@@ -74,6 +75,29 @@ class PluginHost:
         from quantis.ui.ui_extensions import UiExtensionHost
 
         UiExtensionHost.instance().unregister_player_action(action_id)
+
+    def register_track_action(
+        self,
+        action_id: str,
+        label: Callable[[Track], str | None],
+        callback: Callable[[Track], None],
+    ) -> None:
+        """Пункт в контекстном меню любого трека. Колбэки вызываются в UI-потоке."""
+        from quantis.ui.ui_extensions import TrackActionExtension, UiExtensionHost
+
+        UiExtensionHost.instance().register_track_action(
+            TrackActionExtension(
+                action_id=action_id,
+                label=label,
+                callback=callback,
+                from_plugin=True,
+            )
+        )
+
+    def unregister_track_action(self, action_id: str) -> None:
+        from quantis.ui.ui_extensions import UiExtensionHost
+
+        UiExtensionHost.instance().unregister_track_action(action_id)
 
     def register_page(
         self,

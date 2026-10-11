@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import inspect
 import logging
+from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 from quantis.core.async_bridge import AsyncBridge
@@ -20,6 +21,8 @@ _MAX_RECOVERIES = 3
 _MAX_FAILOVERS = 3
 # Столько отыгранных миллисекунд считаем доказательством, что связь жива.
 _HEALTHY_POSITION_MS = 15_000
+
+NextTrackProvider = Callable[[], Awaitable[Track | None]]
 
 
 class PlaybackController:
@@ -51,6 +54,15 @@ class PlaybackController:
         self._seek_pending = False
         self._audio_live = False
         self._repeat_mode = UiPreferences().repeat_mode
+        self._next_track_provider: NextTrackProvider | None = None
+
+    def set_next_track_provider(self, provider: NextTrackProvider | None) -> None:
+        """Внешняя очередь (например, комнаты Together) идёт раньше плейлиста.
+
+        provider возвращает трек, который играть следующим, или None — тогда
+        следующий берётся из текущего плейлиста как обычно.
+        """
+        self._next_track_provider = provider
 
     @property
     def repeat_mode(self) -> RepeatMode:
@@ -376,6 +388,8 @@ class PlaybackController:
             self._bridge.schedule(self._prefetch_next_track(track))
 
     async def play_next(self) -> None:
+        if await self._play_from_provider():
+            return
         playlist = self.playlist_manager.current_playlist
         if playlist is None or len(playlist) == 0:
             return
@@ -390,6 +404,20 @@ class PlaybackController:
 
         track = playlist.move_next_track()
         await self.play_track(track)
+
+    async def _play_from_provider(self) -> bool:
+        provider = self._next_track_provider
+        if provider is None:
+            return False
+        try:
+            track = await provider()
+        except Exception:
+            logger.exception("Внешняя очередь не отдала трек")
+            return False
+        if track is None:
+            return False
+        await self.play_track(track)
+        return True
 
     async def _play_wave_next(self, playlist: WavePlaylist) -> None:
         finished = self._current_track

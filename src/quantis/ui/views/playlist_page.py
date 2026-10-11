@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
 from quantis.core.async_bridge import AsyncBridge
 from quantis.models.playlist import RecommendationPlaylist, WavePlaylist
 from quantis.ui.async_ui import schedule
-from quantis.ui.playlist_actions import show_add_to_playlist_menu
+from quantis.ui.playlist_actions import add_track_actions, show_add_to_playlist_menu
 from quantis.ui.viewmodels.playlist_vm import PlaylistViewModel
 from quantis.ui.views.widgets.cover_art import playlist_cover_path
 from quantis.ui.views.widgets.playlist_card import GradientCover
@@ -265,6 +265,7 @@ class PlaylistPage(QWidget):
             lambda: show_add_to_playlist_menu(track, bridge=self._bridge, parent=self)
         )
         menu.addAction(add_action)
+        add_track_actions(menu, track)
         if self._vm.can_remove_tracks:
             menu.addSeparator()
             remove_action = QAction(self._vm.remove_action_label, menu)

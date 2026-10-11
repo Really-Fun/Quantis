@@ -4,10 +4,14 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import QWidget
+
+if TYPE_CHECKING:
+    from quantis.models import Track
 
 
 @dataclass
@@ -26,6 +30,20 @@ class PlayerActionExtension:
     tooltip: str
     icon: QIcon | None
     callback: Callable[[], None]
+    from_plugin: bool = False
+
+
+@dataclass
+class TrackActionExtension:
+    """Пункт контекстного меню трека (поиск, главная, плейлисты, плеер).
+
+    label(track) решает, показывать ли пункт: None — скрыть (например, плагин
+    сейчас не может ничего сделать с треком).
+    """
+
+    action_id: str
+    label: Callable[[Track], str | None]
+    callback: Callable[[Track], None]
     from_plugin: bool = False
 
 
@@ -75,6 +93,7 @@ class UiExtensionHost(QObject):
         super().__init__()
         self._nav: list[NavExtension] = []
         self._player_actions: list[PlayerActionExtension] = []
+        self._track_actions: list[TrackActionExtension] = []
         self._pages: list[PageExtension] = []
         self._background_layers: list[BackgroundLayerExtension] = []
         self._initialized = True
@@ -108,6 +127,20 @@ class UiExtensionHost(QObject):
         ]
         if len(self._player_actions) != before:
             self.player_actions_changed.emit()
+
+    def register_track_action(self, action: TrackActionExtension) -> None:
+        self._track_actions = [
+            a for a in self._track_actions if a.action_id != action.action_id
+        ]
+        self._track_actions.append(action)
+
+    def unregister_track_action(self, action_id: str) -> None:
+        self._track_actions = [
+            a for a in self._track_actions if a.action_id != action_id
+        ]
+
+    def track_actions(self) -> list[TrackActionExtension]:
+        return list(self._track_actions)
 
     def register_page(self, page: PageExtension) -> None:
         self._pages = [p for p in self._pages if p.page_id != page.page_id]
@@ -154,6 +187,7 @@ class UiExtensionHost(QObject):
     def clear(self) -> None:
         self._nav.clear()
         self._player_actions.clear()
+        self._track_actions.clear()
         self._pages.clear()
         self._background_layers.clear()
         self.nav_changed.emit()
