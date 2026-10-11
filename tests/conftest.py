@@ -25,3 +25,13 @@ tempfile.tempdir = tempfile.mkdtemp(prefix="quantis-test-tmp-")
 def qapp():
     app = QApplication.instance() or QApplication(sys.argv)
     yield app
+
+
+@pytest.fixture(autouse=True)
+def _fresh_yandex_token_cache():
+    """Токен Яндекса кэшируется в памяти — тесты подменяют keyring по-своему."""
+    from quantis.config.credentials import reset_yandex_token_cache
+
+    reset_yandex_token_cache()
+    yield
+    reset_yandex_token_cache()

@@ -155,9 +155,25 @@ class BackdropCompositor(QObject):
             self._invalidate(soft=True)
 
     def set_phase(self, phase: float) -> None:
-        if phase != self._phase:
-            self._phase = phase
+        if phase == self._phase:
+            return
+        self._phase = phase
+        if self._uses_soft_layer():
             self._invalidate(soft=True)
+        else:
+            # Под интерфейсом клип/картинка/обложка — пульс темы не виден.
+            # Раньше он всё равно перерисовывал окно целиком 25 раз в секунду.
+            self._soft_dirty = True
+
+    def _uses_soft_layer(self) -> bool:
+        """Тот же выбор, что в ``_layer``: виден ли мягкий слой темы."""
+        if self._cinematic:
+            return False
+        if self._mode == "video" and self.has_video_frame():
+            return False
+        if self._mode == "image" and not self._wallpaper.isNull():
+            return False
+        return not (self._shows_cover() and not self._cover.isNull())
 
     def set_cinematic(self, enabled: bool) -> None:
         if enabled != self._cinematic:

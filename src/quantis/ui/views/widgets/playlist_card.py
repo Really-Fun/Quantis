@@ -277,6 +277,12 @@ class QuickPickTile(QFrame):
     def playlist(self) -> Playlist:
         return self._playlist
 
+    def set_playlist(self, playlist: Playlist) -> None:
+        """Тот же плейлист новым объектом (свежие треки) — без пересоздания;
+        обложка перечитывается, только если сменился её файл."""
+        self._playlist = playlist
+        self._thumb.set_content(playlist.name, playlist_cover_path(playlist))
+
     def apply_cell(self, width: int, height: int) -> None:
         self.setFixedSize(width, height)
         metrics = QFontMetrics(self._title.font())
@@ -392,6 +398,9 @@ class WrapGrid(QWidget):
         self._items: list[QWidget] = []
         self._reflowing = False
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
+    def items(self) -> list[QWidget]:
+        return list(self._items)
 
     def set_widgets(self, widgets: list[QWidget]) -> None:
         for old in self._items:
@@ -510,14 +519,21 @@ class QuickPickShelf(QWidget):
         self._empty.setWordWrap(True)
         self._empty.hide()
 
+        self._signature: tuple | None = None
         self._grid = WrapGrid(min_item_width=200, spacing=10, fixed_row_height=72)
         self._grid.setObjectName("quickPickShelfHost")
         outer.addWidget(self._empty)
         outer.addWidget(self._grid)
 
+    @staticmethod
+    def _tile_key(playlist: Playlist) -> tuple:
+        """Состав полки: смена треков или обложки плитку не пересоздаёт."""
+        return (type(playlist).__name__, getattr(playlist, "kind", None), playlist.name)
+
     def set_playlists(self, playlists: list[Playlist]) -> None:
         if not playlists:
             self._wave_tile = None
+            self._signature = None
             self._grid.set_widgets([])
             self._grid.hide()
             self._empty.show()
@@ -526,6 +542,14 @@ class QuickPickShelf(QWidget):
         self._grid.show()
         # «Моя волна» — всегда первой
         ordered = sorted(playlists, key=lambda p: getattr(p, "kind", None) != "wave")
+        # Главная зовёт это на каждую смену трека («Недавние»): пересоздание
+        # плиток с синхронным декодированием обложек давало рывки 40–60 мс.
+        signature = tuple(self._tile_key(p) for p in ordered)
+        if signature == self._signature:
+            for tile, playlist in zip(self._grid.items(), ordered, strict=True):
+                tile.set_playlist(playlist)
+            return
+        self._signature = signature
         tiles: list[QWidget] = []
         self._wave_tile = None
         for playlist in ordered:

@@ -4,7 +4,17 @@ import logging
 from pathlib import Path
 from time import monotonic
 
-from PySide6.QtCore import QObject, QPoint, QRect, QSize, Qt, QUrl, Signal
+from PySide6.QtCore import (
+    QObject,
+    QPoint,
+    QRect,
+    QRunnable,
+    QSize,
+    Qt,
+    QThreadPool,
+    QUrl,
+    Signal,
+)
 from PySide6.QtGui import QImage, QImageReader
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer, QVideoFrame, QVideoSink
 from PySide6.QtWidgets import QHBoxLayout, QWidget
@@ -44,8 +54,59 @@ def _media_url(url: str) -> QUrl:
     return QUrl.fromLocalFile(url)
 
 
+def _compact_frame(image: QImage, max_side: int) -> QImage:
+    """Даунскейл + RGB32: отцепляемся от буфера кадра, без альфы."""
+    if image.isNull():
+        return image
+    downscaled = max(image.width(), image.height()) > max_side
+    if downscaled:
+        image = image.scaled(
+            max_side,
+            max_side,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.FastTransformation,
+        )
+    if image.format() != QImage.Format.Format_RGB32:
+        return image.convertToFormat(QImage.Format.Format_RGB32)
+    return image if downscaled else image.copy()
+
+
+class _FrameJob(QRunnable):
+    """YUV → RGB и даунскейл кадра вне главного потока.
+
+    ``QVideoFrame.toImage()`` переводит кадр в полном разрешении: у 4K-клипа
+    это ~26 мс на кадр, при 30 к/с — 80 % главного потока."""
+
+    def __init__(self, feed: _VideoFeed, frame: QVideoFrame, max_side: int, gen: int):
+        super().__init__()
+        self._feed, self._frame = feed, frame
+        self._max_side, self._gen = max_side, gen
+
+    def run(self) -> None:
+        image = QImage()
+        try:
+            if self._frame.map(QVideoFrame.MapMode.ReadOnly):
+                try:
+                    image = self._frame.toImage()
+                finally:
+                    self._frame.unmap()
+            image = _compact_frame(image, self._max_side)
+        except Exception:
+            logger.debug("Кадр видеофона не сконвертирован", exc_info=True)
+            image = QImage()
+        try:
+            self._feed._converted.emit(image, self._gen)
+        except RuntimeError:
+            pass  # фид уже удалён — кадр никому не нужен
+
+
 class _VideoFeed(QObject):
-    """Кадры видео через QVideoSink → компоновщик фона (сам ничего не рисует)."""
+    """Кадры видео через QVideoSink → компоновщик фона (сам ничего не рисует).
+
+    Кадр конвертируется в рабочем потоке; пока он занят, новые кадры
+    пропускаются — фон отстаёт на кадр, а интерфейс не ждёт декодера."""
+
+    _converted = Signal(QImage, int)
 
     def __init__(self, compositor: BackdropCompositor, parent: QObject | None = None):
         super().__init__(parent)
@@ -55,6 +116,11 @@ class _VideoFeed(QObject):
         self._last_frame_at = 0.0
         self._min_interval = 1.0 / WALLPAPER_DEFAULT_FPS
         self._max_side = wallpaper_decode_max_side(360)
+        self._pool = QThreadPool(self)
+        self._pool.setMaxThreadCount(1)
+        self._busy = False
+        self._gen = 0
+        self._converted.connect(self._on_converted)
         self._sink.videoFrameChanged.connect(self._on_frame)
 
     @property
@@ -77,6 +143,7 @@ class _VideoFeed(QObject):
         self._max_side = max(320, int(max_side))
 
     def clear(self) -> None:
+        self._gen += 1  # кадры, что ещё конвертируются, уже не нужны
         self._source = QImage()
         self._last_frame_at = 0.0
         self._compositor.set_video_frame(None)
@@ -84,46 +151,28 @@ class _VideoFeed(QObject):
     def set_still(self, image: QImage) -> None:
         if image.isNull():
             return
+        self._gen += 1
         self._last_frame_at = 0.0
-        self._push(image)
+        self._push(_compact_frame(image, self._max_side))
 
     def _on_frame(self, frame: QVideoFrame) -> None:
-        if not frame.isValid():
+        if not frame.isValid() or self._busy:
             return
         now = monotonic()
         if now - self._last_frame_at < self._min_interval:
             return
         self._last_frame_at = now
+        self._busy = True
+        self._pool.start(_FrameJob(self, QVideoFrame(frame), self._max_side, self._gen))
 
-        if not frame.map(QVideoFrame.MapMode.ReadOnly):
-            return
-        try:
-            image = frame.toImage()
-        finally:
-            frame.unmap()
-
-        if not image.isNull():
+    def _on_converted(self, image: QImage, gen: int) -> None:
+        self._busy = False
+        if gen == self._gen and not image.isNull():
             self._push(image)
 
     def _push(self, image: QImage) -> None:
-        self._source = self._compact_frame(image)
+        self._source = image
         self._compositor.set_video_frame(self._source)
-
-    def _compact_frame(self, image: QImage) -> QImage:
-        """Даунскейл + RGB32: отцепляемся от буфера кадра, без альфы."""
-        if image.isNull():
-            return image
-        downscaled = max(image.width(), image.height()) > self._max_side
-        if downscaled:
-            image = image.scaled(
-                self._max_side,
-                self._max_side,
-                Qt.AspectRatioMode.KeepAspectRatio,
-                Qt.TransformationMode.FastTransformation,
-            )
-        if image.format() != QImage.Format.Format_RGB32:
-            return image.convertToFormat(QImage.Format.Format_RGB32)
-        return image if downscaled else image.copy()
 
 
 class WallpaperBackdrop(QWidget):

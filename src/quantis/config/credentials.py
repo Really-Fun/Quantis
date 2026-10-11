@@ -15,6 +15,7 @@ import json
 import logging
 import os
 import re
+import threading
 from pathlib import Path
 
 from keyring import delete_password, get_password, set_password
@@ -370,13 +371,36 @@ def _validate_youtube_auth(value: str) -> str:
     return _normalize_youtube_auth(value)
 
 
+# Чтение keyring — синхронный D-Bus к Secret Service: на Linux 50–150 мс.
+# yandex_token() зовут из UI (пересборка главной, каждый трек волны), поэтому
+# токен держим в памяти; save/delete обновляют кэш сами.
+_token_lock = threading.Lock()
+_token_cache: str | None = None
+
+
 def yandex_token() -> str:
     """Токен Яндекса или "", если его нет или keyring недоступен."""
-    try:
-        return get_password(SERVICE_NAME_YANDEX, USER) or ""
-    except KeyringError:
-        # Linux без gnome-keyring/KWallet: NoKeyringError вместо пустого токена.
-        return ""
+    global _token_cache
+    cached = _token_cache
+    if cached is not None:
+        return cached
+    with _token_lock:
+        if _token_cache is not None:
+            return _token_cache
+        try:
+            _token_cache = get_password(SERVICE_NAME_YANDEX, USER) or ""
+        except KeyringError:
+            # Linux без gnome-keyring/KWallet: NoKeyringError вместо пустого
+            # токена. Не кэшируем — keyring может подняться позже.
+            return ""
+        return _token_cache
+
+
+def reset_yandex_token_cache() -> None:
+    """Перечитать токен из keyring при следующем вызове (тесты, смена бэкенда)."""
+    global _token_cache
+    with _token_lock:
+        _token_cache = None
 
 
 def yotube_cookie() -> str:
@@ -417,7 +441,10 @@ def save_yandex_token(token: str) -> None:
     value = token.strip()
     if not value:
         raise ValueError("Токен не может быть пустым")
+    global _token_cache
     set_password(SERVICE_NAME_YANDEX, USER, value)
+    with _token_lock:
+        _token_cache = value
     Clients().reload_yandex_client()
 
 
@@ -429,6 +456,7 @@ def delete_yandex_token() -> None:
         pass
     except KeyringError as exc:
         raise RuntimeError(f"Не удалось удалить токен: {exc}") from exc
+    reset_yandex_token_cache()
     Clients().reload_yandex_client()
 
 
