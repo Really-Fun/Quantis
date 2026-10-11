@@ -1,7 +1,9 @@
-"""Страница «Моя волна»: текущая волна крупно и карточки настроений.
+"""Страница «Моя волна»: карта настроения слева, главное — справа.
 
-Разделы: «Подобрано для вас» (колесо Яндекса — меняется после каждого
-переключения), «Настроение», «Занятие», «Жанры», «Характер» — постоянный каталог.
+Карта (``MoodField``) — настроения и занятия на плоскости «энергия × окраска»;
+можно смешать настроение с занятием. Панель справа — текущая или собранная
+волна крупно, запуск и очередь. Ниже — «Подобрано для вас» (колесо Яндекса),
+«Жанры», «Характер».
 """
 
 from __future__ import annotations
@@ -31,8 +33,10 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import (
     QApplication,
+    QBoxLayout,
     QFrame,
     QHBoxLayout,
+    QLabel,
     QScrollArea,
     QSizePolicy,
     QToolButton,
@@ -41,17 +45,23 @@ from PySide6.QtWidgets import (
 )
 
 from quantis.core.async_bridge import AsyncBridge
+from quantis.models import Track
 from quantis.services.async_wave import (
-    WAVE_ACTIVITIES,
+    DEFAULT_WAVE_MOOD,
     WAVE_CHARACTER,
     WAVE_GENRES,
-    WAVE_MOODS,
     WaveMood,
 )
 from quantis.ui.async_ui import schedule
 from quantis.ui.preferences import UiPreferences
 from quantis.ui.viewmodels.home_vm import HomeViewModel
+from quantis.ui.views.widgets.cover_art import (
+    CoverDecoder,
+    paint_rounded_cover,
+    request_track_cover,
+)
 from quantis.ui.views.widgets.home_section import HomeSection
+from quantis.ui.views.widgets.mood_field import NODE_BY_SEED, MoodField
 from quantis.ui.wave_art import WaveArtStore, mood_color, mood_kind, paint_wave_art
 
 _SIDE_MARGIN = 28
@@ -404,54 +414,197 @@ class _CardFlow(QWidget):
         self.setFixedHeight(self.heightForWidth(width))
 
 
-class WaveHero(QFrame):
-    """Шапка: арт текущей волны, название и кнопки управления."""
+class _PanelArt(QWidget):
+    """Обложка волны в панели: арт + мягкое свечение в её цвет (в кэше)."""
 
-    play_requested = Signal()
-    reshuffle_requested = Signal()
-    reset_requested = Signal()
-
-    ART = 212
-    HEIGHT = 268
+    ART = 164
+    GLOW = 24
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setObjectName("waveHero")
-        self.setFixedHeight(self.HEIGHT)
-        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        side = self.ART + 2 * self.GLOW
+        self.setFixedSize(side, side)
         self._mood: WaveMood | None = None
-        self._state = "idle"
-        self._phase = 0.0
+        self._cache: tuple[tuple, QPixmap] | None = None
+        WaveArtStore.instance().updated.connect(self._invalidate)
 
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(28 + self.ART + 32, 0, 28, 0)
-        layout.setSpacing(0)
-        column = QVBoxLayout()
-        column.setContentsMargins(0, 0, 0, 0)
-        column.setSpacing(10)
-        column.addStretch(1)
-        column.addSpacing(110)  # место под подпись и название (рисуются в paint)
-        buttons = QHBoxLayout()
-        buttons.setSpacing(10)
+    def set_mood(self, mood: WaveMood) -> None:
+        if mood != self._mood:
+            self._mood = mood
+            self.update()
+
+    def _invalidate(self) -> None:
+        self._cache = None
+        self.update()
+
+    def _render(self) -> QPixmap:
+        dpr = self.devicePixelRatioF()
+        key = (self._mood, dpr)
+        if self._cache is not None and self._cache[0] == key:
+            return self._cache[1]
+        pixmap = QPixmap(round(self.width() * dpr), round(self.height() * dpr))
+        pixmap.setDevicePixelRatio(dpr)
+        pixmap.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(pixmap)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        art = QRectF(self.GLOW, self.GLOW, self.ART, self.ART)
+        glow = QRadialGradient(art.center(), self.ART * 0.72)
+        glow.setColorAt(0.6, _alpha(mood_color(self._mood), 120))
+        glow.setColorAt(1.0, _alpha(mood_color(self._mood), 0))
+        painter.fillRect(QRectF(self.rect()), glow)
+        path = QPainterPath()
+        path.addRoundedRect(art, 30, 30)
+        painter.save()
+        painter.setClipPath(path)
+        paint_wave_art(painter, art, self._mood)
+        painter.restore()
+        painter.setPen(QPen(QColor(255, 255, 255, 70), 1.2))
+        painter.drawPath(path)
+        painter.end()
+        self._cache = (key, pixmap)
+        return pixmap
+
+    def paintEvent(self, event) -> None:
+        if self._mood is None:
+            return
+        painter = QPainter(self)
+        painter.drawPixmap(0, 0, self._render())
+        painter.end()
+
+
+class _QueueList(QWidget):
+    """Что играет и что дальше в волне: обложка, название, артист."""
+
+    ROW = 52
+    COVER = 40
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self._tracks: list[Track] = []
+        self._accent = QColor("#7C4DFF")
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.setFixedHeight(0)
+        CoverDecoder.instance().ready.connect(self.update)
+
+    def set_tracks(self, tracks: list[Track], accent: QColor) -> None:
+        self._tracks = list(tracks)
+        self._accent = QColor(accent)
+        self.setFixedHeight(self.ROW * len(self._tracks))
+        self.update()
+
+    def tracks(self) -> list[Track]:
+        return list(self._tracks)
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        title_font = _ui_font(13, QFont.Weight.DemiBold)
+        artist_font = _ui_font(11)
+        for index, track in enumerate(self._tracks):
+            top = index * self.ROW
+            row = QRectF(0, top + 2, self.width(), self.ROW - 4)
+            if index == 0:
+                painter.setPen(Qt.PenStyle.NoPen)
+                painter.setBrush(_alpha(self._accent, 46))
+                painter.drawRoundedRect(row, 14, 14)
+            cover = QRectF(8, top + (self.ROW - self.COVER) / 2, self.COVER, self.COVER)
+            paint_rounded_cover(
+                painter,
+                cover.toRect(),
+                label=track.title,
+                pixmap=request_track_cover(track, self.COVER),
+                source_key=str(track.source),
+                radius=10,
+            )
+            text_left = cover.right() + 12
+            text_w = self.width() - text_left - 12
+            painter.setFont(title_font)
+            painter.setPen(QColor(255, 255, 255, 235 if index == 0 else 190))
+            metrics = QFontMetricsF(title_font)
+            painter.drawText(
+                QRectF(text_left, top + 8, text_w, 20),
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                metrics.elidedText(track.title, Qt.TextElideMode.ElideRight, text_w),
+            )
+            painter.setFont(artist_font)
+            painter.setPen(QColor(255, 255, 255, 120))
+            metrics = QFontMetricsF(artist_font)
+            painter.drawText(
+                QRectF(text_left, top + 27, text_w, 18),
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
+                metrics.elidedText(track.author, Qt.TextElideMode.ElideRight, text_w),
+            )
+        painter.end()
+
+
+class WavePanel(QFrame):
+    """Главное справа от карты: волна крупно, запуск и очередь."""
+
+    play_clicked = Signal()
+    shuffle_clicked = Signal()
+    reset_clicked = Signal()
+
+    WIDTH = 384
+
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setObjectName("wavePanel")
+        self.setMinimumHeight(MoodField.MIN_HEIGHT)
+        self._color = QColor("#7C4DFF")
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(26, 22, 26, 22)
+        layout.setSpacing(6)
+        self._caption = QLabel()
+        self._caption.setObjectName("wavePanelCaption")
+        layout.addWidget(self._caption)
+        self._art = _PanelArt()
+        layout.addWidget(self._art, 0, Qt.AlignmentFlag.AlignHCenter)
+        self._title = QLabel()
+        self._title.setObjectName("wavePanelTitle")
+        self._title.setWordWrap(True)
+        self._title.setFont(_display_font(26, QFont.Weight.Bold))
+        layout.addWidget(self._title)
+        self._subtitle = QLabel()
+        self._subtitle.setObjectName("wavePanelSubtitle")
+        self._subtitle.setWordWrap(True)
+        layout.addWidget(self._subtitle)
+        layout.addSpacing(10)
+
         self._play = self._button("▶  Слушать", "waveHeroPlay")
-        self._play.clicked.connect(self.play_requested.emit)
+        self._play.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self._play.clicked.connect(self.play_clicked.emit)
+        layout.addWidget(self._play)
+        layout.addSpacing(4)
+        buttons = QHBoxLayout()
+        buttons.setSpacing(8)
         self._shuffle = self._button("Встряхнуть", "waveHeroAction")
         self._shuffle.setToolTip("Та же волна, но непривычные треки")
-        self._shuffle.clicked.connect(self.reshuffle_requested.emit)
-        self._reset = self._button("Назад к привычному", "waveHeroAction")
-        self._reset.clicked.connect(self.reset_requested.emit)
-        for button in (self._play, self._shuffle, self._reset):
+        self._shuffle.clicked.connect(self.shuffle_clicked.emit)
+        self._reset = self._button("К привычному", "waveHeroAction")
+        self._reset.setToolTip("Вернуть обычную «Мою волну»")
+        self._reset.clicked.connect(self.reset_clicked.emit)
+        for button in (self._shuffle, self._reset):
+            button.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
             buttons.addWidget(button)
-        buttons.addStretch(1)
-        column.addLayout(buttons)
-        column.addStretch(1)
-        layout.addLayout(column, stretch=1)
+        layout.addLayout(buttons)
 
-        self._ticker = QTimer(self)
-        self._ticker.setInterval(50)
-        self._ticker.timeout.connect(self._tick)
-        self._layers: dict[str, tuple[tuple, QPixmap]] = {}
-        WaveArtStore.instance().updated.connect(self._invalidate)
+        self._hint = QLabel(
+            "Выберите на карте настроение и занятие — смешаем их в одну волну. "
+            "Двойной клик по кружку — сразу играть."
+        )
+        self._hint.setObjectName("wavePanelHint")
+        self._hint.setWordWrap(True)
+        layout.addSpacing(8)
+        layout.addWidget(self._hint)
+
+        self._queue_caption = QLabel("ДАЛЬШЕ В ВОЛНЕ")
+        self._queue_caption.setObjectName("wavePanelCaption")
+        layout.addSpacing(10)
+        layout.addWidget(self._queue_caption)
+        self._queue = _QueueList()
+        layout.addWidget(self._queue)
+        layout.addStretch(1)
 
     @staticmethod
     def _button(text: str, name: str) -> QToolButton:
@@ -461,153 +614,64 @@ class WaveHero(QFrame):
         button.setCursor(Qt.CursorShape.PointingHandCursor)
         return button
 
-    def set_mood(self, mood: WaveMood, *, is_default: bool) -> None:
-        self._mood = mood
-        self._reset.setVisible(not is_default)
-        self.update()
-
-    def set_state(self, state: str, *, busy: bool = False, eco: bool = False) -> None:
-        """``idle`` — волна не в плеере, ``playing`` / ``paused`` — в плеере."""
-        self._state = state
-        self._play.setText(
-            {"playing": "❚❚  Пауза", "paused": "▶  Продолжить"}.get(state, "▶  Слушать")
-        )
+    def set_view(
+        self,
+        *,
+        caption: str,
+        mood: WaveMood,
+        title: str,
+        subtitle: str,
+        play_text: str,
+        show_reset: bool,
+        show_hint: bool,
+        busy: bool,
+    ) -> None:
+        self._color = mood_color(mood)
+        self._caption.setText(caption)
+        self._art.set_mood(mood)
+        self._title.setText(title)
+        self._subtitle.setText(subtitle)
+        self._subtitle.setVisible(bool(subtitle))
+        self._play.setText(play_text)
+        self._reset.setVisible(show_reset)
+        self._hint.setVisible(show_hint)
         for button in (self._play, self._shuffle, self._reset):
             button.setEnabled(not busy)
-        if state == "playing" and not eco:
-            self._ticker.start()
-        else:
-            self._ticker.stop()
         self.update()
 
-    def _tick(self) -> None:
-        self._phase += 0.06
-        # пульсирует только свечение у арта — остальная шапка из кэша
-        self.update(self._glow_rect().toAlignedRect())
-
-    def _art_rect(self) -> QRectF:
-        return QRectF(28, (self.height() - self.ART) / 2, self.ART, self.ART)
-
-    def _layer(self, key: tuple, paint) -> QPixmap:
-        """Статичный слой шапки в pixmap — перерисовывается при смене ключа."""
-        cached = self._layers.get(paint.__name__)
-        if cached is not None and cached[0] == key:
-            return cached[1]
-        dpr = self.devicePixelRatioF()
-        pixmap = QPixmap(round(self.width() * dpr), round(self.height() * dpr))
-        pixmap.setDevicePixelRatio(dpr)
-        pixmap.fill(Qt.GlobalColor.transparent)
-        painter = QPainter(pixmap)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        paint(painter)
-        painter.end()
-        self._layers[paint.__name__] = (key, pixmap)
-        return pixmap
-
-    def _paint_backdrop(self, painter: QPainter) -> None:
-        """Фон — тот же арт, растянутый и притушенный: «аура» волны."""
-        rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
-        frame = QPainterPath()
-        frame.addRoundedRect(rect, 28, 28)
-        painter.save()
-        painter.setClipPath(frame)
-        painter.setOpacity(0.55)
-        paint_wave_art(painter, rect.adjusted(-60, -160, 60, 160), self._mood)
-        painter.setOpacity(1.0)
-        veil = QLinearGradient(rect.topLeft(), rect.topRight())
-        veil.setColorAt(0.0, QColor(6, 7, 12, 120))
-        veil.setColorAt(0.45, QColor(6, 7, 12, 205))
-        veil.setColorAt(1.0, QColor(6, 7, 12, 235))
-        painter.fillRect(rect, veil)
-        painter.restore()
-        painter.setPen(QPen(_alpha(mood_color(self._mood), 90), 1.2))
-        painter.drawPath(frame)
-        self._paint_titles(painter, mood_color(self._mood))
-
-    def _paint_cover(self, painter: QPainter) -> None:
-        art = self._art_rect()
-        art_path = QPainterPath()
-        art_path.addRoundedRect(art, 26, 26)
-        painter.save()
-        painter.setClipPath(art_path)
-        paint_wave_art(painter, art, self._mood)
-        painter.restore()
-        painter.setPen(QPen(QColor(255, 255, 255, 60), 1))
-        painter.drawPath(art_path)
-
-    def _invalidate(self) -> None:
-        self._layers.clear()
-        self.update()
+    def set_queue(self, tracks: list[Track]) -> None:
+        self._queue.set_tracks(tracks, self._color)
+        self._queue_caption.setVisible(bool(tracks))
 
     def paintEvent(self, event) -> None:
-        if self._mood is None:
-            return
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        size_key = (self.width(), self.height(), self.devicePixelRatioF(), self._mood)
-        painter.drawPixmap(
-            0, 0, self._layer((*size_key, self._state), self._paint_backdrop)
-        )
-
-        # Свечение вокруг арта — единственное, что меняется каждый кадр
-        art = self._art_rect()
-        color = mood_color(self._mood)
-        pulse = (
-            0.5 + 0.5 * math.sin(self._phase * 2) if self._state == "playing" else 0.25
-        )
-        glow = QRadialGradient(art.center(), self.ART * (0.80 + 0.06 * pulse))
-        glow.setColorAt(0.55, _alpha(color, int(90 + 70 * pulse)))
-        glow.setColorAt(1.0, _alpha(color, 0))
-        frame = QPainterPath()
-        frame.addRoundedRect(QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5), 28, 28)
-        painter.save()
-        painter.setClipPath(frame)
-        painter.fillRect(self._glow_rect(), glow)
-        painter.restore()
-        painter.drawPixmap(0, 0, self._layer(size_key, self._paint_cover))
+        rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
+        path = QPainterPath()
+        path.addRoundedRect(rect, 28, 28)
+        painter.fillPath(path, QColor(9, 10, 17, 236))
+        tint = QLinearGradient(rect.topLeft(), rect.bottomLeft())
+        tint.setColorAt(0.0, _alpha(self._color, 70))
+        tint.setColorAt(0.55, _alpha(self._color, 0))
+        painter.fillPath(path, tint)
+        painter.setPen(QPen(_alpha(self._color, 80), 1.2))
+        painter.drawPath(path)
         painter.end()
 
-    def _glow_rect(self) -> QRectF:
-        return self._art_rect().adjusted(-90, -90, 90, 90)
 
-    def _paint_titles(self, painter: QPainter, color: QColor) -> None:
-        left = 28 + self.ART + 32
-        width = self.width() - left - 28
-        top = (self.height() - 190) / 2
-
-        small = _ui_font(11, QFont.Weight.Bold)
-        small.setLetterSpacing(QFont.SpacingType.AbsoluteSpacing, 1.4)
-        painter.setFont(small)
-        painter.setPen(QColor(color).lighter(150))
-        caption = {
-            "playing": "СЕЙЧАС В ВОЛНЕ",
-            "paused": "ВОЛНА НА ПАУЗЕ",
-        }.get(self._state, "МОЯ ВОЛНА")
-        painter.drawText(
-            QRectF(left, top, width, 18), Qt.AlignmentFlag.AlignLeft, caption
-        )
-
-        title = _display_font(34, QFont.Weight.Bold)
-        metrics = QFontMetricsF(title)
-        name = metrics.elidedText(self._mood.name, Qt.TextElideMode.ElideRight, width)
-        painter.setFont(title)
-        painter.setPen(QColor(255, 255, 255))
-        painter.drawText(
-            QRectF(left, top + 22, width, 48), Qt.AlignmentFlag.AlignLeft, name
-        )
-
-        description = self._mood.description or "Поток треков под это настроение"
-        painter.setFont(_ui_font(13))
-        painter.setPen(QColor(255, 255, 255, 170))
-        painter.drawText(
-            QRectF(left, top + 74, width, 20), Qt.AlignmentFlag.AlignLeft, description
-        )
+def _short(seed: str) -> str:
+    node = NODE_BY_SEED.get(seed)
+    return node.short if node is not None else seed
 
 
 class WavePage(QWidget):
-    """Отдельная страница «Моей волны» в боковом меню."""
+    """Страница «Моей волны»: карта настроения слева, главное — справа."""
 
     toggle_pause_requested = Signal()
+
+    NARROW = 1040
+    """Уже этого панель уходит под карту."""
+    STAGE_HEIGHT = 560
 
     def __init__(
         self,
@@ -621,6 +685,8 @@ class WavePage(QWidget):
         self._bridge = bridge
         self._playing = False
         self._eco = False
+        self._edited = False
+        """Пользователь сам собрал рецепт на карте — не перетираем его."""
         WaveArtStore.instance().set_bridge(bridge)
 
         outer = QVBoxLayout(self)
@@ -636,22 +702,29 @@ class WavePage(QWidget):
         layout.setContentsMargins(_SIDE_MARGIN, 20, _SIDE_MARGIN, 40)
         layout.setSpacing(30)
 
-        self._hero = WaveHero()
-        self._hero.play_requested.connect(self._on_play)
-        self._hero.reshuffle_requested.connect(self._on_reshuffle)
-        self._hero.reset_requested.connect(self._on_reset)
-        layout.addWidget(self._hero)
+        self._stage = QBoxLayout(QBoxLayout.Direction.LeftToRight)
+        self._stage.setSpacing(18)
+        self._field = MoodField()
+        self._field.selection_changed.connect(self._on_selection)
+        self._field.play_requested.connect(self._on_play)
+        self._panel = WavePanel()
+        self._panel.setFixedWidth(WavePanel.WIDTH)
+        self._panel.play_clicked.connect(self._on_play)
+        self._panel.shuffle_clicked.connect(self._on_reshuffle)
+        self._panel.reset_clicked.connect(self._on_reset)
+        # Карта тянется до высоты панели — без пустот сверху и снизу.
+        self._field.setMinimumHeight(self.STAGE_HEIGHT)
+        self._panel.setMinimumHeight(self.STAGE_HEIGHT)
+        self._stage.addWidget(self._field, 1)
+        self._stage.addWidget(self._panel, 0)
+        layout.addLayout(self._stage)
 
         self._sections: list[tuple[HomeSection, _CardFlow]] = []
         self._picks = self._add_section(
             layout, "Подобрано для вас", "Меняется после каждого выбора"
         )
-        self._moods = self._add_section(layout, "Настроение")
-        self._activities = self._add_section(layout, "Занятие")
         self._genres = self._add_section(layout, "Жанры")
         self._character = self._add_section(layout, "Характер")
-        self._moods.set_cards(self._make_cards(WAVE_MOODS))
-        self._activities.set_cards(self._make_cards(WAVE_ACTIVITIES))
         self._genres.set_cards(self._make_cards(WAVE_GENRES))
         self._character.set_cards(self._make_cards(WAVE_CHARACTER))
         layout.addStretch(1)
@@ -679,14 +752,36 @@ class WavePage(QWidget):
             cards.append(card)
         return cards
 
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        narrow = self.width() < self.NARROW
+        direction = (
+            QBoxLayout.Direction.TopToBottom
+            if narrow
+            else QBoxLayout.Direction.LeftToRight
+        )
+        if self._stage.direction() != direction:
+            self._stage.setDirection(direction)
+            if narrow:
+                self._panel.setMinimumWidth(0)
+                self._panel.setMaximumWidth(16777215)
+                self._panel.setMinimumHeight(0)  # под картой — по содержимому
+            else:
+                self._panel.setFixedWidth(WavePanel.WIDTH)
+                self._panel.setMinimumHeight(self.STAGE_HEIGHT)
+
     # --- состояние ---------------------------------------------------------
 
     def set_playing(self, playing: bool) -> None:
         self._playing = playing
         self._sync_state()
 
+    def set_now_playing(self, _track: object = None) -> None:
+        self._sync_state()
+
     def set_eco(self, enabled: bool) -> None:
         self._eco = enabled
+        self._field.set_eco(enabled)
         self._sync_state()
 
     def showEvent(self, event) -> None:
@@ -695,35 +790,122 @@ class WavePage(QWidget):
             schedule(self._vm.refresh_wave_moods(), self._bridge)
         self._sync()
 
+    def recipe(self) -> tuple[str, ...]:
+        return tuple(seed for seed in self._field.selection() if seed)
+
+    def recipe_mood(self) -> WaveMood | None:
+        """Волна из выбранного на карте: одно настроение/занятие или смесь."""
+        seeds = self.recipe()
+        if not seeds:
+            return None
+        if len(seeds) == 1:
+            return NODE_BY_SEED[seeds[0]].mood
+        # У колеса бывает своё имя для такого сочетания — оно живее нашего.
+        for mood in self._vm.wave_moods:
+            if set(mood.seeds) == set(seeds):
+                return mood
+        first = NODE_BY_SEED[seeds[0]].mood
+        return WaveMood(
+            id=",".join(seeds),
+            name=" + ".join(_short(s) for s in seeds),
+            seeds=seeds,
+            description="Настроение и занятие в одной волне",
+            color=first.color,
+        )
+
     def _sync(self) -> None:
         picks = [
             m
             for m in self._vm.wave_moods
-            if not m.is_control and mood_kind(m) != "character"
+            if not m.is_control
+            and mood_kind(m) not in ("character", "mood", "activity")
         ]
         current = [card.mood for card in self._picks.cards()]
         if picks != current:
             self._picks.set_cards(self._make_cards(picks))
         self._sections[0][0].setVisible(bool(picks))
-        active = self._vm.active_wave_mood
-        self._hero.set_mood(active, is_default=active.seeds == ("user:onyourwave",))
+        if not self._edited:
+            self._select_from(self._vm.active_wave_seeds)
         self._sync_state()
+
+    def _select_from(self, seeds: tuple[str, ...]) -> None:
+        mood = next(
+            (s for s in seeds if s.startswith("mood:") and s in NODE_BY_SEED), None
+        )
+        act = next(
+            (s for s in seeds if s.startswith("activity:") and s in NODE_BY_SEED), None
+        )
+        self._field.set_selection(mood, act)
 
     def _sync_state(self) -> None:
         current = self._vm.wave_is_current
-        state = "idle"
-        if current:
-            state = "playing" if self._playing else "paused"
         busy = self._vm.wave_mood_busy
-        self._hero.set_state(state, busy=busy, eco=self._eco)
+        active = self._vm.active_wave_mood
         active_seeds = self._vm.active_wave_seeds
+        recipe = self.recipe()
+        is_default = active_seeds == ("user:onyourwave",)
+        self._field.set_active(active_seeds if current else (), playing=self._playing)
+
+        preview = bool(recipe) and (set(recipe) != set(active_seeds) or not current)
+        if preview:
+            mood = self.recipe_mood()
+            assert mood is not None
+            subtitle = self._subtitle(mood)
+            self._panel.set_view(
+                caption="СОБРАНО НА КАРТЕ",
+                mood=mood,
+                title=mood.name,
+                subtitle=subtitle,
+                play_text="▶  Включить",
+                show_reset=current and not is_default,
+                show_hint=False,
+                busy=busy,
+            )
+        else:
+            state = "idle"
+            if current:
+                state = "playing" if self._playing else "paused"
+            self._panel.set_view(
+                caption={
+                    "playing": "СЕЙЧАС В ВОЛНЕ",
+                    "paused": "ВОЛНА НА ПАУЗЕ",
+                }.get(state, "МОЯ ВОЛНА"),
+                mood=active,
+                title=active.name,
+                subtitle=self._subtitle(active),
+                play_text={"playing": "❚❚  Пауза", "paused": "▶  Продолжить"}.get(
+                    state, "▶  Слушать"
+                ),
+                show_reset=not is_default,
+                show_hint=not recipe and not current,
+                busy=busy,
+            )
+        self._panel.set_queue(self._vm.wave_queue(3) if current else [])
+
         for _, flow in self._sections:
             for card in flow.cards():
                 is_active = current and card.mood.seeds == active_seeds
                 card.set_active(is_active, animate=self._playing and not self._eco)
                 card.setEnabled(not busy)
 
+    @staticmethod
+    def _subtitle(mood: WaveMood) -> str:
+        """Смесь с карты — «Спокойно + Работа», иначе описание волны."""
+        if len(mood.seeds) > 1 and all(s in NODE_BY_SEED for s in mood.seeds):
+            return " + ".join(_short(s) for s in mood.seeds)
+        return mood.description or "Поток треков под это настроение"
+
     # --- действия ------------------------------------------------------------
+
+    def _on_selection(self, _mood: object, _activity: object) -> None:
+        self._edited = True
+        self._sync_state()
+
+    def _start(self, mood: WaveMood) -> None:
+        if self._bridge is None:
+            return
+        self._edited = False
+        schedule(self._vm.play_wave_mood(mood), self._bridge)
 
     def _on_mood(self, mood: WaveMood) -> None:
         if self._bridge is None:
@@ -731,12 +913,19 @@ class WavePage(QWidget):
         if self._vm.wave_is_current and mood.seeds == self._vm.active_wave_seeds:
             self.toggle_pause_requested.emit()
             return
-        schedule(self._vm.play_wave_mood(mood), self._bridge)
+        self._start(mood)
 
     def _on_play(self) -> None:
         if self._bridge is None:
             return
-        if self._vm.wave_is_current:
+        recipe = self.recipe_mood()
+        current = self._vm.wave_is_current
+        if recipe is not None and (
+            not current or set(recipe.seeds) != set(self._vm.active_wave_seeds)
+        ):
+            self._start(recipe)
+            return
+        if current:
             self.toggle_pause_requested.emit()
             return
         schedule(self._vm.play_wave(), self._bridge)
@@ -758,15 +947,12 @@ class WavePage(QWidget):
                 seeds=(f"diversity:reshuffle_{int(time.time() * 1000)}",),
                 style="CONTROL_ACCENT",
             )
-        self._on_mood(mood)
+        self._start(mood)
 
     def _on_reset(self) -> None:
-        mood = self._control("user:onyourwave")
-        if mood is None:
-            from quantis.services.async_wave import DEFAULT_WAVE_MOOD
-
-            mood = DEFAULT_WAVE_MOOD
-        self._on_mood(mood)
+        mood = self._control("user:onyourwave") or DEFAULT_WAVE_MOOD
+        self._field.set_selection(None, None)
+        self._start(mood)
 
     def sizeHint(self) -> QSize:
         return QSize(900, 700)

@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
-from PySide6.QtCore import QRectF
+from PySide6.QtCore import QPointF, QRectF
 from PySide6.QtGui import QColor, QImage, QPainter
 
 from quantis.models import YandexTrack
@@ -22,6 +22,7 @@ from quantis.ui import wave_art
 from quantis.ui.viewmodels import home_vm
 from quantis.ui.viewmodels.home_vm import HomeViewModel
 from quantis.ui.views.wave_page import WavePage, _CardFlow
+from quantis.ui.views.widgets.mood_field import NODE_BY_SEED, NODES, MoodField
 from quantis.ui.wave_art import (
     WaveArtStore,
     mood_color,
@@ -158,47 +159,103 @@ def _vm(monkeypatch) -> tuple[HomeViewModel, MagicMock, MagicMock]:
 
 
 @pytest.mark.asyncio
-async def test_page_builds_sections_and_hero(qapp, monkeypatch) -> None:
+async def test_page_builds_map_panel_and_sections(qapp, monkeypatch) -> None:
     vm, _music, _playback = _vm(monkeypatch)
     page = WavePage(vm, bridge=None)
     await vm.refresh_wave_moods()
 
     picks = [card.mood for card in page._picks.cards()]
-    assert picks == [_ARTIST, _GENRE]  # «Встряхнуть» — кнопка шапки, не карточка
-    assert [c.mood for c in page._moods.cards()] == list(WAVE_MOODS)
-    assert [c.mood for c in page._activities.cards()] == list(WAVE_ACTIVITIES)
+    assert picks == [_ARTIST, _GENRE]  # «Встряхнуть» — кнопка панели, не карточка
     assert [c.mood for c in page._genres.cards()] == list(WAVE_GENRES)
-    assert page._hero._mood == DEFAULT_WAVE_MOOD
-    assert not page._hero._reset.isVisibleTo(page)
+    # все настроения и занятия каталога — на карте
+    on_map = {node.seed for node in NODES}
+    assert {m.seeds[0] for m in (*WAVE_MOODS, *WAVE_ACTIVITIES)} == on_map
+    assert page._panel._title.text() == DEFAULT_WAVE_MOOD.name
+    assert page._panel._hint.isVisibleTo(page)
+    assert not page._panel._reset.isVisibleTo(page)
+
+
+def test_map_selection_mixes_mood_and_activity(qapp, monkeypatch) -> None:
+    vm, _music, _playback = _vm(monkeypatch)
+    page = WavePage(vm, bridge=None)
+    field = page._field
+    selections: list[tuple] = []
+    field.selection_changed.connect(lambda m, a: selections.append((m, a)))
+
+    field.toggle(NODE_BY_SEED["mood:calm"])
+    field.toggle(NODE_BY_SEED["activity:run"])
+    field.toggle(NODE_BY_SEED["mood:sad"])  # настроение меняется, занятие остаётся
+    assert selections[-1] == ("mood:sad", "activity:run")
+
+    recipe = page.recipe_mood()
+    assert recipe is not None
+    assert recipe.seeds == ("mood:sad", "activity:run")
+    assert recipe.name == "Грусть + Бег"
+    assert page._panel._caption.text() == "СОБРАНО НА КАРТЕ"
+    assert page._panel._play.text().endswith("Включить")
+
+    field.toggle(NODE_BY_SEED["activity:run"])  # повторный клик снимает выбор
+    assert page.recipe() == ("mood:sad",)
+
+
+def test_map_prefers_wheel_name_for_known_mix(qapp, monkeypatch) -> None:
+    vm, _music, _playback = _vm(monkeypatch)
+    named = WaveMood(
+        id="mood:calm,activity:work-background",
+        name="Нахожу в работе гармонию",
+        seeds=("mood:calm", "activity:work-background"),
+    )
+    vm._wave_moods = (named,)
+    page = WavePage(vm, bridge=None)
+    page._field.toggle(NODE_BY_SEED["activity:work-background"])
+    page._field.toggle(NODE_BY_SEED["mood:calm"])
+    assert page.recipe_mood() == named
+
+
+def test_node_hit_testing(qapp) -> None:
+    field = MoodField()
+    field.resize(900, 560)
+    node = NODE_BY_SEED["mood:happy"]
+    center = field.node_center(node)
+    assert field.node_at(center) is node
+    assert field.node_at(center + QPointF(200, 200)) is not node
 
 
 @pytest.mark.asyncio
-async def test_active_wave_is_marked_and_click_toggles_pause(qapp, monkeypatch) -> None:
+async def test_active_wave_selects_map_and_play_toggles_pause(
+    qapp, monkeypatch
+) -> None:
     vm, _music, playback = _vm(monkeypatch)
     calm = WAVE_MOODS[0]
     wave = WavePlaylist(
         name=calm.name,
-        tracks=[YandexTrack(track_id="1", title="t", author="a")],
+        tracks=[
+            YandexTrack(track_id="1", title="t", author="a"),
+            YandexTrack(track_id="2", title="u", author="b"),
+        ],
         seeds=calm.seeds,
     )
+    wave.set_current_track(0)
     vm._wave_playlist = wave
     playback.playlist_manager.current_playlist = wave
     bridge = MagicMock()
     page = WavePage(vm, bridge=bridge)
     page.set_playing(True)
 
-    active = [c.mood for c in page._moods.cards() if c._active]
-    assert active == [calm]
-    assert page._hero._mood == calm
-    assert page._hero._reset.isVisibleTo(page)
-    assert page._hero._play.text().endswith("Пауза")
+    assert page._field.selection() == ("mood:calm", None)
+    assert page._panel._caption.text() == "СЕЙЧАС В ВОЛНЕ"
+    assert page._panel._play.text().endswith("Пауза")
+    assert page._panel._reset.isVisibleTo(page)
+    assert [t.track_id for t in page._panel._queue.tracks()] == ["1", "2"]
 
     toggles: list[bool] = []
     page.toggle_pause_requested.connect(lambda: toggles.append(True))
-    page._on_mood(calm)
+    page._on_play()
     assert toggles == [True]
     bridge.schedule.assert_not_called()
 
-    page._on_mood(WAVE_MOODS[1])
+    # Другой рецепт на карте — «Включить» запускает новую волну, не паузу
+    page._field.toggle(NODE_BY_SEED["activity:workout"])
+    page._on_play()
     bridge.schedule.assert_called_once()
     bridge.schedule.call_args.args[0].close()

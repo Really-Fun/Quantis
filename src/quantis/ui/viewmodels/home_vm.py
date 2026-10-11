@@ -600,6 +600,15 @@ class HomeViewModel(BaseViewModel):
         name = wave.name if wave is not None else DEFAULT_WAVE_MOOD.name
         return WaveMood(id=",".join(seeds), name=name, seeds=seeds)
 
+    def wave_queue(self, limit: int = 4) -> list[Track]:
+        """Играющий трек волны и следующие за ним."""
+        current = self._playback.playlist_manager.current_playlist
+        if not isinstance(current, WavePlaylist):
+            return []
+        tracks = list(current.tracks.values)
+        index = max(0, int(getattr(current.tracks, "_index", 0)))
+        return tracks[index : index + limit]
+
     @property
     def wave_is_current(self) -> bool:
         """Сейчас в плеере волна (а не плейлист)."""

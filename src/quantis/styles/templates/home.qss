@@ -308,3 +308,31 @@ QToolButton#waveHeroPlay:disabled,
 QToolButton#waveHeroAction:disabled {
     color: rgba(255, 255, 255, 0.45);
 }
+
+QLabel#wavePanelCaption {
+    background: transparent;
+    color: rgba(255, 255, 255, 0.55);
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.4px;
+}
+
+QLabel#wavePanelTitle {
+    background: transparent;
+    color: #ffffff;
+}
+
+QLabel#wavePanelSubtitle {
+    background: transparent;
+    color: rgba(255, 255, 255, 0.68);
+    font-size: 13px;
+}
+
+QLabel#wavePanelHint {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px dashed rgba(255, 255, 255, 0.16);
+    border-radius: 14px;
+    padding: 10px 12px;
+    color: rgba(255, 255, 255, 0.62);
+    font-size: 12px;
+}
