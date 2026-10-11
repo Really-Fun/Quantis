@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import inspect
 import logging
 from collections.abc import Awaitable, Callable
@@ -21,6 +22,9 @@ _MAX_RECOVERIES = 3
 _MAX_FAILOVERS = 3
 # Столько отыгранных миллисекунд считаем доказательством, что связь жива.
 _HEALTHY_POSITION_MS = 15_000
+# Ссылку на следующий трек берём за столько секунд до конца текущего.
+_PREFETCH_LEAD_S = 35.0
+_PREFETCH_UNKNOWN_DELAY_S = 20.0
 
 NextTrackProvider = Callable[[], Awaitable[Track | None]]
 
@@ -282,7 +286,27 @@ class PlaybackController:
         if index + 1 >= len(tracks):
             return
         nxt = tracks[index + 1]
+        # Ссылка живёт в кэше ~50 с, а download-info у Яндекса — дефицитный
+        # лимит (429 «Concurrency limit exceeded»). Предзагрузка на старте
+        # трека протухала к его концу и отнимала лимит у следующего клика —
+        # первый трек новой волны не запускался. Берём ссылку ближе к концу.
+        seq = self._play_seq
+        delay = self._prefetch_delay_s(current)
+        if delay > 0:
+            await asyncio.sleep(delay)
+            if seq != self._play_seq:
+                return
         await self.music.streamer.prefetch_stream(nxt)
+
+    def _prefetch_delay_s(self, current: Track) -> float:
+        duration_ms = int(self.player.duration or 0) or int(
+            getattr(current, "duration_ms", 0) or 0
+        )
+        if duration_ms <= 0:
+            return _PREFETCH_UNKNOWN_DELAY_S
+        position_ms = max(0, int(self.player.time or 0))
+        remaining_s = (duration_ms - position_ms) / 1000
+        return max(0.0, remaining_s - _PREFETCH_LEAD_S)
 
     @property
     def current_track(self) -> Track | None:

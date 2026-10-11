@@ -3,6 +3,7 @@
 Yandex
 Youtube"""
 
+import asyncio
 import logging
 from abc import ABC, abstractmethod
 from asyncio import Semaphore, get_running_loop
@@ -442,6 +443,9 @@ class AsyncDownloader(AsyncDownloaderInterface):
         self._yandex_downloader = AsyncYandexDownloader()
         self._youtube_downloader = AsyncYoutubeDownloader()
         self._soundcloud_downloader = AsyncSoundCloudDownloader()
+        # Обложку трека на старте просят сразу плеер и палитра: одна загрузка
+        # на двоих, иначе лишний запрос каталога упирается в лимит Яндекса.
+        self._cover_tasks: dict[str, asyncio.Future[None]] = {}
 
     async def download_track(self, track: Track) -> None:
         match track.source:
@@ -453,6 +457,15 @@ class AsyncDownloader(AsyncDownloaderInterface):
                 await self._soundcloud_downloader.download_track(track)
 
     async def download_cover(self, track: Track) -> None:
+        key = f"{track.source}:{track.track_id}"
+        task = self._cover_tasks.get(key)
+        if task is None:
+            task = asyncio.ensure_future(self._download_cover(track))
+            self._cover_tasks[key] = task
+            task.add_done_callback(lambda _done: self._cover_tasks.pop(key, None))
+        await asyncio.shield(task)
+
+    async def _download_cover(self, track: Track) -> None:
         match track.source:
             case TrackSource.YANDEX:
                 await self._yandex_downloader.download_cover(track)

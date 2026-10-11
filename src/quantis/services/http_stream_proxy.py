@@ -201,7 +201,9 @@ class LocalHttpStreamProxy:
             if request.transport is None or request.transport.is_closing():
                 break
             try:
-                url = await self._upstream_url(key, track, force=reconnects > 0)
+                # Протухшую ссылку выкидывают ветки 403/410 и повторного обрыва —
+                # тогда кэш пуст и _upstream_url возьмёт новую сам.
+                url = await self._upstream_url(key, track)
                 if not url:
                     break
                 range_end = "" if limit is None else str(limit - 1)
@@ -260,12 +262,21 @@ class LocalHttpStreamProxy:
                 ClientConnectionError,
                 ConnectionResetError,
             ) as exc:
+                if request.transport is None or request.transport.is_closing():
+                    # Соединение закрыл сам плеер (Qt переоткрывает поток с
+                    # другим Range) — CDN тут ни при чём. Раньше это считалось
+                    # обрывом: ссылка выкидывалась, и на каждый трек уходил
+                    # лишний download-info, который упирался в лимит Яндекса.
+                    break
                 reconnects += 1
                 if reconnects > _MAX_RECONNECTS:
                     logger.warning("HTTP proxy: исчерпаны reconnect @%s", offset)
                     break
                 logger.debug("HTTP proxy reconnect @%s: %s", offset, exc)
-                self._urls.pop(key, None)
+                # Подписанная ссылка ещё жива — сначала переподключаемся по ней;
+                # новую берём, только если обрыв повторился (или 403/410 выше).
+                if reconnects > 1:
+                    self._urls.pop(key, None)
                 continue
             except Exception:
                 logger.debug("HTTP proxy pipe error @%s", offset, exc_info=True)

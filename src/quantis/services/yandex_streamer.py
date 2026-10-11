@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import logging
+import random
+import threading
+import time
 from abc import ABC, abstractmethod
 from asyncio import get_running_loop
 from concurrent.futures import ThreadPoolExecutor
@@ -11,6 +14,18 @@ from typing import Any
 from quantis.models import Track
 
 logger = logging.getLogger(__name__)
+
+# 429 «Concurrency limit exceeded»: download-info с одного токена Яндекс
+# отдаёт только по одному — параллельные запросы (трек + предзагрузка
+# следующего) отклоняются все разом и, повторяя в такт, сталкиваются снова.
+# Поэтому запросы стримера идут строго по очереди, а повторы — с разбросом.
+_RATE_LIMIT_RETRIES = (0.5, 1.0, 2.0, 3.0, 4.0)
+_REQUEST_LOCK = threading.Lock()
+
+
+def _is_rate_limited(exc: BaseException) -> bool:
+    text = str(exc)
+    return "(429)" in text or "Concurrency limit" in text
 
 
 class AsyncStreamerInterface(ABC):
@@ -53,38 +68,53 @@ class AsyncYandexStreamer(AsyncStreamerInterface):
         token = self._yandex_token()
         if not token:
             return None
-        try:
-            from yandex_music import Client
+        for delay in (*_RATE_LIMIT_RETRIES, None):
+            try:
+                with _REQUEST_LOCK:
+                    return self._fetch_stream_url(track, token)
+            except Exception as exc:
+                if delay is None or not _is_rate_limited(exc):
+                    logger.exception(
+                        "Не удалось получить URL потока Яндекс.Музыки: %s", track
+                    )
+                    return None
+                logger.info(
+                    "Яндекс: лимит запросов для «%s», повтор через %.1f с",
+                    track.title,
+                    delay,
+                )
+                time.sleep(delay * random.uniform(0.8, 1.3))
+        return None
 
-            track_id = int(track.track_id)
-            client = Client(token)
-            track_info = client.tracks(track_id)
-            if not track_info:
-                return None
-            # Длина из каталога: у треков из плейлистов и истории её нет или она неверна.
-            catalog_ms = int(getattr(track_info[0], "duration_ms", 0) or 0)
-            if catalog_ms > 0:
-                track.duration_ms = catalog_ms
-            download_info = track_info[0].get_download_info()
-            chosen = self.pick_best_download_info(list(download_info or []))
-            if chosen is None:
-                return None
-            if bool(getattr(chosen, "preview", False)):
-                logger.warning(
-                    "Yandex отдал только preview (~30с) для «%s» — "
-                    "нужен Plus / валидный токен. codec=%s bitrate=%s",
-                    track.title,
-                    getattr(chosen, "codec", "?"),
-                    getattr(chosen, "bitrate_in_kbps", "?"),
-                )
-            else:
-                logger.debug(
-                    "Yandex stream «%s»: codec=%s bitrate=%s",
-                    track.title,
-                    getattr(chosen, "codec", "?"),
-                    getattr(chosen, "bitrate_in_kbps", "?"),
-                )
-            return chosen.get_direct_link()
-        except Exception:
-            logger.exception("Не удалось получить URL потока Яндекс.Музыки: %s", track)
+    def _fetch_stream_url(self, track: Track, token: str) -> str | None:
+        from yandex_music import Client
+
+        track_id = int(track.track_id)
+        client = Client(token)
+        track_info = client.tracks(track_id)
+        if not track_info:
             return None
+        # Длина из каталога: у треков из плейлистов и истории её нет или она неверна.
+        catalog_ms = int(getattr(track_info[0], "duration_ms", 0) or 0)
+        if catalog_ms > 0:
+            track.duration_ms = catalog_ms
+        download_info = track_info[0].get_download_info()
+        chosen = self.pick_best_download_info(list(download_info or []))
+        if chosen is None:
+            return None
+        if bool(getattr(chosen, "preview", False)):
+            logger.warning(
+                "Yandex отдал только preview (~30с) для «%s» — "
+                "нужен Plus / валидный токен. codec=%s bitrate=%s",
+                track.title,
+                getattr(chosen, "codec", "?"),
+                getattr(chosen, "bitrate_in_kbps", "?"),
+            )
+        else:
+            logger.debug(
+                "Yandex stream «%s»: codec=%s bitrate=%s",
+                track.title,
+                getattr(chosen, "codec", "?"),
+                getattr(chosen, "bitrate_in_kbps", "?"),
+            )
+        return chosen.get_direct_link()
