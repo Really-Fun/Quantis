@@ -73,11 +73,14 @@ class _QueuedBridge(_SyncBridge):
 class _FakeDownloader:
     def __init__(self) -> None:
         self.downloaded: list[Track] = []
+        self.fail = False
 
     async def ensure_covers(self, tracks, limit: int = 40) -> int:
         return 0
 
     async def download_track(self, track: Track) -> None:
+        if self.fail:
+            raise OSError("network down")
         self.downloaded.append(track)
 
     async def download_cover(self, track: Track) -> None:
@@ -323,6 +326,46 @@ def test_finished_download_keeps_button_for_next_track(qapp, storage) -> None:
     assert music.downloader.downloaded == [first]
     assert first.downloaded is True
     assert _button(bar, "Скачать").isEnabled()
+
+
+def test_download_in_flight_is_not_started_twice(qapp, storage) -> None:
+    vm = _FakeVM()
+    music = _FakeMusic()
+    bridge = _QueuedBridge()
+    bar = PlayerBar(vm, storage, bridge=bridge, music=music)
+    track = _track("4")
+    vm.track_changed.emit(track)
+    _button(bar, "Скачать").click()
+    assert not _button(bar, "Скачать").isEnabled()  # пока качается
+    _button(bar, "Скачать").click()
+    vm.track_changed.emit(_track("5"))
+    vm.track_changed.emit(track)  # вернулись, а загрузка ещё идёт
+    assert not _button(bar, "Скачать").isEnabled()
+    _button(bar, "Скачать").click()
+    bridge.run(bridge.pending)
+
+    assert music.downloader.downloaded == [track]
+    assert not _button(bar, "Скачать").isEnabled()
+
+
+def test_failed_download_can_be_retried(qapp, storage) -> None:
+    vm = _FakeVM()
+    music = _FakeMusic()
+    music.downloader.fail = True
+    bridge = _QueuedBridge()
+    bar = PlayerBar(vm, storage, bridge=bridge, music=music)
+    track = _track("6")
+    vm.track_changed.emit(track)
+    _button(bar, "Скачать").click()
+    bridge.run(bridge.pending)
+    bridge.pending.clear()
+    assert _button(bar, "Скачать").isEnabled()
+
+    music.downloader.fail = False
+    _button(bar, "Скачать").click()
+    bridge.run(bridge.pending)
+    assert music.downloader.downloaded == [track]
+    assert not _button(bar, "Скачать").isEnabled()
 
 
 def test_chrome_signals(qapp, storage) -> None:

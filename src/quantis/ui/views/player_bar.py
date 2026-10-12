@@ -127,6 +127,7 @@ class PlayerBar(QFrame):
         self._is_playing = False
         self._track_liked = False
         self._cinematic = False
+        self._downloading: set[Track] = set()
 
         self.setObjectName("playerDock")
         self.setFixedHeight(88)
@@ -398,7 +399,9 @@ class PlayerBar(QFrame):
         self._author.setText(track.author)
         self._author.setVisible(bool(track.author))
         self._apply_cover(track)
-        self._download_btn.setEnabled(not track.downloaded)
+        self._download_btn.setEnabled(
+            not track.downloaded and track not in self._downloading
+        )
         self._playlist_btn.setEnabled(True)
         if self._bridge is None or self._music is None:
             self._set_liked_ui(False)
@@ -514,23 +517,27 @@ class PlayerBar(QFrame):
         track = self._current_track
         if track is None or self._bridge is None or self._music is None:
             return
-        if track.downloaded:
+        if track.downloaded or track in self._downloading:
             return
+        self._downloading.add(track)
+        self._download_btn.setEnabled(False)
         self._bridge.schedule(self._download_track(track))
 
     async def _download_track(self, track: Track) -> None:
+        ok = False
         try:
             await self._music.downloader.download_track(track)
             await self._music.downloader.download_cover(track)
-            track.downloaded = True
-            if self._bridge is not None:
-                self._bridge.invoke_main(lambda: self._on_downloaded(track))
+            track.downloaded = ok = True
         except Exception:
             logger.exception("PlayerBar: download failed")
+        if self._bridge is not None:
+            self._bridge.invoke_main(lambda: self._on_download_finished(track, ok))
 
-    def _on_downloaded(self, track: Track) -> None:
+    def _on_download_finished(self, track: Track, ok: bool) -> None:
+        self._downloading.discard(track)
         if track == self._current_track:  # пока качали, трек могли сменить
-            self._download_btn.setEnabled(False)
+            self._download_btn.setEnabled(not ok)  # после ошибки — повторить
 
     # --------------------------------------------------- painting and theme
 
