@@ -309,6 +309,22 @@ def test_download_click(qapp, storage) -> None:
     assert not _button(bar, "Скачать").isEnabled()
 
 
+def test_finished_download_keeps_button_for_next_track(qapp, storage) -> None:
+    vm = _FakeVM()
+    music = _FakeMusic()
+    bridge = _QueuedBridge()
+    bar = PlayerBar(vm, storage, bridge=bridge, music=music)
+    first, second = _track("first"), _track("second")
+    vm.track_changed.emit(first)
+    _button(bar, "Скачать").click()
+    vm.track_changed.emit(second)
+    bridge.run(bridge.pending)  # загрузка first закончилась, играет second
+
+    assert music.downloader.downloaded == [first]
+    assert first.downloaded is True
+    assert _button(bar, "Скачать").isEnabled()
+
+
 def test_chrome_signals(qapp, storage) -> None:
     bar = PlayerBar(_FakeVM(), storage)
     fired: list[str] = []

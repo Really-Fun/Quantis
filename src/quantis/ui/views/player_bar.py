@@ -524,9 +524,13 @@ class PlayerBar(QFrame):
             await self._music.downloader.download_cover(track)
             track.downloaded = True
             if self._bridge is not None:
-                self._bridge.invoke_main(lambda: self._download_btn.setEnabled(False))
+                self._bridge.invoke_main(lambda: self._on_downloaded(track))
         except Exception:
             logger.exception("PlayerBar: download failed")
+
+    def _on_downloaded(self, track: Track) -> None:
+        if track == self._current_track:  # пока качали, трек могли сменить
+            self._download_btn.setEnabled(False)
 
     # --------------------------------------------------- painting and theme
 
