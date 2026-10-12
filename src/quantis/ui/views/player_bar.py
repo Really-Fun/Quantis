@@ -407,10 +407,14 @@ class PlayerBar(QFrame):
             [track],
             self._music.downloader,
             self._bridge,
-            on_done=lambda: self._apply_cover(track),
+            on_done=lambda: self._on_cover_fetched(track),
             limit=1,
         )
         self._bridge.schedule(self._sync_liked_state(track))
+
+    def _on_cover_fetched(self, track: Track) -> None:
+        if track == self._current_track:  # пока качали, трек могли сменить
+            self._apply_cover(track)
 
     def _apply_cover(self, track: Track) -> None:
         cover_path = Path(self._path_provider.get_cover_path(track))
@@ -473,14 +477,18 @@ class PlayerBar(QFrame):
     async def _toggle_like(self, track: Track) -> None:
         liked = await self._liked.toggle(track)
         if self._bridge is not None:
-            self._bridge.invoke_main(lambda: self._set_liked_ui(liked))
+            self._bridge.invoke_main(lambda: self._on_liked_fetched(track, liked))
             if self._on_liked_changed is not None:
                 self._bridge.invoke_main(self._on_liked_changed)
 
     async def _sync_liked_state(self, track: Track) -> None:
         liked = await self._liked.is_liked(track)
         if self._bridge is not None:
-            self._bridge.invoke_main(lambda: self._set_liked_ui(liked))
+            self._bridge.invoke_main(lambda: self._on_liked_fetched(track, liked))
+
+    def _on_liked_fetched(self, track: Track, liked: bool) -> None:
+        if track == self._current_track:  # пока ждали ответа, трек могли сменить
+            self._set_liked_ui(liked)
 
     def _set_liked_ui(self, liked: bool) -> None:
         self._track_liked = liked

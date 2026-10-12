@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import asyncio
+import random
+from pathlib import Path
 
 import pytest
 from PySide6.QtCore import QEvent, QObject, Signal
+from PySide6.QtGui import QColor, QImage
 from PySide6.QtWidgets import QApplication, QLabel, QSlider, QToolButton
 
 from quantis.models.repeat_mode import RepeatMode
@@ -51,6 +54,20 @@ class _SyncBridge:
 
     def invoke_main(self, callback) -> None:
         callback()
+
+
+class _QueuedBridge(_SyncBridge):
+    """Корутины ждут, пока тест не запустит их сам — в нужном порядке."""
+
+    def __init__(self) -> None:
+        self.pending: list = []
+
+    def schedule(self, coro) -> None:
+        self.pending.append(coro)
+
+    def run(self, coros) -> None:
+        for coro in coros:
+            asyncio.run(coro)
 
 
 class _FakeDownloader:
@@ -118,6 +135,15 @@ def _volume(bar: PlayerBar) -> QSlider:
 
 def _seek(bar: PlayerBar) -> WaveformSeekSlider:
     return bar.findChild(WaveformSeekSlider)
+
+
+def _cover_center(bar: PlayerBar) -> QColor:
+    image = bar.findChild(QLabel, "coverLabel").grab().toImage()
+    return image.pixelColor(image.width() // 2, image.height() // 2)
+
+
+def _is_red(color: QColor) -> bool:
+    return color.red() > 200 and color.green() < 60 and color.blue() < 60
 
 
 def _like(bar: PlayerBar) -> QToolButton:
@@ -244,6 +270,31 @@ def test_like_toggle(qapp, storage) -> None:
     bar.toggle_like()  # горячая клавиша L
     assert _like(bar).property("liked") is True
     assert changed == [True, True]
+
+
+def test_late_results_for_previous_track_are_ignored(qapp, storage) -> None:
+    old, new = _track("old"), _track("new")
+    cover_path = Path(storage.get_cover_path(old))
+    cover_path.parent.mkdir(parents=True)
+    red = QImage(128, 128, QImage.Format.Format_RGB32)
+    noise = random.Random(1)
+    for x in range(128):  # красный центр, вокруг шум: меньше 3500 байт — заглушка
+        for y in range(128):
+            rgb = (255, 0, 0) if 32 <= x < 96 and 32 <= y < 96 else noise.randbytes(3)
+            red.setPixelColor(x, y, QColor(*rgb))
+    red.save(str(cover_path))
+    _FakeLiked.liked = {repr(old)}
+    vm = _FakeVM()
+    bridge = _QueuedBridge()
+    bar = PlayerBar(vm, storage, bridge=bridge, music=_FakeMusic())
+    vm.track_changed.emit(old)
+    assert _is_red(_cover_center(bar))
+    vm.track_changed.emit(new)
+    old_jobs, new_jobs = bridge.pending[:2], bridge.pending[2:]
+    bridge.run(new_jobs + old_jobs)  # ответы про old пришли последними
+
+    assert _like(bar).property("liked") is False
+    assert not _is_red(_cover_center(bar))  # не обложка old
 
 
 def test_download_click(qapp, storage) -> None:
