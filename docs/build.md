@@ -215,18 +215,27 @@ Program Files требовала бы прав администратора. В�
 ## Релиз через GitHub Actions
 
 [.github/workflows/release.yml](../.github/workflows/release.yml) собирает
-на Windows-раннере обе сборки (Qt и VLC) со своим bootloader PyInstaller и
-кладёт в **черновик** релиза `v<версия>` четыре файла:
-`Quantis-<версия>-setup.exe`, `quantis-v<версия>.zip`,
-`Quantis-VLC-<версия>-setup.exe`, `quantis-vlc-v<версия>.zip`.
+Windows (Qt и VLC, со своим bootloader PyInstaller) и Linux (Qt + MPRIS),
+проверяет каждую сборку изнутри ([packaging/smoke](../packaging/smoke), для
+Windows — через тихую установку установщика) и кладёт в **черновик** релиза
+`v<версия>`:
+
+| Файл | Что это |
+|------|---------|
+| `Quantis-<версия>-setup.exe` | установщик, Qt |
+| `Quantis-<версия>-win64-portable.zip` / `.rar` | папка с программой, Qt |
+| `Quantis-VLC-<версия>-setup.exe` | установщик, libVLC |
+| `Quantis-VLC-<версия>-win64-portable.zip` / `.rar` | папка с программой, libVLC |
+| `Quantis-<версия>-linux-x86_64.tar.gz` | Linux, `Quantis/Quantis`; собрано на Ubuntu 24.04 (нужен glibc 2.39+) |
 
 1. `poetry version patch` (или `poetry version 0.4.0`), коммит, пуш в `main`.
-2. Через ~10–15 минут на странице Releases появится черновик с файлами и
+2. Минут через 15–20 на странице Releases появится черновик с файлами и
    автосгенерированным списком изменений.
 3. Поправить заголовок и описание → **Publish release**. Тег создаётся в этот
    момент, на коммите, из которого собраны файлы.
 
 Пока черновик не опубликован, каждый пуш в `main` пересобирает файлы в нём
 (описание остаётся как есть). Если версия уже опубликована, сборка
-пропускается — сначала поднимите версию. Запустить вручную: Actions →
-Release build → Run workflow.
+пропускается — сначала поднимите версию. Если проверка сборки упала, её файлы
+в черновик не попадают. Запустить вручную: Actions → Release build → Run
+workflow.

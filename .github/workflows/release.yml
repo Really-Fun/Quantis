@@ -1,9 +1,9 @@
 name: Release build
 
-# Собирает Windows-установщики и zip (Qt и VLC) и кладёт их в ЧЕРНОВИК
-# релиза v<версия из pyproject.toml>. Дальше вручную: поправить описание →
-# Publish. Тег создаётся в момент публикации, на коммите, из которого собран
-# черновик.
+# Собирает Windows (Qt и VLC) и Linux, проверяет сборки изнутри
+# (packaging/smoke) и кладёт файлы в ЧЕРНОВИК релиза v<версия из
+# pyproject.toml>. Дальше вручную: поправить описание → Publish. Тег
+# создаётся в момент публикации, на коммите, из которого собран черновик.
 #
 # Новые пуши в main до публикации обновляют файлы в том же черновике,
 # описание не трогают. Уже опубликованную версию не пересобирает — сначала
@@ -38,8 +38,8 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      # Черновик создаётся здесь, один раз: сборки Qt и VLC идут параллельно
-      # и только докладывают в него файлы.
+      # Черновик создаётся здесь, один раз: сборки идут параллельно и только
+      # докладывают в него файлы.
       - id: v
         env:
           GH_TOKEN: ${{ github.token }}
@@ -76,15 +76,14 @@ jobs:
         include:
           - backend: qt
             app: Quantis
-            zip: quantis
             groups: build
           - backend: vlc
             app: Quantis-VLC
-            zip: quantis-vlc
             groups: build,vlc
     env:
       VERSION: ${{ needs.draft.outputs.version }}
       TAG: ${{ needs.draft.outputs.tag }}
+      PORTABLE: ${{ matrix.app }}-${{ needs.draft.outputs.version }}-win64-portable
     steps:
       - uses: actions/checkout@v5
 
@@ -105,35 +104,49 @@ jobs:
         shell: pwsh
         run: .\packaging\scripts\rebuild_pyi_bootloader.ps1
 
-      - name: VLC
-        if: matrix.backend == 'vlc'
+      - name: Инструменты (VLC, Inno Setup, WinRAR, ffmpeg)
         shell: pwsh
         run: |
-          choco install vlc --no-progress -y
-          $vlc = "$env:ProgramFiles\VideoLAN\VLC"
-          if (-not (Test-Path "$vlc\libvlc.dll")) { throw "libvlc.dll не найден в $vlc" }
-          "VLC_HOME=$vlc" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          $pkgs = @("winrar", "ffmpeg")
+          if (-not (Get-Command iscc -ErrorAction SilentlyContinue) -and
+              -not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { $pkgs += "innosetup" }
+          if ("${{ matrix.backend }}" -eq "vlc") { $pkgs += "vlc" }
+          choco install @pkgs --no-progress -y
+          "${env:ProgramFiles(x86)}\Inno Setup 6" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+          "$env:ProgramFiles\WinRAR" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+          if ("${{ matrix.backend }}" -eq "vlc") {
+            $vlc = "$env:ProgramFiles\VideoLAN\VLC"
+            if (-not (Test-Path "$vlc\libvlc.dll")) { throw "libvlc.dll не найден в $vlc" }
+            "VLC_HOME=$vlc" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          }
 
       - name: PyInstaller
         run: poetry run python packaging/scripts/build_exe.py ${{ matrix.backend }}
 
       - name: Inno Setup
-        shell: pwsh
-        run: |
-          if (-not (Get-Command iscc -ErrorAction SilentlyContinue)) {
-            $inno = "${env:ProgramFiles(x86)}\Inno Setup 6"
-            if (-not (Test-Path "$inno\ISCC.exe")) {
-              choco install innosetup --no-progress -y
-            }
-            $env:PATH = "$inno;$env:PATH"
-          }
-          poetry run python packaging/scripts/build_installer.py --backend ${{ matrix.backend }}
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        run: poetry run python packaging/scripts/build_installer.py --backend ${{ matrix.backend }}
 
-      - name: Zip
+      # Ставит установщик тихо во временный каталог, проверяет установленный
+      # exe изнутри и удаляет. Аудио для проверки — синус из ffmpeg.
+      - name: Проверка установщика
         shell: pwsh
         run: |
-          Compress-Archive -Path "dist\${{ matrix.app }}" -DestinationPath "dist\installer\${{ matrix.zip }}-v$env:VERSION.zip"
+          $media = Join-Path $env:RUNNER_TEMP "media"
+          New-Item -ItemType Directory -Force -Path $media | Out-Null
+          foreach ($ext in "mp3", "m4a", "webm") {
+            ffmpeg -loglevel error -y -f lavfi -i "sine=frequency=440:duration=3" "$media\sample.$ext"
+          }
+          .\packaging\scripts\smoke_bundle.ps1 -Media $media `
+            -Installer "dist\installer\${{ matrix.app }}-$env:VERSION-setup.exe"
+
+      - name: zip и rar
+        shell: pwsh
+        run: |
+          Compress-Archive -Path "dist\${{ matrix.app }}" -DestinationPath "dist\installer\$env:PORTABLE.zip"
+          Push-Location dist
+          rar a -r -m3 -idq "installer\$env:PORTABLE.rar" "${{ matrix.app }}"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Pop-Location
           Get-ChildItem dist\installer | Format-Table Name, Length
 
       - name: Файлы в черновик
@@ -143,6 +156,57 @@ jobs:
         run: |
           gh release upload "$TAG" --clobber \
             "dist/installer/${{ matrix.app }}-$VERSION-setup.exe" \
-            "dist/installer/${{ matrix.zip }}-v$VERSION.zip"
-          echo "### ${{ matrix.app }} → черновик $TAG" >> "$GITHUB_STEP_SUMMARY"
-          echo "${{ github.server_url }}/${{ github.repository }}/releases" >> "$GITHUB_STEP_SUMMARY"
+            "dist/installer/$PORTABLE.zip" \
+            "dist/installer/$PORTABLE.rar"
+
+  linux:
+    name: Linux (qt + MPRIS)
+    needs: draft
+    if: needs.draft.outputs.build == 'true'
+    runs-on: ubuntu-24.04
+    env:
+      VERSION: ${{ needs.draft.outputs.version }}
+      TAG: ${{ needs.draft.outputs.tag }}
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v5
+
+      # PyGObject (для mpris-server) собирается из исходников; Qt-библиотеки
+      # нужны проверке собранного приложения, ffmpeg — для тестового аудио.
+      - name: System packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libgirepository-2.0-dev libcairo2-dev pkg-config ffmpeg \
+            libegl1 libgl1 libxkbcommon0 libfontconfig1 libdbus-1-3 libpulse0
+
+      - name: Install Poetry
+        run: pipx install poetry==2.4.1
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.13"
+          cache: poetry
+
+      - name: Install
+        run: poetry install --with build --no-interaction
+
+      - name: PyInstaller
+        run: poetry run python packaging/scripts/build_exe.py qt --mpris
+
+      - name: Проверка сборки
+        run: |
+          media="$RUNNER_TEMP/media"
+          mkdir -p "$media"
+          for ext in mp3 m4a webm; do
+            ffmpeg -loglevel error -y -f lavfi -i "sine=frequency=440:duration=3" "$media/sample.$ext"
+          done
+          packaging/scripts/smoke_bundle.sh dist/Quantis/Quantis "$media"
+
+      - name: Файлы в черновик
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          archive="Quantis-$VERSION-linux-x86_64.tar.gz"
+          tar -C dist -czf "$archive" Quantis
+          gh release upload "$TAG" "$archive" --clobber
