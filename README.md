@@ -82,9 +82,11 @@
 
 ## Установка
 
-### Готовая сборка (Windows)
+### Готовая сборка (Windows, Linux)
 
-Скачай установщик со страницы [**Releases**](https://github.com/Really-Fun/Quantis/releases/latest).
+Скачай со страницы [**Releases**](https://github.com/Really-Fun/Quantis/releases/latest):
+установщик `Quantis-<версия>-setup.exe` или portable-архив для Windows,
+`Quantis-<версия>-linux-x86_64.tar.gz` для Linux (распаковать и запустить `Quantis/Quantis`).
 Как собрать самому, в том числе вариант на libVLC, описано в [docs/build.md](docs/build.md).
 
 ### Из исходников (Windows, Linux)

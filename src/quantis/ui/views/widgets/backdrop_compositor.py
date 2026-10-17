@@ -572,8 +572,8 @@ def _paint_cinematic_dim(painter: QPainter, rect: QRect, *, header: int = 0) -> 
     vignette.setColorAt(0.72, QColor(0, 0, 0, 95))
     vignette.setColorAt(1.0, QColor(0, 0, 0, 175))
     painter.fillRect(rect, vignette)
-    top = rect.top() + rect.height() * 0.58
-    bottom = QLinearGradient(0, top, 0, rect.bottom())
+    fade_from = rect.top() + rect.height() * 0.58
+    bottom = QLinearGradient(0, fade_from, 0, rect.bottom())
     bottom.setColorAt(0.0, QColor(0, 0, 0, 0))
     bottom.setColorAt(0.4, QColor(0, 0, 0, 55))
     bottom.setColorAt(1.0, QColor(0, 0, 0, 170))

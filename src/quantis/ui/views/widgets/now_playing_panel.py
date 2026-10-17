@@ -178,9 +178,7 @@ class NowPlayingPanel(QFrame):
         label = (
             "YouTube"
             if source.lower() == "youtube"
-            else "Яндекс"
-            if source.lower() == "yandex"
-            else "Источник"
+            else "Яндекс" if source.lower() == "yandex" else "Источник"
         )
         self._source_btn.setText(f"Источник · {label}")
         self._apply_cover(track)
