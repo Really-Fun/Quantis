@@ -298,7 +298,8 @@ class NowPlayingStage(QWidget):
     @staticmethod
     def _gap(col: QVBoxLayout, size: int) -> tuple[QSpacerItem, int]:
         col.addSpacing(size)
-        spacer = col.itemAt(col.count() - 1).spacerItem()
+        item = col.itemAt(col.count() - 1)
+        spacer = item.spacerItem() if item is not None else None
         assert spacer is not None
         return spacer, size
 

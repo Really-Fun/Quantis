@@ -34,7 +34,7 @@ class WaveformSeekSlider(QSlider):
         self._palette = LivePalette.instance().current
         self._peaks: list[float] = []
         self._cache = QPixmap()
-        self._cache_key: tuple | None = None
+        self._cache_key: tuple[object, ...] | None = None
         self._prefs = UiPreferences()
         self._prefs.theme_changed.connect(self._on_theme)
         self._on_theme()
