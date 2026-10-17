@@ -313,11 +313,19 @@ class PlaybackController:
         return self._current_track
 
     def _local_path_if_ready(self, track: Track) -> str | None:
+        # Промах здесь — не мелочь: скачанный трек уходит в yt-dlp/сеть и
+        # секунды стоит на паузе. Поэтому ищем файл и по id, не только по имени.
+        provider = self.music.provider
+        find = getattr(provider, "find_track_file", None)
+        if callable(find):
+            found = find(track)
+            if isinstance(found, str):
+                return found
         extension = getattr(track, "extension", None)
         path = (
-            self.music.provider.get_track_path(track, extension)
+            provider.get_track_path(track, extension)
             if extension
-            else self.music.provider.get_track_path(track)
+            else provider.get_track_path(track)
         )
         file_path = Path(path)
         if not file_path.is_file():

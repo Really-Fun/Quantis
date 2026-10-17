@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import glob
 import logging
 import re
 from os import path
@@ -11,7 +12,16 @@ from quantis.utils import app_paths
 
 _INVALID_PATH_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 _OUTTMPL_EXT = "%(ext)s"
+# Те же форматы, что видят «Скачанные» и TrackManager.
+_AUDIO_SUFFIXES = frozenset({".mp3", ".m4a"})
 logger = logging.getLogger(__name__)
+
+
+def _is_ready_file(file_path: Path) -> bool:
+    try:
+        return file_path.is_file() and file_path.stat().st_size > 0
+    except OSError:
+        return False
 
 
 class PathProvider:
@@ -83,6 +93,29 @@ class PathProvider:
             self.music_folder(),
             f"{self.storage_id(track)}_{title}_{author}.{ext}",
         )
+
+    def find_track_file(self, track: Track) -> str | None:
+        """Скачанный файл трека или None.
+
+        Имя из title/author не всегда совпадает с файлом на диске: YouTube
+        вычищает «Отметок Нравится» из автора, а файл назван ещё со статистикой.
+        Поэтому запасной путь — поиск по id в начале имени.
+        """
+        exact = Path(self.get_track_path(track))
+        if _is_ready_file(exact):
+            return str(exact)
+        music_dir = Path(self.music_folder())
+        prefix = glob.escape(f"{self.storage_id(track)}_")
+        try:
+            candidates = sorted(music_dir.glob(f"{prefix}*"))
+        except OSError:
+            return None
+        for candidate in candidates:
+            if candidate.suffix.lower() in _AUDIO_SUFFIXES and _is_ready_file(
+                candidate
+            ):
+                return str(candidate)
+        return None
 
     def get_cover_path(self, track: Track, extension: str = "jpg") -> str:
         ext = self._sanitize_extension(extension)
