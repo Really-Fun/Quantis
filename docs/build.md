@@ -215,8 +215,10 @@ Program Files требовала бы прав администратора. В�
 ## Релиз через GitHub Actions
 
 [.github/workflows/release.yml](../.github/workflows/release.yml) собирает
-`Quantis-<версия>-setup.exe` и `Quantis-<версия>-win64-portable.zip` на
-Windows-раннере и кладёт их в **черновик** релиза `v<версия>`.
+на Windows-раннере обе сборки (Qt и VLC) со своим bootloader PyInstaller и
+кладёт в **черновик** релиза `v<версия>` четыре файла:
+`Quantis-<версия>-setup.exe`, `quantis-v<версия>.zip`,
+`Quantis-VLC-<версия>-setup.exe`, `quantis-vlc-v<версия>.zip`.
 
 1. `poetry version patch` (или `poetry version 0.4.0`), коммит, пуш в `main`.
 2. Через ~10–15 минут на странице Releases появится черновик с файлами и
