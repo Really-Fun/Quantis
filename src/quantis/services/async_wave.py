@@ -34,6 +34,13 @@ _QUEUE_SIZE = 5
 _FINISH_SLACK_SECONDS = 5.0
 
 
+def is_skip(total_seconds: float, played_seconds: float) -> bool:
+    """Ушли с трека раньше конца — скип; длина неизвестна — считаем дослушанным."""
+    return (
+        bool(total_seconds) and played_seconds < total_seconds - _FINISH_SLACK_SECONDS
+    )
+
+
 @dataclass(frozen=True)
 class WaveMood:
     """Карточка колеса «Моей волны»: настроение, занятие, жанр, артист…"""
@@ -273,7 +280,7 @@ class AsyncWaveService:
 
         self._adopt(playlist)
         total = self._duration_seconds(finished)
-        skipped = bool(total) and played_seconds < total - _FINISH_SLACK_SECONDS
+        skipped = is_skip(total, played_seconds)
         event = {
             "type": "skip" if skipped else "trackFinished",
             "trackId": self._full_track_id(finished),

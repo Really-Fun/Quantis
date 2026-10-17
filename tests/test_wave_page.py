@@ -19,7 +19,6 @@ from quantis.services.async_wave import (
     WaveMood,
 )
 from quantis.ui import wave_art
-from quantis.ui.viewmodels import home_vm
 from quantis.ui.viewmodels.home_vm import HomeViewModel
 from quantis.ui.views.wave_page import WavePage, _CardFlow
 from quantis.ui.views.widgets.mood_field import NODE_BY_SEED, NODES, MoodField
@@ -148,7 +147,6 @@ def test_card_flow_stretches_cards_to_row(qapp) -> None:
 
 
 def _vm(monkeypatch) -> tuple[HomeViewModel, MagicMock, MagicMock]:
-    monkeypatch.setattr(home_vm, "yandex_token", lambda: "token")
     music = MagicMock()
     music.wave.fetch_wheel = AsyncMock(return_value=[_ARTIST, _RESHUFFLE, _GENRE])
     playback = MagicMock()

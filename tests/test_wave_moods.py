@@ -9,7 +9,6 @@ import pytest
 from quantis.models import YandexTrack
 from quantis.models.playlist import WavePlaylist
 from quantis.services.async_wave import WaveMood
-from quantis.ui.viewmodels import home_vm
 from quantis.ui.viewmodels.home_vm import HomeViewModel
 from quantis.ui.views.widgets.wave_moods import WaveMoodStrip
 
@@ -68,11 +67,10 @@ def test_control_chip_is_never_marked_active(qapp) -> None:
 async def test_play_wave_mood_starts_session_plays_and_refreshes_wheel(
     qapp, monkeypatch
 ) -> None:
-    monkeypatch.setattr(home_vm, "yandex_token", lambda: "token")
     track = YandexTrack(track_id="1", title="Song", author="Artist")
     wave = WavePlaylist(tracks=[track], seeds=("mood:calm",), session_id="S1")
     music = MagicMock()
-    music.wave.start_yandex_wave = AsyncMock(return_value=wave)
+    music.wave.start_wave = AsyncMock(return_value=wave)
     music.wave.fetch_wheel = AsyncMock(return_value=[_RUN, _CALM])
     playback = MagicMock()
     playback.play_track = AsyncMock()
@@ -82,7 +80,7 @@ async def test_play_wave_mood_starts_session_plays_and_refreshes_wheel(
 
     await vm.play_wave_mood(_CALM)
 
-    music.wave.start_yandex_wave.assert_awaited_once_with(("mood:calm",))
+    music.wave.start_wave.assert_awaited_once_with(("mood:calm",), taste=[])
     playback.play_track.assert_awaited_once_with(track)
     playing = playback.playlist_manager.set_playlist.call_args.args[0]
     assert isinstance(playing, WavePlaylist)
@@ -95,9 +93,8 @@ async def test_play_wave_mood_starts_session_plays_and_refreshes_wheel(
 
 @pytest.mark.asyncio
 async def test_play_wave_mood_failure_reports_error(qapp, monkeypatch) -> None:
-    monkeypatch.setattr(home_vm, "yandex_token", lambda: "token")
     music = MagicMock()
-    music.wave.start_yandex_wave = AsyncMock(return_value=None)
+    music.wave.start_wave = AsyncMock(return_value=None)
     music.wave.fetch_wheel = AsyncMock(return_value=[])
     playback = MagicMock()
     playback.play_track = AsyncMock()

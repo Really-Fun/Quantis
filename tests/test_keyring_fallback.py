@@ -41,5 +41,6 @@ def test_home_snapshot_without_keyring(no_keyring: None, qapp) -> None:
         recommendation_tracks=(),
     )
     names = [playlist.name for playlist in snapshot.library_playlists]
-    assert "Моя волна" not in names
+    # Без токена Яндекса волна играет с YouTube — карточка на месте.
+    assert names[0] == "Моя волна"
     assert "Любимые" in names

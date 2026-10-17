@@ -418,7 +418,7 @@ class PlaybackController:
         if playlist is None or len(playlist) == 0:
             return
 
-        if isinstance(playlist, WavePlaylist) and playlist.source == "yandex":
+        if isinstance(playlist, WavePlaylist):
             await self._play_wave_next(playlist)
             return
 

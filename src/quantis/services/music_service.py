@@ -48,8 +48,13 @@ class MusicService:
     def wave(self):
         if self._wave is None:
             from quantis.services.async_wave import AsyncWaveService
+            from quantis.services.wave_router import WaveRouter
+            from quantis.services.youtube_wave import YoutubeWaveService
 
-            self._wave = AsyncWaveService()
+            self._wave = WaveRouter(
+                AsyncWaveService,
+                lambda: YoutubeWaveService(self.finder.youtube),
+            )
         return self._wave
 
     @property

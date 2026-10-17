@@ -15,7 +15,6 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from quantis.config.credentials import yandex_token
 from quantis.core.async_bridge import AsyncBridge
 from quantis.models import Track, UserPlaylist
 from quantis.models.playlist import Playlist
@@ -233,11 +232,11 @@ class HomePage(QWidget):
         snap = self._vm.snapshot
         self._stage.set_greeting(snap.greeting)
 
-        has_token = bool(yandex_token())
+        # Без токена Яндекса волна играет с YouTube — плитка доступна всегда.
         self._quick_shelf.set_wave_state(
-            available=has_token,
+            available=True,
             track_count=snap.wave_track_count,
-            loading=has_token and not snap.wave_ready,
+            loading=not snap.wave_ready,
         )
 
         self._quick_shelf.set_playlists(list(snap.quick_playlists))
@@ -378,7 +377,7 @@ class HomePage(QWidget):
         playlist = await self._vm.open_wave()
         if playlist is None or not len(playlist):
             self._quick_shelf.set_wave_state(
-                available=bool(yandex_token()),
+                available=True,
                 track_count=0,
                 error="Не удалось загрузить волну",
             )
@@ -395,9 +394,7 @@ class HomePage(QWidget):
         await self._vm.play_wave()
         wave = getattr(self._vm, "_wave_playlist", None)
         count = len(wave) if wave is not None else self._vm.snapshot.wave_track_count
-        self._quick_shelf.set_wave_state(
-            available=bool(yandex_token()), track_count=count
-        )
+        self._quick_shelf.set_wave_state(available=True, track_count=count)
 
     def _sync_wave_moods(self) -> None:
         moods = self._vm.wave_moods

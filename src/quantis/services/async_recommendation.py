@@ -190,27 +190,7 @@ class AsyncRecommendation:
         limit: int,
         exclude_ids: set[str],
     ) -> list[Track]:
-        tracks: list[Track] = []
-        for track_info in (result or {}).get("tracks") or []:
-            if not isinstance(track_info, dict):
-                continue
-            video_id = str(track_info.get("videoId") or "")
-            if not is_youtube_video_id(video_id) or video_id in exclude_ids:
-                continue
-            tracks.append(
-                YoutubeTrack(
-                    track_id=video_id,
-                    title=str(track_info.get("title") or "").strip() or video_id,
-                    author=youtube_author_from_payload(track_info),
-                    downloaded=False,
-                    duration_ms=seconds_to_ms(track_info.get("lengthSeconds"))
-                    or clock_to_ms(track_info.get("duration")),
-                )
-            )
-            exclude_ids.add(video_id)
-            if len(tracks) >= limit:
-                break
-        return tracks
+        return youtube_tracks_from_watch(result, limit=limit, exclude_ids=exclude_ids)
 
     async def _search_fallback(
         self,
@@ -255,6 +235,37 @@ class AsyncRecommendation:
             return None
         playlist.set_current_track(idx + 1)
         return playlist.get_current_track()
+
+
+def youtube_tracks_from_watch(
+    result: dict | None,
+    *,
+    limit: int,
+    exclude_ids: set[str],
+) -> list[Track]:
+    """Треки из ответа ``get_watch_playlist``; ``exclude_ids`` пополняется."""
+    tracks: list[Track] = []
+    for track_info in (result or {}).get("tracks") or []:
+        if not isinstance(track_info, dict):
+            continue
+        video_id = str(track_info.get("videoId") or "")
+        if not is_youtube_video_id(video_id) or video_id in exclude_ids:
+            continue
+        tracks.append(
+            YoutubeTrack(
+                track_id=video_id,
+                title=str(track_info.get("title") or "").strip() or video_id,
+                author=youtube_author_from_payload(track_info),
+                downloaded=False,
+                duration_ms=seconds_to_ms(track_info.get("lengthSeconds"))
+                or clock_to_ms(track_info.get("duration"))
+                or clock_to_ms(track_info.get("length")),
+            )
+        )
+        exclude_ids.add(video_id)
+        if len(tracks) >= limit:
+            break
+    return tracks
 
 
 def _exclude_ids(seed: Track | None) -> set[str]:

@@ -7,7 +7,6 @@ from datetime import datetime
 
 from PySide6.QtCore import QObject, Signal
 
-from quantis.config.credentials import yandex_token
 from quantis.controllers.playback_controller import PlaybackController
 from quantis.core.async_bridge import AsyncBridge
 from quantis.models import (
@@ -217,7 +216,7 @@ class HomeViewModel(BaseViewModel):
             recommendation_tracks, recommendation_playlist = (
                 await self._load_recommendations(recent_tracks, liked_tracks)
             )
-            wave_playlist = await self._load_wave()
+            wave_playlist = await self._load_wave(recent_tracks, liked_tracks)
             full_snapshot = self._build_snapshot(
                 recent_tracks=recent_tracks,
                 liked_tracks=liked_tracks,
@@ -272,16 +271,16 @@ class HomeViewModel(BaseViewModel):
 
         wave = wave_playlist or self._wave_playlist
         wave_count = len(wave) if wave is not None else 0
-        # Карточка волны всегда первая, если есть токен (даже до загрузки — count 0).
-        if yandex_token() or wave_count:
-            library_playlists.append(
-                _CountedShell(
-                    "Моя волна",
-                    count=wave_count,
-                    cover_path=get_asset_path("assets/icons/radio.svg"),
-                    kind="wave",
-                )
+        # Карточка волны всегда первая (даже до загрузки — count 0): без токена
+        # Яндекса волна играет с YouTube.
+        library_playlists.append(
+            _CountedShell(
+                "Моя волна",
+                count=wave_count,
+                cover_path=get_asset_path("assets/icons/radio.svg"),
+                kind="wave",
             )
+        )
 
         rec_count = len(recommendation_tracks)
         if rec_count:
@@ -393,11 +392,27 @@ class HomeViewModel(BaseViewModel):
         except Exception:
             logger.exception("Не удалось обновить недавние треки")
 
-    async def _load_wave(self) -> WavePlaylist | None:
-        if not yandex_token():
-            return None
+    def _wave_taste(
+        self,
+        recent: list[Track] | None = None,
+        liked: list[Track] | None = None,
+    ) -> list[Track]:
+        """Сиды волны «по вкусу» для YouTube (Яндекс знает вкус сам)."""
+        if recent is None:
+            recent = list(self._recent_model.all_tracks())
+        if liked is None:
+            liked = list(self._liked_model.all_tracks())
+        return _unique_seeds(recent, liked)
+
+    async def _load_wave(
+        self,
+        recent: list[Track] | None = None,
+        liked: list[Track] | None = None,
+    ) -> WavePlaylist | None:
         try:
-            return await self._music.wave.start_yandex_wave()
+            return await self._music.wave.start_wave(
+                taste=self._wave_taste(recent, liked)
+            )
         except Exception:
             logger.exception("Не удалось загрузить Мою волну")
             return None
@@ -617,8 +632,6 @@ class HomeViewModel(BaseViewModel):
 
     async def refresh_wave_moods(self) -> None:
         """Перечитать колесо: список персональный и меняется после переключения."""
-        if not yandex_token():
-            return
         try:
             moods = await self._music.wave.fetch_wheel(self.active_wave_seeds)
         except Exception:
@@ -632,7 +645,9 @@ class HomeViewModel(BaseViewModel):
             return
         self._run_main(lambda: self._set_wave_mood_busy(True))
         try:
-            playlist = await self._music.wave.start_yandex_wave(mood.seeds)
+            playlist = await self._music.wave.start_wave(
+                mood.seeds, taste=self._wave_taste()
+            )
             if playlist is None or not len(playlist):
                 self._run_main(
                     lambda: self.emit_error(f"Не удалось включить «{mood.name}»")
