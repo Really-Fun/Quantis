@@ -297,3 +297,134 @@ async def test_yandex_download_returns_path_and_meta(tmp_path: Path) -> None:
     assert result.meta.album == "Alb" and meta is not None and meta.year == 2020
     client.tracks = AsyncMock(side_effect=RuntimeError("x"))
     assert await downloader.fetch_meta(track) is None
+
+
+# --- метаданные для миграции: значения сервиса важнее имени файла ---
+
+
+def test_meta_from_yandex_prefers_service_title_and_artists() -> None:
+    ya = SimpleNamespace(
+        title="Who Are You?",
+        artists=[SimpleNamespace(name="AC/DC"), SimpleNamespace(name="Guest")],
+        albums=[],
+    )
+    track = Track(track_id=1, title="Who Are You", author="_AC_DC", source="yandex")
+    meta = meta_from_yandex(track, ya, prefer_service=True)
+    assert (meta.title, meta.artist) == ("Who Are You?", "AC/DC, Guest")
+    # Скачивание (по умолчанию) берёт название и автора трека Quantis.
+    plain = meta_from_yandex(track, ya)
+    assert (plain.title, plain.artist) == ("Who Are You", "_AC_DC")
+
+
+def test_meta_from_yandex_service_empty_falls_back_to_track() -> None:
+    ya = SimpleNamespace(title=None, artists=[SimpleNamespace(name=None)], albums=None)
+    track = Track(track_id=1, title="T", author="A", source="yandex")
+    meta = meta_from_yandex(track, ya, prefer_service=True)
+    assert (meta.title, meta.artist) == ("T", "A")
+
+
+def test_meta_from_ydl_prefers_track_and_artist() -> None:
+    track = YoutubeTrack(track_id="vid", title="What_ Why", author="Chan")
+    info = {"track": "What? Why", "title": "Chan - What? Why (Video)", "artist": "Band"}
+    meta = meta_from_ydl(track, info, prefer_service=True)
+    assert (meta.title, meta.artist) == ("What? Why", "Band")
+    plain = meta_from_ydl(track, info)
+    assert (plain.title, plain.artist) == ("What_ Why", "Chan")
+
+
+def test_meta_from_ydl_title_and_uploader_fallbacks() -> None:
+    track = YoutubeTrack(track_id="vid", title="T", author="A")
+    info = {"title": "Video", "uploader": "Chan • 1,2 млн просмотров"}
+    meta = meta_from_ydl(track, info, prefer_service=True)
+    assert (meta.title, meta.artist) == ("Video", "Chan")
+    empty = meta_from_ydl(track, {"track": "", "artist": None}, prefer_service=True)
+    assert (empty.title, empty.artist) == ("T", "A")
+
+
+def test_meta_from_ydl_soundcloud_release_date() -> None:
+    track = Track(track_id=123, title="T", author="A", source="soundcloud")
+    info = {"release_date": "20150607", "upload_date": "20180102"}
+    assert meta_from_ydl(track, info).year == 2015
+
+
+def test_base_meta_soundcloud_id_without_prefix() -> None:
+    from quantis.models.track import SoundCloudTrack
+
+    for raw in ("sc123", "123"):
+        meta = meta_from_ydl(SoundCloudTrack(track_id=raw, title="T", author="A"), {})
+        assert meta.track_id == "123" and meta.source == "soundcloud"
+
+
+def _yandex_with(tracks_mock) -> AsyncYandexDownloader:
+    downloader = AsyncYandexDownloader()
+    downloader._client = SimpleNamespace(token="t", tracks=tracks_mock)
+    downloader._client_ready = True
+    return downloader
+
+
+@pytest.mark.asyncio
+async def test_yandex_fetch_meta_retries_rate_limit(monkeypatch) -> None:
+    from quantis.services import async_downloader as ad
+
+    sleeps: list[float] = []
+
+    async def no_sleep(delay):
+        sleeps.append(delay)
+
+    monkeypatch.setattr(ad, "_backoff_sleep", no_sleep)
+    ya = SimpleNamespace(title="Svc", artists=[SimpleNamespace(name="Art")], albums=[])
+    tracks = AsyncMock(
+        side_effect=[
+            RuntimeError("Concurrency limit exceeded (429)"),
+            RuntimeError("(429)"),
+            [ya],
+        ]
+    )
+    downloader = _yandex_with(tracks)
+    track = Track(track_id=1, title="T", author="A", source="yandex")
+    meta = await downloader.fetch_meta(track)
+    assert meta is not None and (meta.title, meta.artist) == ("Svc", "Art")
+    assert len(sleeps) == 2 and tracks.await_count == 3
+
+
+@pytest.mark.asyncio
+async def test_yandex_lookup_meta_distinguishes_error_and_not_found(
+    monkeypatch,
+) -> None:
+    from yandex_music.exceptions import NotFoundError
+
+    from quantis.services import async_downloader as ad
+
+    async def no_sleep(_delay):
+        return None
+
+    monkeypatch.setattr(ad, "_backoff_sleep", no_sleep)
+    track = Track(track_id=1, title="T", author="A", source="yandex")
+    assert await _yandex_with(AsyncMock(return_value=[])).lookup_meta(track) is None
+    missing = _yandex_with(AsyncMock(side_effect=NotFoundError("nope")))
+    assert await missing.lookup_meta(track) is None
+    limited = _yandex_with(AsyncMock(side_effect=RuntimeError("(429)")))
+    with pytest.raises(RuntimeError):
+        await limited.lookup_meta(track)
+    assert await limited.fetch_meta(track) is None  # публичный контракт: не бросает
+    no_client = AsyncYandexDownloader()
+    no_client._client, no_client._client_ready = None, True
+    assert await no_client.lookup_meta(track) is None
+
+
+@pytest.mark.asyncio
+async def test_youtube_lookup_meta_not_found_vs_error() -> None:
+    downloader = AsyncYoutubeDownloader()
+    track = YoutubeTrack(track_id="vid", title="T", author="A")
+    with patch.object(
+        downloader,
+        "sync_extract",
+        side_effect=RuntimeError("ERROR: [youtube] vid: Video unavailable"),
+    ):
+        assert await downloader.lookup_meta(track) is None
+    with patch.object(
+        downloader, "sync_extract", side_effect=RuntimeError("network down")
+    ):
+        with pytest.raises(RuntimeError):
+            await downloader.lookup_meta(track)
+        assert await downloader.fetch_meta(track) is None

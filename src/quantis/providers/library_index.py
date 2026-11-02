@@ -329,7 +329,15 @@ class LibraryIndex:
             self._inflight -= 1
 
     async def _scan_once(self) -> None:
-        if await asyncio.to_thread(self._scan, self.music_dir):
+        try:
+            if await asyncio.to_thread(self._scan, self.music_dir):
+                self._event.set()
+        except Exception:
+            # Ждущие wait_ready() не должны висеть вечно: работаем с тем, что
+            # есть (кэш или прошлый скан), следующий refresh() попробует снова.
+            logger.exception("Не удалось просканировать папку музыки")
+            with self._lock:
+                self._ready = True
             self._event.set()
 
     async def wait_ready(self) -> None:

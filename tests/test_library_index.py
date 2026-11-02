@@ -511,3 +511,24 @@ async def test_refresh_reads_tags_of_seeded_legacy_named_file(music, cache):
     assert not index.has("yandex", "42")
     entry = index.entry_for("youtube", VID)
     assert entry is not None and entry.tagged and entry.title == "Песня"
+
+
+@pytest.mark.asyncio
+async def test_scan_error_releases_waiters(music, cache, monkeypatch):
+    import asyncio
+
+    index = new_index(music, cache)
+
+    def boom(_music_dir):
+        raise RuntimeError("scan")
+
+    monkeypatch.setattr(index, "_scan", boom)
+    waiter = asyncio.create_task(index.wait_ready())
+    await asyncio.sleep(0)
+    try:
+        await index.refresh()
+    except RuntimeError:
+        pass
+    await asyncio.wait_for(waiter, 1)
+    assert index.is_ready
+    await asyncio.wait_for(index.wait_ready(), 1)

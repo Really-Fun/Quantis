@@ -27,11 +27,17 @@ class RetagReport:
 
 
 def _fallback_meta(entry: IndexEntry) -> TrackMeta:
+    """Теги из имени файла, когда сервис чисто ответил «нет такого трека»."""
+    from quantis.models.track import strip_youtube_stats
+
+    author = (entry.author or "").strip()
+    if entry.source == "youtube" and author:
+        author = strip_youtube_stats(author)
     return TrackMeta(
         source=entry.source,
         track_id=entry.track_id,
-        title=entry.title,
-        artist=entry.author or "",
+        title=(entry.title or "").strip(),
+        artist=author,
         source_url=source_url(entry.source, entry.track_id),
     )
 
@@ -42,25 +48,44 @@ def _readings(entry: IndexEntry) -> list[tuple[str, str]]:
     return [(r.source, r.track_id) for r in parse_legacy_names(entry.path.name)]
 
 
-async def _safe_fetch(downloader: AsyncDownloader, track) -> TrackMeta | None:
-    try:
-        return await downloader.fetch_meta(track)
-    except Exception:
-        logger.debug("Метаданные недоступны: %s", track, exc_info=True)
-        return None
+def _title_matches(service_title: str, name_rest: str) -> bool:
+    """Название сервиса совпадает с началом имени после ID.
+
+    Старые имена санитизировались `_sanitize_filename_part` (``? : / " * | %``
+    и т. п. -> ``_``), а название и исполнитель склеены через ``_``, поэтому
+    сравниваем санитизированное название с началом остатка имени.
+    """
+    from quantis.providers.path_provider import PathProvider
+
+    if not (service_title or "").strip():
+        return False
+    title = PathProvider._sanitize_filename_part(service_title).casefold()
+    rest = name_rest.casefold()
+    return rest == title or rest.startswith(title + "_")
 
 
 async def _resolve(downloader: AsyncDownloader, entry: IndexEntry):
-    """(entry, track, meta) для записи; None, если прочтение имени неоднозначно."""
+    """(entry, track, meta) для записи; None — пропустить файл без изменений.
+
+    Ошибка сервиса (сеть, лимит 429) — это не «трека нет»: файл пропускается,
+    чтобы следующий запуск обработал его заново.
+    """
     from quantis.models.playlist import _track_from_entry
 
     if not entry.ambiguous:
         track = _track_from_entry(entry)
         if track is None:
             return None
-        meta = await _safe_fetch(downloader, track) or _fallback_meta(entry)
-        return entry, track, meta
+        try:
+            meta = await downloader.lookup_meta(track)
+        except Exception:
+            logger.info(
+                "Сервис недоступен, файл пропущен: %s", entry.path, exc_info=True
+            )
+            return None
+        return entry, track, meta or _fallback_meta(entry)
 
+    stem = entry.path.stem
     found = []
     for reading in parse_legacy_names(entry.path.name):
         candidate = dataclasses.replace(
@@ -74,10 +99,18 @@ async def _resolve(downloader: AsyncDownloader, entry: IndexEntry):
         track = _track_from_entry(candidate)
         if track is None:
             continue
-        meta = await _safe_fetch(downloader, track)
-        if meta is not None:
+        try:
+            meta = await downloader.lookup_meta(track)
+        except Exception:
+            # Не знаем, есть ли этот трек: выбирать другое прочтение нельзя.
+            logger.info(
+                "Сервис недоступен, файл пропущен: %s", entry.path, exc_info=True
+            )
+            return None
+        rest = stem[len(reading.track_id) + 1 :]
+        if meta is not None and _title_matches(meta.title, rest):
             found.append((candidate, track, meta))
-    # Без однозначного ответа сервиса не гадаем по имени файла.
+    # Без однозначного проверенного ответа сервиса не гадаем по имени файла.
     return found[0] if len(found) == 1 else None
 
 
@@ -108,13 +141,14 @@ async def retag_legacy(
                     report.skipped += 1
                 else:
                     resolved_entry, track, meta = resolved
-                    final = await downloader.tag_and_rename(
+                    outcome = await downloader.tag_and_rename(
                         resolved_entry.path, meta, track
                     )
-                    if final is None:
-                        report.skipped += 1
-                    else:
+                    # Теги без нового имени — не готово: файл ещё `ID_…`.
+                    if outcome.complete:
                         report.done += 1
+                    else:
+                        report.skipped += 1
             except asyncio.CancelledError:
                 raise
             except Exception:

@@ -284,3 +284,73 @@ async def test_empty_title_readback_blocks_rename(index, music, monkeypatch):
     assert await dl.download_full(make_track()) is True
     assert (music / "1_T_A.mp3").is_file()
     assert not (music / "A - T.mp3").exists()
+
+
+@pytest.mark.asyncio
+async def test_soundcloud_ids_with_and_without_prefix_dedupe(index, music):
+    from quantis.models.track import SoundCloudTrack
+
+    dl = AsyncDownloader(index=index)
+    calls: list = []
+    gate = asyncio.Event()
+
+    async def slow_download(track):
+        calls.append(track.track_id)
+        await gate.wait()
+        return None
+
+    dl.download_track = slow_download
+    first = asyncio.ensure_future(
+        dl.download_full(SoundCloudTrack(track_id="sc123", title="T", author="A"))
+    )
+    await asyncio.sleep(0.01)
+    second = asyncio.ensure_future(
+        dl.download_full(SoundCloudTrack(track_id="123", title="T", author="A"))
+    )
+    await asyncio.sleep(0.01)
+    assert dl.is_downloading("soundcloud", "123")
+    assert dl.is_downloading("soundcloud", "sc123")
+    gate.set()
+    assert await asyncio.gather(first, second) == [False, False]
+    assert calls == ["sc123"]
+
+
+@pytest.mark.asyncio
+async def test_rename_failure_still_succeeds(index, music, monkeypatch):
+    real_replace = Path.replace
+
+    def locked(self, target):
+        if self.suffix == ".mp3":
+            raise PermissionError("file in use")
+        return real_replace(self, target)
+
+    monkeypatch.setattr(Path, "replace", locked)
+    dl = make_downloader(index, music)
+    track = make_track()
+    assert await dl.download_full(track) is True
+    assert track.downloaded is True
+    path = music / "1_T_A.mp3"
+    assert read_identity(path).track_id == "1"
+    assert index.path_for("yandex", "1") == path
+
+
+@pytest.mark.asyncio
+async def test_tag_and_rename_reports_rename_failure(index, music, monkeypatch):
+    real_replace = Path.replace
+    path = music / "1_T_A.mp3"
+    shutil.copy(FIXTURES / "silence.mp3", path)
+    dl = make_downloader(index, music)
+    meta = TrackMeta(source="yandex", track_id="1", title="T", artist="A")
+
+    def locked(self, target):
+        if self.suffix == ".mp3":
+            raise PermissionError("file in use")
+        return real_replace(self, target)
+
+    monkeypatch.setattr(Path, "replace", locked)
+    outcome = await dl.tag_and_rename(path, meta, make_track())
+    assert outcome.verified and not outcome.renamed and not outcome.complete
+    assert outcome.path == path
+    monkeypatch.setattr(Path, "replace", real_replace)
+    outcome = await dl.tag_and_rename(path, meta, make_track())
+    assert outcome.complete and outcome.path == music / "A - T.mp3"
