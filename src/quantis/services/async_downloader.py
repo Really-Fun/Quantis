@@ -7,8 +7,9 @@ import asyncio
 import logging
 from abc import ABC, abstractmethod
 from asyncio import Semaphore, get_running_loop
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 import aiofiles
 import aiohttp
@@ -23,6 +24,7 @@ from quantis.models.track import (
 )
 from quantis.providers import PathProvider
 from quantis.services.cover_validate import cover_bytes_ok, cover_file_ok
+from quantis.services.track_tags import TrackMeta, source_url
 from quantis.services.wallpaper_policy import (
     wallpaper_cache_format,
     wallpaper_duration_filter,
@@ -38,6 +40,91 @@ _AUDIO_FORMAT = (
 _VIDEO_FORMAT = wallpaper_cache_format(360)
 _AUDIO_EXTENSIONS = frozenset({"m4a", "mp3"})
 _MAX_COVER_BYTES = 8 * 1024 * 1024
+
+
+@dataclass
+class DownloadedAudio:
+    """Скачанный файл и метаданные трека."""
+
+    path: Path
+    meta: TrackMeta
+
+
+def _text(value: Any) -> str:
+    return value.strip() if isinstance(value, str) else ""
+
+
+def _int_or_none(value: Any) -> int | None:
+    if isinstance(value, bool):
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _base_meta(track: Track) -> TrackMeta:
+    source = str(track.source).lower()
+    track_id = str(track.track_id)
+    return TrackMeta(
+        source=source,
+        track_id=track_id,
+        title=track.title,
+        artist=track.author,
+        source_url=source_url(source, track_id),
+    )
+
+
+def meta_from_yandex(track: Track, ya_track: Any) -> TrackMeta:
+    """Метаданные из объекта трека yandex-music (любое поле может быть None)."""
+    meta = _base_meta(track)
+    albums = getattr(ya_track, "albums", None)
+    if not albums:
+        return meta
+    album = albums[0]
+    meta.album = _text(getattr(album, "title", None))
+    meta.year = _int_or_none(getattr(album, "year", None))
+    meta.genre = _text(getattr(album, "genre", None))
+    position = getattr(album, "track_position", None)
+    meta.track_number = _int_or_none(getattr(position, "index", None))
+    names = [
+        _text(getattr(artist, "name", None))
+        for artist in (getattr(album, "artists", None) or [])
+    ]
+    meta.album_artist = ", ".join(name for name in names if name)
+    return meta
+
+
+def meta_from_ydl(track: Track, info: dict) -> TrackMeta:
+    """Метаданные из ответа yt-dlp."""
+    meta = _base_meta(track)
+    meta.album = _text(info.get("album"))
+    meta.genre = _text(info.get("genre"))
+    meta.track_number = _int_or_none(info.get("track_number"))
+    year = _int_or_none(info.get("release_year"))
+    if year is None:
+        upload_date = info.get("upload_date")
+        if isinstance(upload_date, str):
+            year = _int_or_none(upload_date[:4])
+    meta.year = year
+    return meta
+
+
+def _downloaded_from_info(track: Track, info: Any) -> DownloadedAudio | None:
+    """Путь файла берём из ответа yt-dlp; суффикс должен быть аудио."""
+    try:
+        filepath = info["requested_downloads"][0]["filepath"]
+    except (KeyError, IndexError, TypeError):
+        return None
+    if not filepath:
+        return None
+    path = Path(filepath)
+    ext = path.suffix.lstrip(".").lower()
+    if ext not in _AUDIO_EXTENSIONS:
+        return None
+    if isinstance(track, (YoutubeTrack, SoundCloudTrack)):
+        track.extension = ext
+    return DownloadedAudio(path=path, meta=meta_from_ydl(track, info))
 
 
 def _is_http_url(url: str) -> bool:
@@ -72,7 +159,12 @@ class AsyncDownloaderInterface(ABC):
     @abstractmethod
     async def download_track(
         self, track: Track | YandexTrack | YoutubeTrack
-    ) -> None: ...
+    ) -> DownloadedAudio | None: ...
+
+    @abstractmethod
+    async def fetch_meta(
+        self, track: Track | YandexTrack | YoutubeTrack
+    ) -> TrackMeta | None: ...
 
     @abstractmethod
     async def download_cover(
@@ -95,7 +187,20 @@ class AsyncYandexDownloader(AsyncDownloaderInterface):
             self._client_ready = True
         return self._client
 
-    async def download_track(self, track: Track | YandexTrack | YoutubeTrack) -> None:
+    async def fetch_meta(self, track: Track | YandexTrack | YoutubeTrack):
+        """Метаданные без скачивания; None при любой ошибке."""
+        if self.client is None:
+            return None
+        try:
+            track_info = await self.client.tracks(int(track.track_id))
+            return meta_from_yandex(track, track_info[0])
+        except Exception:
+            logger.debug("Метаданные Яндекса недоступны: %s", track, exc_info=True)
+            return None
+
+    async def download_track(
+        self, track: Track | YandexTrack | YoutubeTrack
+    ) -> DownloadedAudio | None:
         """Скачивает трек с яндекса. Асинхронное скачивание
 
         Args:
@@ -103,10 +208,10 @@ class AsyncYandexDownloader(AsyncDownloaderInterface):
         """
         if self.client is None:
             logger.warning(
-                "Клиент ЯндексМузыки не инициализирован." "Невозможно скачать трек: %s",
+                "Клиент ЯндексМузыки не инициализирован.Невозможно скачать трек: %s",
                 track,
             )
-            return
+            return None
         try:
             PathProvider.ensure_storage_dirs()
             track_info = await self.client.tracks(int(track.track_id))
@@ -120,8 +225,12 @@ class AsyncYandexDownloader(AsyncDownloaderInterface):
                 await current_track.download_async(file_path, bitrate_in_kbps=320)
             else:
                 await current_track.download_async(file_path, bitrate_in_kbps=192)
+            return DownloadedAudio(
+                path=Path(file_path), meta=meta_from_yandex(track, current_track)
+            )
         except Exception:
             logger.exception("Не удалось скачать трек с Яндекс.Музыки: %s", track)
+            return None
 
     async def download_cover(self, track: Track | YandexTrack | YoutubeTrack) -> None:
         """Скачивает обложку трека с платформы Яндекс. Асинхронное скачивание
@@ -131,7 +240,7 @@ class AsyncYandexDownloader(AsyncDownloaderInterface):
         """
         if self.client is None:
             logger.warning(
-                "Клиент ЯндексМузыки не инициализирован." "Невозможно скачать трек: %s",
+                "Клиент ЯндексМузыки не инициализирован.Невозможно скачать трек: %s",
                 track,
             )
             return
@@ -206,35 +315,44 @@ class AsyncYoutubeDownloader(AsyncDownloaderInterface):
     def _audio_outtmpl(self, track: Track | YoutubeTrack) -> str:
         return self.path_provider.get_track_path(track, extension="%(ext)s")
 
-    def _apply_downloaded_extension(self, track: Track | YoutubeTrack) -> str | None:
-        prefix = f"{track.track_id}_"
-        music_dir = Path(self.path_provider.MUSIC_FOLDER)
-        for candidate in music_dir.glob(f"{prefix}*"):
-            ext = candidate.suffix.lstrip(".").lower()
-            if ext in _AUDIO_EXTENSIONS:
-                if isinstance(track, YoutubeTrack):
-                    track.extension = ext
-                return ext
-        return None
-
-    async def _download_audio(self, track: Track | YoutubeTrack) -> bool:
+    async def _download_audio(
+        self, track: Track | YoutubeTrack
+    ) -> DownloadedAudio | None:
         outtmpl = self._audio_outtmpl(track)
         for opts in (
             self._ydl_opts(outtmpl, video=False),
             self._ydl_opts_fallback(outtmpl, video=False),
         ):
             try:
-                await get_running_loop().run_in_executor(
+                info = await get_running_loop().run_in_executor(
                     self._executor, self.sync_download, opts, track.track_id
                 )
-                return self._apply_downloaded_extension(track) is not None
+                return _downloaded_from_info(track, info)
             except Exception:
                 logger.debug(
                     "YouTube audio download attempt failed for %s",
                     track.track_id,
                     exc_info=True,
                 )
-        return False
+        return None
+
+    async def fetch_meta(self, track: Track | YandexTrack | YoutubeTrack):
+        """Метаданные без скачивания; None при любой ошибке."""
+        outtmpl = self._audio_outtmpl(track)
+        for opts in (
+            self._ydl_opts(outtmpl, video=False),
+            self._ydl_opts_fallback(outtmpl, video=False),
+        ):
+            try:
+                info = await get_running_loop().run_in_executor(
+                    self._executor, self.sync_extract, opts, track.track_id
+                )
+                return meta_from_ydl(track, info)
+            except Exception:
+                logger.debug(
+                    "YouTube meta fetch failed for %s", track.track_id, exc_info=True
+                )
+        return None
 
     async def _download_video_cache(self, track: Track | YoutubeTrack) -> None:
         outtmpl = self.path_provider.get_video_cache_path(track, extension="%(ext)s")
@@ -260,13 +378,17 @@ class AsyncYoutubeDownloader(AsyncDownloaderInterface):
             self._session = aiohttp.ClientSession()
         return self._session
 
-    async def download_track(self, track: Track | YandexTrack | YoutubeTrack) -> None:
+    async def download_track(
+        self, track: Track | YandexTrack | YoutubeTrack
+    ) -> DownloadedAudio | None:
         """Скачивает аудио (m4a/mp3). MP4 — только в кэш обоев при включённом видеофоне."""
-        if not await self._download_audio(track):
+        result = await self._download_audio(track)
+        if result is None:
             logger.error("Не удалось скачать трек с YouTube: %s", track.track_id)
-            return
+            return None
         if self._video_wallpaper_enabled():
             await self._download_video_cache(track)
+        return result
 
     async def download_cover(self, track: Track | YandexTrack | YoutubeTrack) -> None:
         """Асинхронное получение обложки с ютуб.
@@ -294,7 +416,7 @@ class AsyncYoutubeDownloader(AsyncDownloaderInterface):
                 logger.exception("Ошибка при скачивании обложки для %s", track.track_id)
 
     @staticmethod
-    def sync_download(opts: dict, track_id: int | str) -> None:
+    def _extract(opts: dict, track_id: int | str, *, download: bool) -> dict:
         from yt_dlp import YoutubeDL
 
         from quantis.services.url_resolver import is_youtube_video_id
@@ -303,7 +425,17 @@ class AsyncYoutubeDownloader(AsyncDownloaderInterface):
             raise ValueError(f"Некорректный YouTube id: {track_id!r}")
 
         with YoutubeDL(opts) as ydl:
-            ydl.extract_info(f"https://youtube.com/watch?v={track_id}", download=True)
+            return ydl.extract_info(
+                f"https://youtube.com/watch?v={track_id}", download=download
+            )
+
+    @staticmethod
+    def sync_download(opts: dict, track_id: int | str) -> dict:
+        return AsyncYoutubeDownloader._extract(opts, track_id, download=True)
+
+    @staticmethod
+    def sync_extract(opts: dict, track_id: int | str) -> dict:
+        return AsyncYoutubeDownloader._extract(opts, track_id, download=False)
 
     async def close(self) -> None:
         if self._session is not None and not self._session.closed:
@@ -339,26 +471,33 @@ class AsyncSoundCloudDownloader(AsyncDownloaderInterface):
             ),
         }
 
-    def _apply_downloaded_extension(self, track: Track) -> str | None:
-        prefix = f"{self.path_provider.storage_id(track)}_"
-        music_dir = Path(
-            self.path_provider.MUSIC_FOLDER or self.path_provider.music_folder()
-        )
-        for candidate in music_dir.glob(f"{prefix}*"):
-            ext = candidate.suffix.lstrip(".").lower()
-            if ext in _AUDIO_EXTENSIONS:
-                if isinstance(track, SoundCloudTrack):
-                    track.extension = ext
-                return ext
-        return None
+    async def fetch_meta(self, track: Track | YandexTrack | YoutubeTrack):
+        """Метаданные без скачивания; None при любой ошибке."""
+        try:
+            from quantis.services.soundcloud import watch_url
 
-    async def download_track(self, track: Track | YandexTrack | YoutubeTrack) -> None:
+            info = await get_running_loop().run_in_executor(
+                self._executor,
+                self.sync_extract,
+                self._ydl_opts(self.path_provider.get_track_path(track, "%(ext)s")),
+                watch_url(track.track_id),
+            )
+            return meta_from_ydl(track, info)
+        except Exception:
+            logger.debug(
+                "SoundCloud meta fetch failed: %s", track.track_id, exc_info=True
+            )
+            return None
+
+    async def download_track(
+        self, track: Track | YandexTrack | YoutubeTrack
+    ) -> DownloadedAudio | None:
         from quantis.services.soundcloud import watch_url
 
-        outtmpl = self.path_provider.get_track_path(track, extension="%(ext)s")
-        PathProvider.ensure_storage_dirs()
         try:
-            await get_running_loop().run_in_executor(
+            outtmpl = self.path_provider.get_track_path(track, extension="%(ext)s")
+            PathProvider.ensure_storage_dirs()
+            info = await get_running_loop().run_in_executor(
                 self._executor,
                 self.sync_download,
                 self._ydl_opts(outtmpl),
@@ -366,9 +505,11 @@ class AsyncSoundCloudDownloader(AsyncDownloaderInterface):
             )
         except Exception:
             logger.exception("Не удалось скачать трек с SoundCloud: %s", track.track_id)
-            return
-        if self._apply_downloaded_extension(track) is None:
+            return None
+        result = _downloaded_from_info(track, info)
+        if result is None:
             logger.error("Не удалось скачать трек с SoundCloud: %s", track.track_id)
+        return result
 
     async def get_session(self) -> aiohttp.ClientSession:
         if self._session is None:
@@ -423,11 +564,18 @@ class AsyncSoundCloudDownloader(AsyncDownloaderInterface):
             return ""
 
     @staticmethod
-    def sync_download(opts: dict, url: str) -> None:
+    def sync_download(opts: dict, url: str) -> dict:
         from yt_dlp import YoutubeDL
 
         with YoutubeDL(opts) as ydl:
-            ydl.extract_info(url, download=True)
+            return ydl.extract_info(url, download=True)
+
+    @staticmethod
+    def sync_extract(opts: dict, url: str) -> dict:
+        from yt_dlp import YoutubeDL
+
+        with YoutubeDL(opts) as ydl:
+            return ydl.extract_info(url, download=False)
 
     async def close(self) -> None:
         if self._session is not None and not self._session.closed:
@@ -447,14 +595,35 @@ class AsyncDownloader(AsyncDownloaderInterface):
         # на двоих, иначе лишний запрос каталога упирается в лимит Яндекса.
         self._cover_tasks: dict[str, asyncio.Future[None]] = {}
 
-    async def download_track(self, track: Track) -> None:
+    def _for(self, track: Track):
         match track.source:
             case TrackSource.YANDEX:
-                await self._yandex_downloader.download_track(track)
+                return self._yandex_downloader
             case TrackSource.YOUTUBE:
-                await self._youtube_downloader.download_track(track)
+                return self._youtube_downloader
             case TrackSource.SOUNDCLOUD:
-                await self._soundcloud_downloader.download_track(track)
+                return self._soundcloud_downloader
+        return None
+
+    async def download_track(self, track: Track) -> DownloadedAudio | None:
+        downloader = self._for(track)
+        if downloader is None:
+            return None
+        try:
+            return await downloader.download_track(track)
+        except Exception:
+            logger.exception("Не удалось скачать трек: %s", track)
+            return None
+
+    async def fetch_meta(self, track: Track) -> TrackMeta | None:
+        downloader = self._for(track)
+        if downloader is None:
+            return None
+        try:
+            return await downloader.fetch_meta(track)
+        except Exception:
+            logger.debug("Метаданные недоступны: %s", track, exc_info=True)
+            return None
 
     async def download_cover(self, track: Track) -> None:
         key = f"{track.source}:{track.track_id}"
