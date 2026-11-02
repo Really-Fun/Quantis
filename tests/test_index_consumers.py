@@ -347,3 +347,47 @@ def test_settings_same_music_dir_does_not_reset_index(
     index.reset.assert_not_called()
     assert bridge.scheduled == []
     page.deleteLater()
+
+
+@pytest.mark.parametrize("other_source", ["youtube", "yandex"])
+def test_delete_track_keeps_other_tracks_file_with_same_prefix(
+    music: Path, other_source: str
+) -> None:
+    # Человеческое имя чужого трека начинается с «42_» (исполнитель «42_Band»).
+    foreign = make_tagged(
+        music, "42_Band - Song.mp3", source=other_source,
+        track_id=VID if other_source == "youtube" else "4242",
+        title="Song", artist="42_Band",
+    )
+    legacy = make_audio(music, "42_Song_A.mp3")
+    index = _refresh()
+    track = YandexTrack(track_id=42, title="Song", author="A", downloaded=True)
+
+    DownloadPlaylist(tracks=[track]).delete_track(track)
+
+    assert not legacy.exists()
+    assert foreign.exists()
+    assert index.has(other_source, VID if other_source == "youtube" else "4242")
+
+
+def test_delete_track_before_index_keeps_foreign_tagged_file(music: Path) -> None:
+    foreign = make_tagged(
+        music, "42_Band - Song.mp3", source="yandex", track_id="4242",
+        title="Song", artist="42_Band",
+    )
+    legacy = make_audio(music, "42_Song_A.mp3")
+    track = YandexTrack(track_id=42, title="Song", author="A", downloaded=True)
+
+    DownloadPlaylist(tracks=[track]).delete_track(track)
+
+    assert not legacy.exists()
+    assert foreign.exists()
+
+
+def test_find_track_file_fallback_skips_foreign_tagged_file(music: Path) -> None:
+    make_tagged(
+        music, "42_Band - Song.mp3", source="yandex", track_id="4242",
+        title="Song", artist="42_Band",
+    )
+    track = YandexTrack(track_id=42, title="Song", author="A")
+    assert PathProvider().find_track_file(track) is None

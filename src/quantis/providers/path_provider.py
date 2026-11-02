@@ -7,6 +7,7 @@ from os import path
 from pathlib import Path
 
 from quantis.models.track import Track, TrackSource
+from quantis.services.soundcloud import parse_storage_id
 from quantis.services.soundcloud import storage_id as soundcloud_storage_id
 from quantis.utils import app_paths
 
@@ -30,6 +31,29 @@ def _is_ready_file(file_path: Path) -> bool:
         return file_path.is_file() and file_path.stat().st_size > 0
     except OSError:
         return False
+
+
+def _identity_key(source: str, track_id: str) -> tuple[str, str]:
+    src = str(source).lower()
+    tid = str(track_id)
+    if src == TrackSource.SOUNDCLOUD:
+        tid = parse_storage_id(tid) or tid
+    return src, tid
+
+
+def _owned_by(candidate: Path, track: Track) -> bool:
+    """Файл принадлежит треку: по тегам Quantis, иначе по старому имени."""
+    from quantis.providers.legacy_names import parse_legacy_names
+    from quantis.services.track_tags import read_identity
+
+    wanted = _identity_key(str(track.source), str(track.track_id))
+    identity = read_identity(candidate)
+    if identity is not None:
+        return _identity_key(identity.source, identity.track_id) == wanted
+    return any(
+        _identity_key(reading.source, reading.track_id) == wanted
+        for reading in parse_legacy_names(candidate.name)
+    )
 
 
 class PathProvider:
@@ -184,6 +208,26 @@ class PathProvider:
                     return candidate
             index += 1
 
+    def legacy_candidates(self, track: Track) -> list[Path]:
+        """Файлы `ID_…` этого трека, найденные по префиксу имени.
+
+        Префикс совпадает и с чужими человеческими именами (исполнитель
+        «42_Band»), поэтому файл берём, только если он принадлежит треку:
+        по нашим тегам, а без тегов — по одному из прочтений старого имени.
+        """
+        music_dir = Path(self.music_folder())
+        prefix = glob.escape(f"{self.storage_id(track)}_")
+        try:
+            found = sorted(music_dir.glob(f"{prefix}*"))
+        except OSError:
+            return []
+        return [
+            candidate
+            for candidate in found
+            if candidate.suffix.lower() in _AUDIO_SUFFIXES
+            and _owned_by(candidate, track)
+        ]
+
     def find_track_file(self, track: Track) -> str | None:
         """Скачанный файл трека или None.
 
@@ -204,16 +248,8 @@ class PathProvider:
         exact = Path(self.get_track_path(track))
         if _is_ready_file(exact):
             return str(exact)
-        music_dir = Path(self.music_folder())
-        prefix = glob.escape(f"{self.storage_id(track)}_")
-        try:
-            candidates = sorted(music_dir.glob(f"{prefix}*"))
-        except OSError:
-            return None
-        for candidate in candidates:
-            if candidate.suffix.lower() in _AUDIO_SUFFIXES and _is_ready_file(
-                candidate
-            ):
+        for candidate in self.legacy_candidates(track):
+            if _is_ready_file(candidate):
                 return str(candidate)
         return None
 

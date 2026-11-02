@@ -456,3 +456,58 @@ async def test_cache_save_failure_does_not_block_ready(music, cache, monkeypatch
     await asyncio.wait_for(waiter, 1)
     assert index.is_ready
     assert index.has("yandex", "1")
+
+
+def _no_tag_reads(monkeypatch):
+    def boom(path):
+        raise AssertionError("read_identity не должен вызываться")
+
+    monkeypatch.setattr(li, "read_identity", boom)
+
+
+def test_load_cached_without_cache_seeds_legacy_names(music, cache, monkeypatch):
+    make_audio(music, "42_Song_A.mp3")
+    amb = make_audio(music, "12345678_Ab_Song.mp3")
+    make_audio(music, "Artist - Foreign.mp3")
+    _no_tag_reads(monkeypatch)
+    index = new_index(music, cache)
+    index.load_cached()
+    assert not index.is_ready
+    assert index.has("yandex", "42")
+    assert index.path_for("yandex", "12345678") == amb
+    from quantis.providers.legacy_names import parse_legacy_names
+
+    yt = parse_legacy_names(amb.name)[1]
+    assert index.has("youtube", yt.track_id)
+    assert len(index.entries()) == 2
+
+
+def test_load_cached_other_dir_cache_seeds_legacy_names(
+    tmp_path, music, cache, monkeypatch
+):
+    other = tmp_path / "other"
+    other.mkdir()
+    index = new_index(other, cache)
+    index.put(make_audio(other, "7_Old_B.mp3"))  # кэш для другой папки
+    make_audio(music, "42_Song_A.mp3")
+    _no_tag_reads(monkeypatch)
+    fresh = new_index(music, cache)
+    fresh.load_cached()
+    assert fresh.has("yandex", "42")
+    assert not fresh.has("yandex", "7")
+    assert not fresh.is_ready
+
+
+@pytest.mark.asyncio
+async def test_refresh_reads_tags_of_seeded_legacy_named_file(music, cache):
+    # Имя в старом формате, но в файле уже есть наши теги — теги главнее.
+    make_tagged(music, "42_Song_A.mp3", source="youtube", track_id=VID)
+    index = new_index(music, cache)
+    index.load_cached()
+    assert index.has("yandex", "42")  # до скана — только по имени
+    await index.refresh()
+    assert index.is_ready
+    assert index.has("youtube", VID)
+    assert not index.has("yandex", "42")
+    entry = index.entry_for("youtube", VID)
+    assert entry is not None and entry.tagged and entry.title == "Песня"

@@ -26,6 +26,8 @@ logger = logging.getLogger(__name__)
 _AUDIO_SUFFIXES = frozenset({".mp3", ".m4a"})
 _CACHE_VERSION = 1
 _SOUNDCLOUD_PREFIX = "sc"
+# size/mtime записи, заполненной без stat (по имени при старте).
+_UNKNOWN = -1
 
 Key = tuple[str, str]
 
@@ -132,25 +134,51 @@ class LibraryIndex:
     # --- кэш ---
 
     def load_cached(self) -> None:
-        """Синхронно читает кэш. Чужая папка или битый файл дают пустой индекс."""
+        """Синхронно читает кэш.
+
+        Нет кэша этой папки (первый запуск, другая папка, битый файл) — индекс
+        заполняется по старым именам `ID_…` без чтения тегов, чтобы такие файлы
+        сразу считались скачанными. Готовым индекс делает только `refresh()`.
+        """
         music_dir = self.music_dir
         files = self._read_cache(music_dir)
+        if files is None:
+            files = self._seed_legacy(music_dir)
         with self._lock:
             self._files = files
             self._files_dir = music_dir
             self._rebuild_keys(music_dir)
 
-    def _read_cache(self, music_dir: Path) -> dict[str, _Record]:
+    def _read_cache(self, music_dir: Path) -> dict[str, _Record] | None:
+        """Записи кэша; None — кэша для этой папки нет или он битый."""
         try:
             data = json.loads(self.cache_path.read_text(encoding="utf-8"))
             if data["version"] != _CACHE_VERSION or data["music_dir"] != str(music_dir):
-                return {}
+                return None
             raw = data["files"]
             if not isinstance(raw, dict):
-                return {}
+                return None
             return {name: _Record(**fields) for name, fields in raw.items()}
         except (OSError, ValueError, KeyError, TypeError):
-            return {}
+            return None
+
+    @classmethod
+    def _seed_legacy(cls, music_dir: Path) -> dict[str, _Record]:
+        """Записи только по старым именам, без тегов.
+
+        size/mtime = -1: скан не сочтёт такую запись неизменной и прочитает
+        теги файла (в файле со старым именем они уже могут быть).
+        """
+        files: dict[str, _Record] = {}
+        try:
+            with os.scandir(music_dir) as it:
+                for item in it:
+                    rec = cls._legacy_record(item.name, _UNKNOWN, _UNKNOWN)
+                    if rec is not None:
+                        files[item.name] = rec
+        except OSError:
+            pass
+        return files
 
     def _save_cache(self, music_dir: Path, files: dict[str, _Record]) -> None:
         data = {
@@ -177,7 +205,12 @@ class LibraryIndex:
                 size, mtime_ns, identity.source, identity.track_id,
                 identity.title, identity.artist, True,
             )
-        readings = parse_legacy_names(path.name)
+        return LibraryIndex._legacy_record(path.name, size, mtime_ns)
+
+    @staticmethod
+    def _legacy_record(name: str, size: int, mtime_ns: int) -> _Record | None:
+        """Запись по старому имени `ID_…` (с алиасом для двусмысленных имён)."""
+        readings = parse_legacy_names(name)
         if not readings:
             return None
         main = readings[0]

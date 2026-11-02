@@ -14,7 +14,6 @@
 
 from __future__ import annotations
 
-import glob
 import json
 import os
 from abc import ABC, abstractmethod
@@ -211,15 +210,8 @@ class DownloadPlaylist(Playlist):
         indexed = index.path_for(str(track.source), str(track.track_id))
         if indexed is not None:
             candidates.append(indexed)
-        candidates.append(Path(provider.get_track_path(track)))
-        music_dir = Path(provider.music_folder())
-        prefix = glob.escape(f"{provider.storage_id(track)}_")
-        try:
-            for extra in music_dir.glob(f"{prefix}*"):
-                if extra.suffix.lower() in {".mp3", ".m4a"}:
-                    candidates.append(extra)
-        except OSError:
-            pass
+        # Точное имя `ID_Название_Автор` тоже попадает под префикс.
+        candidates.extend(provider.legacy_candidates(track))
         seen: set[str] = set()
         for path in candidates:
             key = str(path)
