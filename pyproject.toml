@@ -23,6 +23,7 @@ dependencies = [
     "winrt-Windows.media>=3.2.1; sys_platform == 'win32'",
     "winrt-Windows.media.playback>=3.2.1; sys_platform == 'win32'",
     "winrt-Windows.foundation>=3.2.1; sys_platform == 'win32'",
+    "mutagen (>=1.47.0,<2.0.0)",
 ]
 
 [project.scripts]
