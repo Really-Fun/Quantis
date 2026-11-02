@@ -14,6 +14,13 @@ _INVALID_PATH_CHARS = re.compile(r'[<>:"/\\|?*\x00-\x1f]')
 _OUTTMPL_EXT = "%(ext)s"
 # Те же форматы, что видят «Скачанные» и TrackManager.
 _AUDIO_SUFFIXES = frozenset({".mp3", ".m4a"})
+_MAX_STEM = 150
+_NAME_SEPARATOR = " - "
+_RESERVED_NAMES = frozenset(
+    {"CON", "PRN", "AUX", "NUL"}
+    | {f"COM{i}" for i in range(1, 10)}
+    | {f"LPT{i}" for i in range(1, 10)}
+)
 logger = logging.getLogger(__name__)
 
 
@@ -93,6 +100,65 @@ class PathProvider:
             self.music_folder(),
             f"{self.storage_id(track)}_{title}_{author}.{ext}",
         )
+
+    @staticmethod
+    def _avoid_reserved(stem: str) -> str:
+        """Имена устройств Windows (CON, NUL, COM1…) недопустимы для файла."""
+        if stem.upper() in _RESERVED_NAMES:
+            return f"{stem}_"
+        return stem
+
+    @classmethod
+    def _human_stem(cls, artist: str, title: str, suffix: str) -> str:
+        """``artist - title`` + suffix, целиком не длиннее _MAX_STEM.
+
+        Режем сначала название, потом исполнителя; многоточие не добавляем.
+        """
+        artist_part = cls._sanitize_filename_part(artist)
+        title_part = cls._sanitize_filename_part(title)
+        budget = _MAX_STEM - len(suffix) - len(_NAME_SEPARATOR)
+        if len(artist_part) + len(title_part) > budget:
+            title_part = title_part[: max(budget - len(artist_part), 1)]
+            title_part = title_part.rstrip(" .") or "u"
+            artist_part = artist_part[: max(budget - len(title_part), 1)]
+            artist_part = artist_part.rstrip(" .") or "u"
+        return cls._avoid_reserved(
+            f"{artist_part}{_NAME_SEPARATOR}{title_part}{suffix}"
+        )
+
+    def human_track_path(
+        self,
+        artist: str,
+        title: str,
+        ext: str,
+        *,
+        owner: tuple[str, str] | None = None,
+    ) -> Path:
+        """Путь ``{artist} - {title}.{ext}`` в папке музыки.
+
+        Занятое чужим файлом имя получает суффикс `` (2)``, `` (3)``…; файл
+        с тегами владельца ``owner`` (source, id) считается своим.
+        """
+        from quantis.services.track_tags import read_identity
+
+        folder = Path(self.music_folder())
+        extension = self._sanitize_extension(ext)
+        index = 1
+        while True:
+            suffix = "" if index == 1 else f" ({index})"
+            candidate = folder / (
+                f"{self._human_stem(artist, title, suffix)}.{extension}"
+            )
+            if not candidate.exists():
+                return candidate
+            if owner is not None:
+                identity = read_identity(candidate)
+                if identity is not None and (
+                    identity.source,
+                    identity.track_id,
+                ) == tuple(owner):
+                    return candidate
+            index += 1
 
     def find_track_file(self, track: Track) -> str | None:
         """Скачанный файл трека или None.
