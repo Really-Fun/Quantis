@@ -7,7 +7,9 @@ from pathlib import Path
 
 import pytest
 
-from quantis.models import YandexTrack  # noqa: F401  (порядок импорта: цикл soundcloud <-> path_provider)
+from quantis.models import (
+    YandexTrack,  # noqa: F401  (порядок импорта: цикл soundcloud <-> path_provider)
+)
 from quantis.providers.path_provider import PathProvider
 from quantis.services.track_tags import TrackMeta, write_tags
 
@@ -79,8 +81,18 @@ def test_collision_suffix_fits_cap(provider, tmp_path):
 def test_same_owner_reuses_path(provider, tmp_path):
     target = tmp_path / "Artist - Song.mp3"
     shutil.copy(FIXTURES / "silence.mp3", target)
-    write_tags(target, TrackMeta(source="youtube", track_id="x", title="Song", artist="Artist"), cover=None)
-    assert provider.human_track_path("Artist", "Song", "mp3", owner=("youtube", "x")) == target
+    write_tags(
+        target,
+        TrackMeta(source="youtube", track_id="x", title="Song", artist="Artist"),
+        cover=None,
+    )
+    assert (
+        provider.human_track_path("Artist", "Song", "mp3", owner=("youtube", "x"))
+        == target
+    )
     other = provider.human_track_path("Artist", "Song", "mp3", owner=("youtube", "y"))
     assert other.name == "Artist - Song (2).mp3"
-    assert provider.human_track_path("Artist", "Song", "mp3").name == "Artist - Song (2).mp3"
+    assert (
+        provider.human_track_path("Artist", "Song", "mp3").name
+        == "Artist - Song (2).mp3"
+    )
