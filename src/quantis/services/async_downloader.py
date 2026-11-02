@@ -712,13 +712,13 @@ class AsyncDownloader(AsyncDownloaderInterface):
         source = str(track.source)
         track_id = str(track.track_id)
         if index.path_for(source, track_id) is not None:
-            await self.ensure_cover(track)
+            await self._safe_cover(track)
             track.downloaded = True
             return True
         audio = await self.download_track(track)
         if audio is None:
             return False
-        cover_ok = await self.ensure_cover(track)
+        cover_ok = await self._safe_cover(track)
         verified = await self._write_and_verify_tags(audio, cover_ok, track)
         async with self._rename_lock:
             final = audio.path
@@ -732,6 +732,14 @@ class AsyncDownloader(AsyncDownloaderInterface):
                 logger.warning("Не удалось добавить в индекс: %s", final, exc_info=True)
         track.downloaded = True
         return True
+
+    async def _safe_cover(self, track: Track) -> bool:
+        """ensure_cover, который не бросает: сбой обложки не ломает скачивание."""
+        try:
+            return await self.ensure_cover(track)
+        except Exception:
+            logger.warning("Не удалось получить обложку: %s", track, exc_info=True)
+            return False
 
     async def _write_and_verify_tags(
         self, audio: DownloadedAudio, cover_ok: bool, track: Track
@@ -750,9 +758,10 @@ class AsyncDownloader(AsyncDownloaderInterface):
         except Exception:
             logger.warning("Не удалось записать теги: %s", path, exc_info=True)
             return False
-        if identity is None or (identity.source, identity.track_id) != (
-            meta.source,
-            meta.track_id,
+        if (
+            identity is None
+            or (identity.source, identity.track_id) != (meta.source, meta.track_id)
+            or not identity.title.strip()
         ):
             logger.warning("Теги не прошли проверку, файл не переименован: %s", path)
             return False
@@ -769,8 +778,17 @@ class AsyncDownloader(AsyncDownloaderInterface):
                 path.suffix.lstrip("."),
                 owner=(meta.source, meta.track_id),
             )
-            if target != path:
-                await asyncio.to_thread(path.replace, target)
+            if target == path:
+                return target
+            if await asyncio.to_thread(target.exists):
+                # Своя уже размеченная копия (индекс устарел): не перезаписываем.
+                try:
+                    await asyncio.to_thread(path.unlink)
+                except OSError:
+                    logger.warning("Не удалось удалить дубликат: %s", path)
+                    return path
+                return target
+            await asyncio.to_thread(path.replace, target)
             return target
         except Exception:
             logger.warning("Не удалось переименовать файл: %s", path, exc_info=True)

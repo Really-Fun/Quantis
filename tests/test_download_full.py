@@ -201,3 +201,86 @@ async def test_waits_for_index_ready(music, tmp_path):
     await idx.refresh()
     assert await task is True
     assert calls == ["1"]
+
+
+@pytest.mark.asyncio
+async def test_cover_error_still_succeeds(index, music):
+    dl = make_downloader(index, music)
+
+    async def boom(track):
+        raise asyncio.TimeoutError
+
+    dl.ensure_cover = boom
+    assert await dl.download_full(make_track()) is True
+    assert read_identity(music / "A - T.mp3") is not None
+    assert index.path_for("yandex", "1") == music / "A - T.mp3"
+
+
+@pytest.mark.asyncio
+async def test_cover_error_on_shortcut_path(index, music):
+    mine = music / "My name.mp3"
+    shutil.copy(FIXTURES / "silence.mp3", mine)
+    write_tags(
+        mine, TrackMeta(source="yandex", track_id="1", title="T", artist="A"), None
+    )
+    await index.refresh()
+    dl = make_downloader(index, music)
+
+    async def boom(track):
+        raise OSError("disk")
+
+    dl.ensure_cover = boom
+    track = make_track()
+    assert await dl.download_full(track) is True
+    assert track.downloaded is True
+
+
+@pytest.mark.asyncio
+async def test_cover_present_passed_to_write_tags(index, music, monkeypatch):
+    dl = make_downloader(index, music)
+
+    async def has_cover(track):
+        return True
+
+    dl.ensure_cover = has_cover
+    captured = []
+
+    def spy(path, meta, cover):
+        captured.append(cover)
+
+    monkeypatch.setattr(ad, "write_tags", spy)
+    await dl.download_full(make_track())
+    assert captured == [Path(PathProvider().get_cover_path(make_track()))]
+
+
+@pytest.mark.asyncio
+async def test_stale_index_does_not_overwrite_own_tagged_file(index, music):
+    own = music / "A - T.mp3"
+    shutil.copy(FIXTURES / "silence.mp3", own)
+    write_tags(
+        own, TrackMeta(source="yandex", track_id="1", title="T", artist="A"), None
+    )
+    os.utime(own, (1_000_000, 1_000_000))
+    before = own.read_bytes()
+    assert not index.has("yandex", "1")
+    dl = make_downloader(index, music)
+    assert await dl.download_full(make_track()) is True
+    assert own.read_bytes() == before
+    assert own.stat().st_mtime == 1_000_000
+    assert sorted(p.name for p in music.iterdir()) == ["A - T.mp3"]
+    assert index.path_for("yandex", "1") == own
+
+
+@pytest.mark.asyncio
+async def test_empty_title_readback_blocks_rename(index, music, monkeypatch):
+    real = ad.read_identity
+
+    def empty_title(path):
+        ident = real(path)
+        return ident and type(ident)(ident.source, ident.track_id, "", ident.artist)
+
+    monkeypatch.setattr(ad, "read_identity", empty_title)
+    dl = make_downloader(index, music)
+    assert await dl.download_full(make_track()) is True
+    assert (music / "1_T_A.mp3").is_file()
+    assert not (music / "A - T.mp3").exists()
