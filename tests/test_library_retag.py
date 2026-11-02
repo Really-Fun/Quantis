@@ -168,3 +168,79 @@ async def test_ambiguous_both_or_neither_skipped(music, index, both):
     assert report == RetagReport(done=0, already=0, skipped=1)
     assert (music / name).exists()
     assert read_identity(music / name) is None
+
+
+def _blocking_download(dl, music, created, release):
+    async def fake_download(track):
+        path = music / f"{track.track_id}_{track.title}_{track.author}.mp3"
+        shutil.copy(FIXTURES / "silence.mp3", path)
+        created.set()
+        await release.wait()
+        return ad.DownloadedAudio(
+            path=path,
+            meta=meta("yandex", str(track.track_id), track.title, track.author),
+        )
+
+    dl.download_track = fake_download
+
+
+async def test_retag_skips_track_being_downloaded(music, index):
+    import asyncio
+
+    from quantis.models import YandexTrack
+
+    await index.refresh()
+    dl = FakeDownloader(index, {("yandex", "1"): meta(track_id="1", title="T")})
+    created, release = asyncio.Event(), asyncio.Event()
+    _blocking_download(dl, music, created, release)
+    task = asyncio.ensure_future(
+        dl.download_full(YandexTrack(track_id="1", title="T", author="A"))
+    )
+    await created.wait()
+    report = await retag_legacy(dl, index)
+    assert report == RetagReport(done=0, already=0, skipped=1)
+    assert (music / "1_T_A.mp3").exists()
+    assert read_identity(music / "1_T_A.mp3") is None
+    release.set()
+    assert await task is True
+    assert (music / "A - T.mp3").exists()
+    assert not (music / "1_T_A.mp3").exists()
+
+
+async def test_download_waits_for_retag_of_same_track(music, index):
+    import asyncio
+
+    from quantis.models import YandexTrack
+
+    legacy(music, "1_T_A.mp3")
+    await index.refresh()
+    gate = asyncio.Event()
+    entered = asyncio.Event()
+    dl = FakeDownloader(index)
+    downloads = []
+
+    async def slow_fetch(track):
+        entered.set()
+        await gate.wait()
+        return meta(track_id="1", title="T")
+
+    async def fake_download(track):
+        downloads.append(track.track_id)
+        return None
+
+    dl.fetch_meta = slow_fetch
+    dl.download_track = fake_download
+    retag = asyncio.ensure_future(retag_legacy(dl, index))
+    await entered.wait()
+    full = asyncio.ensure_future(
+        dl.download_full(YandexTrack(track_id="1", title="T", author="A"))
+    )
+    await asyncio.sleep(0.05)
+    assert downloads == [] and not full.done()
+    gate.set()
+    report = await retag
+    assert report.done == 1
+    # После миграции файл уже есть в индексе: повторного скачивания нет.
+    assert await full is True
+    assert downloads == []
+    assert (music / "A - T.mp3").exists()

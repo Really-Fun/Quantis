@@ -36,6 +36,12 @@ def _fallback_meta(entry: IndexEntry) -> TrackMeta:
     )
 
 
+def _readings(entry: IndexEntry) -> list[tuple[str, str]]:
+    if not entry.ambiguous:
+        return [(entry.source, entry.track_id)]
+    return [(r.source, r.track_id) for r in parse_legacy_names(entry.path.name)]
+
+
 async def _safe_fetch(downloader: AsyncDownloader, track) -> TrackMeta | None:
     try:
         return await downloader.fetch_meta(track)
@@ -89,6 +95,13 @@ async def retag_legacy(
         if entry.tagged:
             report.already += 1
         else:
+            readings = _readings(entry)
+            if not downloader.begin_retag(readings):
+                # Файл может быть недокачан: им владеет скачивание.
+                report.skipped += 1
+                if on_progress is not None:
+                    on_progress(i, total)
+                continue
             try:
                 resolved = await _resolve(downloader, entry)
                 if resolved is None:
@@ -107,6 +120,8 @@ async def retag_legacy(
             except Exception:
                 logger.warning("Не удалось обработать %s", entry.path, exc_info=True)
                 report.skipped += 1
+            finally:
+                downloader.end_retag(readings)
         if on_progress is not None:
             on_progress(i, total)
     return report

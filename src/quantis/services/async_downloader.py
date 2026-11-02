@@ -601,6 +601,9 @@ class AsyncDownloader(AsyncDownloaderInterface):
         # Выбор имени и переименование — под одним замком: два разных трека
         # с одинаковым «исполнитель - название» не должны взять одно имя.
         self._rename_lock = asyncio.Lock()
+        # Треки, которые сейчас размечает миграция старых файлов: скачивание
+        # того же трека ждёт её конца, а миграция пропускает скачиваемые.
+        self._retagging: dict[str, asyncio.Event] = {}
         self._yandex_downloader = AsyncYandexDownloader()
         self._youtube_downloader = AsyncYoutubeDownloader()
         self._soundcloud_downloader = AsyncSoundCloudDownloader()
@@ -706,7 +709,38 @@ class AsyncDownloader(AsyncDownloaderInterface):
             task.add_done_callback(lambda _done: self._full_tasks.pop(key, None))
         return await asyncio.shield(task)
 
+    @staticmethod
+    def _guard_key(source: str, track_id: str) -> str:
+        source = str(source)
+        track_id = str(track_id)
+        if source == "soundcloud" and track_id.startswith("sc"):
+            track_id = track_id[2:]
+        return f"{source}:{track_id}"
+
+    def is_downloading(self, source: str, track_id: str) -> bool:
+        """Идёт ли download_full для этого трека (id SoundCloud — с `sc` или без)."""
+        key = self._guard_key(source, track_id)
+        return any(self._guard_key(*k.split(":", 1)) == key for k in self._full_tasks)
+
+    def begin_retag(self, readings: list[tuple[str, str]]) -> bool:
+        """Занимает треки под миграцию. False, если любой из них скачивается."""
+        keys = [self._guard_key(s, t) for s, t in readings]
+        if any(self.is_downloading(s, t) for s, t in readings):
+            return False
+        for key in keys:
+            self._retagging.setdefault(key, asyncio.Event())
+        return True
+
+    def end_retag(self, readings: list[tuple[str, str]]) -> None:
+        for s, t in readings:
+            event = self._retagging.pop(self._guard_key(s, t), None)
+            if event is not None:
+                event.set()
+
     async def _download_full(self, track: Track) -> bool:
+        key = self._guard_key(str(track.source), str(track.track_id))
+        while (event := self._retagging.get(key)) is not None:
+            await event.wait()
         index = self.index
         await index.wait_ready()
         source = str(track.source)
