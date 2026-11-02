@@ -86,6 +86,10 @@ class LibraryIndex:
         # Один Event на индекс: reset() его сбрасывает, а не подменяет,
         # поэтому уже ждущие wait_ready() освобождаются следующим refresh().
         self._event = asyncio.Event()
+        # Сканы идут строго по одному; refresh() во время скана ждёт его и
+        # запускает ещё один проход, общий для всех ожидающих.
+        self._scan_lock = asyncio.Lock()
+        self._follow_up: asyncio.Future | None = None
         self._generation = 0  # растёт при reset(): отсекает устаревшие сканы
         self._dirty: set[str] = set()  # имена, тронутые put/discard во время скана
         self._listeners: list[Callable[[], None]] = []
@@ -264,8 +268,21 @@ class LibraryIndex:
 
     async def refresh(self) -> None:
         """Пересканирует папку в рабочем потоке; читает теги только у изменившихся."""
-        music_dir = self.music_dir
-        if await asyncio.to_thread(self._scan, music_dir):
+        if self._scan_lock.locked():
+            if self._follow_up is None:
+                self._follow_up = asyncio.ensure_future(self._follow_up_pass())
+            await asyncio.shield(self._follow_up)
+            return
+        async with self._scan_lock:
+            await self._scan_once()
+
+    async def _follow_up_pass(self) -> None:
+        async with self._scan_lock:
+            self._follow_up = None  # проход начался: новые вызовы встанут в очередь
+            await self._scan_once()
+
+    async def _scan_once(self) -> None:
+        if await asyncio.to_thread(self._scan, self.music_dir):
             self._event.set()
 
     async def wait_ready(self) -> None:

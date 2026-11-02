@@ -352,3 +352,46 @@ async def test_stale_scan_after_reset_is_discarded(tmp_path, music, cache, monke
     await index.refresh()
     assert index.is_ready
     assert [e.track_id for e in index.entries()] == ["7"]
+
+
+@pytest.mark.asyncio
+async def test_overlapping_refreshes_keep_put(music, cache, monkeypatch):
+    import asyncio
+    import threading
+
+    make_audio(music, "1_S_A.mp3")
+    started, release = threading.Event(), threading.Event()
+    orig = _slow_reads(monkeypatch, started, release)
+    index = new_index(music, cache)
+    first = asyncio.create_task(index.refresh())
+    while not started.is_set():
+        await asyncio.sleep(0.01)
+    second = asyncio.create_task(index.refresh())
+    await asyncio.sleep(0.05)
+    monkeypatch.setattr(li, "read_identity", orig)
+    assert index.put(make_audio(music, "99_New_A.mp3")) is not None
+    release.set()
+    await asyncio.gather(first, second)
+    assert index.has("yandex", "99")
+    assert index.has("yandex", "1")
+
+
+@pytest.mark.asyncio
+async def test_refresh_mid_scan_waits_for_fresh_scan(music, cache, monkeypatch):
+    import asyncio
+    import threading
+
+    make_audio(music, "1_S_A.mp3")
+    started, release = threading.Event(), threading.Event()
+    _slow_reads(monkeypatch, started, release)
+    index = new_index(music, cache)
+    first = asyncio.create_task(index.refresh())
+    while not started.is_set():
+        await asyncio.sleep(0.01)
+    make_audio(music, "5_Late_A.mp3")  # появился после старта первого скана
+    second = asyncio.create_task(index.refresh())
+    third = asyncio.create_task(index.refresh())  # делит проход со вторым
+    await asyncio.sleep(0.05)
+    release.set()
+    await asyncio.gather(first, second, third)
+    assert index.has("yandex", "5")
