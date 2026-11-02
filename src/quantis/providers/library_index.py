@@ -90,6 +90,7 @@ class LibraryIndex:
         # запускает ещё один проход, общий для всех ожидающих.
         self._scan_lock = asyncio.Lock()
         self._follow_up: asyncio.Future | None = None
+        self._inflight = 0  # созданные и не завершённые проходы
         self._generation = 0  # растёт при reset(): отсекает устаревшие сканы
         self._dirty: set[str] = set()  # имена, тронутые put/discard во время скана
         self._listeners: list[Callable[[], None]] = []
@@ -258,7 +259,10 @@ class LibraryIndex:
             self._files_dir = music_dir
             self._rebuild_keys(music_dir)
             self._ready = True
-        self._save_cache(music_dir, new)
+        try:
+            self._save_cache(music_dir, new)
+        except OSError:
+            logger.warning("Не удалось сохранить кэш индекса", exc_info=True)
         for callback in list(self._listeners):
             try:
                 callback()
@@ -268,18 +272,28 @@ class LibraryIndex:
 
     async def refresh(self) -> None:
         """Пересканирует папку в рабочем потоке; читает теги только у изменившихся."""
-        if self._scan_lock.locked():
-            if self._follow_up is None:
-                self._follow_up = asyncio.ensure_future(self._follow_up_pass())
-            await asyncio.shield(self._follow_up)
-            return
-        async with self._scan_lock:
-            await self._scan_once()
+        if self._inflight == 0:
+            task = self._start_pass(follow=False)
+        elif self._follow_up is not None:
+            task = self._follow_up
+        else:
+            task = self._follow_up = self._start_pass(follow=True)
+        # shield: отмена вызывающего не должна прерывать проход и снимать
+        # блокировку, пока рабочий поток ещё сканирует папку.
+        await asyncio.shield(task)
 
-    async def _follow_up_pass(self) -> None:
-        async with self._scan_lock:
-            self._follow_up = None  # проход начался: новые вызовы встанут в очередь
-            await self._scan_once()
+    def _start_pass(self, follow: bool) -> asyncio.Future:
+        self._inflight += 1
+        return asyncio.ensure_future(self._pass(follow))
+
+    async def _pass(self, follow: bool) -> None:
+        try:
+            async with self._scan_lock:
+                if follow:
+                    self._follow_up = None  # проход начался: новые вызовы в очередь
+                await self._scan_once()
+        finally:
+            self._inflight -= 1
 
     async def _scan_once(self) -> None:
         if await asyncio.to_thread(self._scan, self.music_dir):

@@ -395,3 +395,64 @@ async def test_refresh_mid_scan_waits_for_fresh_scan(music, cache, monkeypatch):
     release.set()
     await asyncio.gather(first, second, third)
     assert index.has("yandex", "5")
+
+
+@pytest.mark.asyncio
+async def test_cancelled_refresh_does_not_overlap_scans(music, cache, monkeypatch):
+    import asyncio
+    import threading
+
+    make_audio(music, "1_S_A.mp3")
+    orig = li.read_identity
+    counter = threading.Lock()
+    state = {"now": 0, "max": 0}
+    started, release = threading.Event(), threading.Event()
+
+    def slow(path):
+        with counter:
+            state["now"] += 1
+            state["max"] = max(state["max"], state["now"])
+        started.set()
+        release.wait(5)
+        try:
+            return orig(path)
+        finally:
+            with counter:
+                state["now"] -= 1
+
+    monkeypatch.setattr(li, "read_identity", slow)
+    index = new_index(music, cache)
+    first = asyncio.create_task(index.refresh())
+    while not started.is_set():
+        await asyncio.sleep(0.01)
+    second = asyncio.create_task(index.refresh())
+    await asyncio.sleep(0.05)
+    first.cancel()
+    await asyncio.sleep(0.05)
+    new = make_audio(music, "99_New_A.mp3")
+    monkeypatch.setattr(li, "read_identity", orig)  # put читает теги синхронно
+    assert index.put(new) is not None  # put во время сканов
+    release.set()
+    await second
+    assert state["max"] == 1
+    assert index.has("yandex", "99")
+    assert index.has("yandex", "1")
+
+
+@pytest.mark.asyncio
+async def test_cache_save_failure_does_not_block_ready(music, cache, monkeypatch):
+    import asyncio
+
+    make_audio(music, "1_S_A.mp3")
+    index = new_index(music, cache)
+
+    def boom(*args, **kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(index, "_save_cache", boom)
+    waiter = asyncio.create_task(index.wait_ready())
+    await asyncio.sleep(0)
+    await index.refresh()
+    await asyncio.wait_for(waiter, 1)
+    assert index.is_ready
+    assert index.has("yandex", "1")
