@@ -35,3 +35,15 @@ def _fresh_yandex_token_cache():
     reset_yandex_token_cache()
     yield
     reset_yandex_token_cache()
+
+
+@pytest.fixture(autouse=True)
+def _isolated_library_index(tmp_path):
+    """Индекс библиотеки не должен читать и писать каталог данных пользователя."""
+    from quantis.providers.library_index import LibraryIndex
+
+    LibraryIndex.reset_instance()
+    LibraryIndex.CACHE_PATH = tmp_path / "library_index_cache" / "library_index.json"
+    yield
+    LibraryIndex.CACHE_PATH = None
+    LibraryIndex.reset_instance()
