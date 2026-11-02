@@ -15,6 +15,7 @@ _OUTTMPL_EXT = "%(ext)s"
 # Те же форматы, что видят «Скачанные» и TrackManager.
 _AUDIO_SUFFIXES = frozenset({".mp3", ".m4a"})
 _MAX_STEM = 150
+_MAX_STEM_BYTES = 200
 _NAME_SEPARATOR = " - "
 _RESERVED_NAMES = frozenset(
     {"CON", "PRN", "AUX", "NUL"}
@@ -102,29 +103,52 @@ class PathProvider:
         )
 
     @staticmethod
-    def _avoid_reserved(stem: str) -> str:
-        """Имена устройств Windows (CON, NUL, COM1…) недопустимы для файла."""
-        if stem.upper() in _RESERVED_NAMES:
-            return f"{stem}_"
-        return stem
+    def _avoid_reserved(artist: str, stem: str) -> str:
+        """Исполнитель, не превращающий имя в устройство Windows.
+
+        Windows резервирует часть имени до первой точки (``con.foo`` — это CON),
+        поэтому при совпадении дописываем «_» к исполнителю перед точкой.
+        """
+        base = stem.split(".", 1)[0].rstrip(" .")
+        if base.upper() not in _RESERVED_NAMES:
+            return artist
+        dot = artist.find(".")
+        if dot == -1:
+            return f"{artist}_"
+        return f"{artist[:dot]}_{artist[dot:]}"
+
+    @classmethod
+    def _compose_stem(cls, artist: str, title: str, suffix: str) -> str:
+        stem = f"{artist}{_NAME_SEPARATOR}{title}{suffix}"
+        fixed = cls._avoid_reserved(artist, stem)
+        if fixed == artist:
+            return stem
+        return f"{fixed}{_NAME_SEPARATOR}{title}{suffix}"
 
     @classmethod
     def _human_stem(cls, artist: str, title: str, suffix: str) -> str:
-        """``artist - title`` + suffix, целиком не длиннее _MAX_STEM.
+        """``artist - title`` + suffix: ≤ _MAX_STEM символов и ≤ _MAX_STEM_BYTES.
 
-        Режем сначала название, потом исполнителя; многоточие не добавляем.
+        Режем сначала название, потом исполнителя (по символам, многоточие не
+        добавляем); лимит в байтах нужен для ext4 (255 байт на имя).
         """
-        artist_part = cls._sanitize_filename_part(artist)
-        title_part = cls._sanitize_filename_part(title)
-        budget = _MAX_STEM - len(suffix) - len(_NAME_SEPARATOR)
-        if len(artist_part) + len(title_part) > budget:
-            title_part = title_part[: max(budget - len(artist_part), 1)]
-            title_part = title_part.rstrip(" .") or "u"
-            artist_part = artist_part[: max(budget - len(title_part), 1)]
-            artist_part = artist_part.rstrip(" .") or "u"
-        return cls._avoid_reserved(
-            f"{artist_part}{_NAME_SEPARATOR}{title_part}{suffix}"
-        )
+        artist = cls._sanitize_filename_part(artist)
+        title = cls._sanitize_filename_part(title)
+
+        def fits() -> bool:
+            stem = cls._compose_stem(artist, title, suffix)
+            return (
+                len(stem) <= _MAX_STEM and len(stem.encode("utf-8")) <= _MAX_STEM_BYTES
+            )
+
+        while not fits() and len(title) > 1:
+            title = title[:-1]
+        while not fits() and len(artist) > 1:
+            artist = artist[:-1]
+        # rstrip только укорачивает, лимиты не нарушаются.
+        title = title.rstrip(" .") or "u"
+        artist = artist.rstrip(" .") or "u"
+        return cls._compose_stem(artist, title, suffix)
 
     def human_track_path(
         self,
