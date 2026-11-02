@@ -257,3 +257,98 @@ def test_singleton_isolated_by_conftest():
     assert first.cache_path == LibraryIndex.CACHE_PATH
     LibraryIndex.reset_instance()
     assert LibraryIndex.instance() is not first
+
+
+def _slow_reads(monkeypatch, started, release):
+    """read_identity блокируется, пока тест не отпустит скан."""
+    orig = li.read_identity
+
+    def slow(path):
+        started.set()
+        release.wait(5)
+        return orig(path)
+
+    monkeypatch.setattr(li, "read_identity", slow)
+    return orig
+
+
+@pytest.mark.asyncio
+async def test_put_during_refresh_is_kept(music, cache, monkeypatch):
+    import asyncio
+    import threading
+
+    make_audio(music, "1_S_A.mp3")
+    started, release = threading.Event(), threading.Event()
+    orig = _slow_reads(monkeypatch, started, release)
+    index = new_index(music, cache)
+    task = asyncio.create_task(index.refresh())
+    while not started.is_set():
+        await asyncio.sleep(0.01)
+    new = make_audio(music, "99_New_A.mp3")
+    monkeypatch.setattr(li, "read_identity", orig)
+    assert index.put(new) is not None
+    release.set()
+    await task
+    assert index.has("yandex", "99")
+    assert index.has("yandex", "1")
+
+
+@pytest.mark.asyncio
+async def test_discard_during_refresh_is_kept(music, cache, monkeypatch):
+    import asyncio
+    import threading
+
+    gone = make_audio(music, "2_Gone_A.mp3")
+    index = new_index(music, cache)
+    index.put(gone)
+    make_audio(music, "1_S_A.mp3")
+    started, release = threading.Event(), threading.Event()
+    _slow_reads(monkeypatch, started, release)
+    task = asyncio.create_task(index.refresh())
+    while not started.is_set():
+        await asyncio.sleep(0.01)
+    index.discard(gone)  # запись убрана, файл на диске остался
+    release.set()
+    await task
+    assert not index.has("yandex", "2")
+    assert index.has("yandex", "1")
+
+
+@pytest.mark.asyncio
+async def test_wait_ready_survives_reset(music, cache):
+    import asyncio
+
+    index = new_index(music, cache)
+    waiter = asyncio.create_task(index.wait_ready())
+    await asyncio.sleep(0)
+    index.reset()
+    await index.refresh()
+    await asyncio.wait_for(waiter, 1)
+
+
+@pytest.mark.asyncio
+async def test_stale_scan_after_reset_is_discarded(tmp_path, music, cache, monkeypatch):
+    import asyncio
+    import threading
+
+    other = tmp_path / "music_b"
+    other.mkdir()
+    make_audio(music, "1_S_A.mp3")
+    make_audio(other, "7_B_A.mp3")
+    started, release = threading.Event(), threading.Event()
+    orig = _slow_reads(monkeypatch, started, release)
+    index = LibraryIndex(music_dir=music, cache_path=cache)
+    task = asyncio.create_task(index.refresh())
+    while not started.is_set():
+        await asyncio.sleep(0.01)
+    monkeypatch.setattr(li, "read_identity", orig)
+    index.reset()
+    index._music_dir = other
+    release.set()
+    await task
+    assert not index.is_ready
+    assert index.entries() == []
+    assert not index.has("yandex", "1")
+    await index.refresh()
+    assert index.is_ready
+    assert [e.track_id for e in index.entries()] == ["7"]

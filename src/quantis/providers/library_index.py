@@ -83,7 +83,11 @@ class LibraryIndex:
         self._files_dir: Path | None = None  # папка, к которой относятся _files
         self._keys: dict[Key, str] = {}
         self._ready = False
-        self._event: asyncio.Event | None = None
+        # Один Event на индекс: reset() его сбрасывает, а не подменяет,
+        # поэтому уже ждущие wait_ready() освобождаются следующим refresh().
+        self._event = asyncio.Event()
+        self._generation = 0  # растёт при reset(): отсекает устаревшие сканы
+        self._dirty: set[str] = set()  # имена, тронутые put/discard во время скана
         self._listeners: list[Callable[[], None]] = []
 
     # --- синглтон ---
@@ -209,10 +213,12 @@ class LibraryIndex:
 
     # --- обновление ---
 
-    def _scan(self, music_dir: Path) -> None:
+    def _scan(self, music_dir: Path) -> bool:
         """Полный проход по папке (рабочий поток)."""
         with self._lock:
             old = dict(self._files) if self._files_dir == music_dir else {}
+            generation = self._generation
+            self._dirty = set()
         new: dict[str, _Record] = {}
         try:
             with os.scandir(music_dir) as it:
@@ -235,30 +241,36 @@ class LibraryIndex:
         except OSError:
             logger.warning("Не удалось прочитать папку %s", music_dir, exc_info=True)
         with self._lock:
+            if generation != self._generation:
+                return False  # за время скана был reset(): результат устарел
+            # put/discard во время скана новее снимка скана - сохраняем их.
+            for name in self._dirty:
+                if name in self._files:
+                    new[name] = self._files[name]
+                else:
+                    new.pop(name, None)
+            self._dirty = set()
             self._files = new
             self._files_dir = music_dir
             self._rebuild_keys(music_dir)
+            self._ready = True
         self._save_cache(music_dir, new)
-        self._ready = True
         for callback in list(self._listeners):
             try:
                 callback()
             except Exception:
                 logger.exception("Ошибка слушателя индекса")
+        return True
 
     async def refresh(self) -> None:
         """Пересканирует папку в рабочем потоке; читает теги только у изменившихся."""
         music_dir = self.music_dir
-        await asyncio.to_thread(self._scan, music_dir)
-        if self._event is None:
-            self._event = asyncio.Event()
-        self._event.set()
+        if await asyncio.to_thread(self._scan, music_dir):
+            self._event.set()
 
     async def wait_ready(self) -> None:
         if self._ready:
             return
-        if self._event is None:
-            self._event = asyncio.Event()
         await self._event.wait()
 
     def add_listener(self, callback: Callable[[], None]) -> None:
@@ -271,8 +283,10 @@ class LibraryIndex:
             self._files = {}
             self._files_dir = None
             self._keys = {}
-        self._ready = False
-        self._event = None
+            self._generation += 1
+            self._dirty = set()
+            self._ready = False
+        self._event.clear()
 
     # --- запросы ---
 
@@ -290,6 +304,7 @@ class LibraryIndex:
 
     def _drop(self, name: str) -> None:
         with self._lock:
+            self._dirty.add(name)
             if self._files.pop(name, None) is None:
                 return
             music_dir = self._files_dir or self.music_dir
@@ -342,6 +357,7 @@ class LibraryIndex:
             if self._files_dir != music_dir:
                 self._files = {}
                 self._files_dir = music_dir
+            self._dirty.add(path.name)
             if rec is None:
                 self._files.pop(path.name, None)
             else:
