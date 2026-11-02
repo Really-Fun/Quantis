@@ -9,7 +9,7 @@ from abc import ABC, abstractmethod
 from asyncio import Semaphore, get_running_loop
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 import aiofiles
 import aiohttp
@@ -24,11 +24,19 @@ from quantis.models.track import (
 )
 from quantis.providers import PathProvider
 from quantis.services.cover_validate import cover_bytes_ok, cover_file_ok
-from quantis.services.track_tags import TrackMeta, source_url
+from quantis.services.track_tags import (
+    TrackMeta,
+    read_identity,
+    source_url,
+    write_tags,
+)
 from quantis.services.wallpaper_policy import (
     wallpaper_cache_format,
     wallpaper_duration_filter,
 )
+
+if TYPE_CHECKING:
+    from quantis.providers.library_index import LibraryIndex
 
 logger = logging.getLogger(__name__)
 
@@ -587,7 +595,12 @@ class AsyncSoundCloudDownloader(AsyncDownloaderInterface):
 
 
 class AsyncDownloader(AsyncDownloaderInterface):
-    def __init__(self) -> None:
+    def __init__(self, index: "LibraryIndex | None" = None) -> None:
+        self._index = index
+        self._full_tasks: dict[str, asyncio.Future[bool]] = {}
+        # Выбор имени и переименование — под одним замком: два разных трека
+        # с одинаковым «исполнитель - название» не должны взять одно имя.
+        self._rename_lock = asyncio.Lock()
         self._yandex_downloader = AsyncYandexDownloader()
         self._youtube_downloader = AsyncYoutubeDownloader()
         self._soundcloud_downloader = AsyncSoundCloudDownloader()
@@ -674,6 +687,94 @@ class AsyncDownloader(AsyncDownloaderInterface):
             if ok:
                 downloaded += 1
         return downloaded
+
+    @property
+    def index(self) -> "LibraryIndex":
+        if self._index is not None:
+            return self._index
+        from quantis.providers.library_index import LibraryIndex
+
+        return LibraryIndex.instance()
+
+    async def download_full(self, track: Track) -> bool:
+        """Скачать, положить обложку, записать теги, переименовать, проиндексировать."""
+        key = f"{track.source}:{track.track_id}"
+        task = self._full_tasks.get(key)
+        if task is None:
+            task = asyncio.ensure_future(self._download_full(track))
+            self._full_tasks[key] = task
+            task.add_done_callback(lambda _done: self._full_tasks.pop(key, None))
+        return await asyncio.shield(task)
+
+    async def _download_full(self, track: Track) -> bool:
+        index = self.index
+        await index.wait_ready()
+        source = str(track.source)
+        track_id = str(track.track_id)
+        if index.path_for(source, track_id) is not None:
+            await self.ensure_cover(track)
+            track.downloaded = True
+            return True
+        audio = await self.download_track(track)
+        if audio is None:
+            return False
+        cover_ok = await self.ensure_cover(track)
+        verified = await self._write_and_verify_tags(audio, cover_ok, track)
+        async with self._rename_lock:
+            final = audio.path
+            if verified:
+                final = await self._rename_human(audio)
+            try:
+                entry = await asyncio.to_thread(index.put, final)
+                if entry is None:
+                    logger.warning("Файл не попал в индекс: %s", final)
+            except Exception:
+                logger.warning("Не удалось добавить в индекс: %s", final, exc_info=True)
+        track.downloaded = True
+        return True
+
+    async def _write_and_verify_tags(
+        self, audio: DownloadedAudio, cover_ok: bool, track: Track
+    ) -> bool:
+        """Пишет теги и читает их обратно. Любая ошибка даёт False."""
+        path = Path(audio.path)
+        meta = audio.meta
+        try:
+            cover = None
+            if cover_ok:
+                cover = Path(
+                    self._yandex_downloader.path_provider.get_cover_path(track)
+                )
+            await asyncio.to_thread(write_tags, path, meta, cover)
+            identity = await asyncio.to_thread(read_identity, path)
+        except Exception:
+            logger.warning("Не удалось записать теги: %s", path, exc_info=True)
+            return False
+        if identity is None or (identity.source, identity.track_id) != (
+            meta.source,
+            meta.track_id,
+        ):
+            logger.warning("Теги не прошли проверку, файл не переименован: %s", path)
+            return False
+        return True
+
+    async def _rename_human(self, audio: DownloadedAudio) -> Path:
+        """Переименовывает в «Исполнитель - Название». Зовётся под _rename_lock."""
+        path = Path(audio.path)
+        meta = audio.meta
+        try:
+            target = self._yandex_downloader.path_provider.human_track_path(
+                meta.artist,
+                meta.title,
+                path.suffix.lstrip("."),
+                owner=(meta.source, meta.track_id),
+            )
+            if target != path:
+                await asyncio.to_thread(path.replace, target)
+            return target
+        except Exception:
+            logger.warning("Не удалось переименовать файл: %s", path, exc_info=True)
+            return path
 
     def shutdown(self) -> None:
         self._youtube_downloader.shutdown()
