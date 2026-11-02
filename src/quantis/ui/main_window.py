@@ -305,6 +305,14 @@ class QuantisMainWindow(QMainWindow):
         self._search_vm.download_finished.connect(
             lambda: self._home_vm.refresh_downloaded(self._bridge)
         )
+        from quantis.providers.library_index import LibraryIndex
+
+        # Слушатель зовётся из рабочего потока скана — в UI переходим через мост.
+        LibraryIndex.instance().add_listener(
+            lambda: self._bridge.invoke_main(
+                lambda: self._home_vm.refresh_downloaded(self._bridge)
+            )
+        )
         self._playlist_vm.tracks_mutated.connect(self._on_playlist_tracks_mutated)
         self._ui_prefs.theme_changed.connect(self._on_theme_changed)
         self._ui_prefs.wallpaper_changed.connect(self._on_wallpaper_changed)

@@ -526,9 +526,9 @@ class PlayerBar(QFrame):
     async def _download_track(self, track: Track) -> None:
         ok = False
         try:
-            await self._music.downloader.download_track(track)
-            await self._music.downloader.download_cover(track)
-            track.downloaded = ok = True
+            ok = await self._music.downloader.download_full(track)
+            if not ok:
+                logger.warning("PlayerBar: download failed: %s", track)
         except Exception:
             logger.exception("PlayerBar: download failed")
         if self._bridge is not None:

@@ -78,13 +78,13 @@ class _FakeDownloader:
     async def ensure_covers(self, tracks, limit: int = 40) -> int:
         return 0
 
-    async def download_track(self, track: Track) -> None:
+    async def download_full(self, track: Track) -> bool:
+        # Как AsyncDownloader.download_full: обычный сбой — False, не исключение.
         if self.fail:
-            raise OSError("network down")
+            return False
         self.downloaded.append(track)
-
-    async def download_cover(self, track: Track) -> None:
-        pass
+        track.downloaded = True
+        return True
 
 
 class _FakeMusic:
@@ -366,6 +366,19 @@ def test_failed_download_can_be_retried(qapp, storage) -> None:
     bridge.run(bridge.pending)
     assert music.downloader.downloaded == [track]
     assert not _button(bar, "Скачать").isEnabled()
+
+
+def test_player_bar_failed_download_reenables_button(qapp, storage) -> None:
+    vm = _FakeVM()
+    music = _FakeMusic()
+    music.downloader.fail = True
+    bar = PlayerBar(vm, storage, bridge=_SyncBridge(), music=music)
+    track = _track("7")
+    vm.track_changed.emit(track)
+    _button(bar, "Скачать").click()
+    assert track.downloaded is False
+    assert _button(bar, "Скачать").isEnabled()
+    assert track not in bar._downloading
 
 
 def test_chrome_signals(qapp, storage) -> None:

@@ -435,12 +435,25 @@ class SettingsPage(QWidget):
             QFileDialog.Option.ShowDirsOnly,
         )
         if chosen:
-            self._prefs.set_music_dir(chosen)
-            self._sync_storage_labels()
+            self._apply_music_dir(chosen)
 
     def _on_reset_music_dir(self) -> None:
-        self._prefs.set_music_dir("")
+        self._apply_music_dir("")
+
+    def _apply_music_dir(self, path: str) -> None:
+        before = self._prefs.music_dir
+        self._prefs.set_music_dir(path)
         self._sync_storage_labels()
+        if self._prefs.music_dir == before:
+            return
+        # Другая папка — индекс собирается заново (без refresh он не готов,
+        # и download_full ждал бы вечно).
+        from quantis.providers.library_index import LibraryIndex
+
+        index = LibraryIndex.instance()
+        index.reset()
+        if self._bridge is not None:
+            self._bridge.schedule(index.refresh())
 
     def _on_open_music_dir(self) -> None:
         self._open_folder(app_paths.music_dir())

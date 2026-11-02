@@ -190,7 +190,17 @@ class PathProvider:
         Имя из title/author не всегда совпадает с файлом на диске: YouTube
         вычищает «Отметок Нравится» из автора, а файл назван ещё со статистикой.
         Поэтому запасной путь — поиск по id в начале имени.
+
+        Сначала спрашиваем индекс библиотеки (файлы с человеческими именами);
+        поиск по имени остаётся на время, пока индекс не готов.
         """
+        from quantis.providers.library_index import LibraryIndex
+
+        indexed = LibraryIndex.instance().path_for(
+            str(track.source), str(track.track_id)
+        )
+        if indexed is not None and _is_ready_file(indexed):
+            return str(indexed)
         exact = Path(self.get_track_path(track))
         if _is_ready_file(exact):
             return str(exact)

@@ -37,6 +37,10 @@ def main() -> None:
     bridge = AsyncBridge()
     bridge.setParent(app)
     bundle = build_application(bridge)
+    # Кэш индекса — до окна: «Скачанные» и отметки «скачано» видны сразу.
+    from quantis.providers.library_index import LibraryIndex
+
+    LibraryIndex.instance().load_cached()
 
     # Сначала окно и первый кадр — плагины/адаптер после show.
     window = Quantis(bundle)
@@ -45,6 +49,8 @@ def main() -> None:
     def _post_show() -> None:
         from quantis.plugins import PluginRegistry
 
+        # Без refresh() индекс не станет готов, а download_full ждёт готовности.
+        bridge.schedule(LibraryIndex.instance().refresh())
         bridge.schedule(PluginRegistry.instance().load_all(bundle.plugin_host))
         if os.environ.get("QUANTIS_ENABLE_ADAPTER", "1").lower() in (
             "1",

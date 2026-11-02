@@ -14,6 +14,7 @@ from quantis.ui.models import TrackListModel
 from quantis.ui.viewmodels.base_viewmodel import BaseViewModel
 
 logger = logging.getLogger(__name__)
+_DOWNLOAD_FAILED = "Не удалось скачать трек"
 
 _SOURCE_FILTERS = ("all", "yandex", "youtube", "soundcloud")
 _SOURCE_LABELS = {
@@ -287,12 +288,13 @@ class SearchViewModel(BaseViewModel):
         downloader = self._playback.music.downloader
         bridge.invoke_main(lambda: self.set_loading(True))
         try:
-            await downloader.download_track(track)
-            await downloader.download_cover(track)
-            track.downloaded = True
+            ok = await downloader.download_full(track)
+            if not ok:
+                bridge.invoke_main(lambda: self.emit_error(_DOWNLOAD_FAILED))
+                return
 
             def refresh() -> None:
-                model_index = self._model.index(index)
+                model_index = self._model.index(index, 0)
                 self._model.dataChanged.emit(model_index, model_index, [])
                 self.download_finished.emit()
 

@@ -14,16 +14,20 @@
 
 from __future__ import annotations
 
+import glob
 import json
 import os
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import Iterable, Tuple
+from typing import TYPE_CHECKING, Iterable, Tuple
 
 from quantis.models.track import SoundCloudTrack, Track, YandexTrack, YoutubeTrack
 from quantis.providers import PathProvider, TrackManager
 from quantis.types.upgrade_cycle import UpgradeCycle
-from quantis.utils import app_paths, get_asset_path
+from quantis.utils import get_asset_path
+
+if TYPE_CHECKING:
+    from quantis.providers.library_index import IndexEntry
 
 
 class Playlist(ABC):
@@ -199,10 +203,17 @@ class DownloadPlaylist(Playlist):
         return tuple(self.tracks.values)
 
     def delete_track(self, track: Track) -> bool:
+        from quantis.providers.library_index import LibraryIndex
+
         provider = PathProvider()
-        candidates = [Path(provider.get_track_path(track))]
+        index = LibraryIndex.instance()
+        candidates: list[Path] = []
+        indexed = index.path_for(str(track.source), str(track.track_id))
+        if indexed is not None:
+            candidates.append(indexed)
+        candidates.append(Path(provider.get_track_path(track)))
         music_dir = Path(provider.music_folder())
-        prefix = f"{provider.storage_id(track)}_"
+        prefix = glob.escape(f"{provider.storage_id(track)}_")
         try:
             for extra in music_dir.glob(f"{prefix}*"):
                 if extra.suffix.lower() in {".mp3", ".m4a"}:
@@ -218,7 +229,8 @@ class DownloadPlaylist(Playlist):
             try:
                 path.unlink(missing_ok=True)
             except OSError:
-                pass
+                continue  # файл остался — из индекса не убираем
+            index.discard(path)
         super().delete_track(track)
         try:
             Path(provider.get_cover_path(track)).unlink(missing_ok=True)
@@ -243,57 +255,54 @@ class DownloadPlaylist(Playlist):
 
     @staticmethod
     def get_tracks_from_music_dir() -> Tuple[Track, ...]:
-        """Получаем список треков из директории music.
+        """Скачанные треки из индекса библиотеки (название и автор — из записи).
 
-        Returns:
-            Tuple[Track]: список треков
+        Пока индекс не построен, список пуст: его обновит слушатель индекса.
+        Два файла одного трека дают одну строку, файл с тегами важнее.
         """
-        music_dir = app_paths.music_dir()
-        if not music_dir.is_dir():
-            return ()
-        tracks = []
-        for track_file in os.listdir(music_dir):
-            try:
-                name, ext = os.path.splitext(track_file)
-                ext = ext.replace(".", "").lower()
-                if ext not in ("mp3", "m4a"):
-                    continue
-                parts = name.split("_", 2)
-                if len(parts) < 3:
-                    continue
-                track_id, track_title, track_author = parts
-                if track_id.startswith("sc") and track_id[2:].isdigit():
-                    tracks.append(
-                        SoundCloudTrack(
-                            track_id=track_id[2:],
-                            title=track_title,
-                            author=track_author,
-                            downloaded=True,
-                            extension=ext,
-                        )
-                    )
-                elif track_id.isdigit():
-                    tracks.append(
-                        YandexTrack(
-                            track_id=track_id,
-                            title=track_title,
-                            author=track_author,
-                            downloaded=True,
-                        )
-                    )
-                else:
-                    tracks.append(
-                        YoutubeTrack(
-                            track_id=track_id,
-                            title=track_title,
-                            author=track_author,
-                            downloaded=True,
-                            extension=ext,
-                        )
-                    )
-            except Exception:
-                continue
+        from quantis.providers.library_index import LibraryIndex
+
+        chosen: dict[tuple[str, str], IndexEntry] = {}
+        for entry in LibraryIndex.instance().entries():
+            key = (entry.source, entry.track_id)
+            current = chosen.get(key)
+            if current is None or (entry.tagged and not current.tagged):
+                chosen[key] = entry
+        tracks: list[Track] = []
+        for entry in chosen.values():
+            track = _track_from_entry(entry)
+            if track is not None:
+                tracks.append(track)
         return tuple(tracks)
+
+
+def _track_from_entry(entry: IndexEntry) -> Track | None:
+    ext = entry.path.suffix.lstrip(".").lower()
+    source = entry.source.lower()
+    if source == "soundcloud":
+        return SoundCloudTrack(
+            track_id=entry.track_id,
+            title=entry.title,
+            author=entry.author,
+            downloaded=True,
+            extension=ext,
+        )
+    if source == "yandex":
+        return YandexTrack(
+            track_id=entry.track_id,
+            title=entry.title,
+            author=entry.author,
+            downloaded=True,
+        )
+    if source == "youtube":
+        return YoutubeTrack(
+            track_id=entry.track_id,
+            title=entry.title,
+            author=entry.author,
+            downloaded=True,
+            extension=ext,
+        )
+    return None
 
 
 class RecentlyPlayedPlaylist(Playlist):
