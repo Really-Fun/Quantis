@@ -594,7 +594,9 @@ class QuantisMainWindow(QMainWindow):
 
     def _ensure_settings_page(self) -> SettingsPage:
         if self._settings_page is None:
-            self._settings_page = SettingsPage(self._ui_prefs, self._bridge)
+            self._settings_page = SettingsPage(
+                self._ui_prefs, self._bridge, music=self._bundle.music
+            )
             self._settings_page.update_checked.connect(self._sync_update_banner)
             self._replace_stack_page(self.PAGE_SETTINGS, self._settings_page)
         return self._settings_page

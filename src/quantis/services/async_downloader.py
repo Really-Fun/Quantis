@@ -718,20 +718,37 @@ class AsyncDownloader(AsyncDownloaderInterface):
         audio = await self.download_track(track)
         if audio is None:
             return False
+        await self.tag_and_rename(audio.path, audio.meta, track)
+        track.downloaded = True
+        return True
+
+    async def tag_and_rename(
+        self, path: Path, meta: TrackMeta, track: Track
+    ) -> Path | None:
+        """Обложка, теги, проверка, переименование и индекс.
+
+        Возвращает итоговый путь или None, если теги не прошли проверку (файл
+        тогда остаётся под прежним именем, но всё равно попадает в индекс).
+        Общая для скачивания и миграции старых файлов: замок имён один.
+        """
+        path = Path(path)
         cover_ok = await self._safe_cover(track)
+        audio = DownloadedAudio(path=path, meta=meta)
         verified = await self._write_and_verify_tags(audio, cover_ok, track)
+        index = self.index
         async with self._rename_lock:
-            final = audio.path
+            final = path
             if verified:
                 final = await self._rename_human(audio)
             try:
                 entry = await asyncio.to_thread(index.put, final)
                 if entry is None:
                     logger.warning("Файл не попал в индекс: %s", final)
+                elif final != path:
+                    await asyncio.to_thread(index.discard, path)
             except Exception:
                 logger.warning("Не удалось добавить в индекс: %s", final, exc_info=True)
-        track.downloaded = True
-        return True
+        return final if verified else None
 
     async def _safe_cover(self, track: Track) -> bool:
         """ensure_cover, который не бросает: сбой обложки не ломает скачивание."""

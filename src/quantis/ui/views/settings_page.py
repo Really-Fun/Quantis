@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import logging
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from PySide6.QtCore import Qt, QUrl, Signal
 from PySide6.QtGui import QDesktopServices, QShowEvent
@@ -47,6 +49,11 @@ from quantis.ui.wallpapers import (
 )
 from quantis.utils import app_paths
 
+if TYPE_CHECKING:
+    from quantis.services.music_service import MusicService
+
+logger = logging.getLogger(__name__)
+
 
 class SettingsPage(QWidget):
     update_checked = Signal()
@@ -56,10 +63,13 @@ class SettingsPage(QWidget):
         preferences: UiPreferences | None = None,
         bridge: AsyncBridge | None = None,
         parent: QWidget | None = None,
+        music: MusicService | None = None,
     ) -> None:
         super().__init__(parent)
         self._prefs = preferences or UiPreferences()
         self._bridge = bridge
+        self._music = music
+        self._retag_running = False
         self._update_loading = False
         self._release_url = ""
         self.setObjectName("settingsPage")
@@ -225,7 +235,9 @@ class SettingsPage(QWidget):
         music_row, music_body = self._row(
             "Папка для скачанной музыки",
             "Треки и обложки сохраняются сюда. Программа не пишет в свой "
-            "каталог установки, поэтому права администратора не нужны.",
+            "каталог установки, поэтому права администратора не нужны. "
+            "Кнопка «Записать теги» вшивает обложку и данные в ранее скачанные "
+            "треки и называет файлы «Исполнитель - Название».",
         )
         self._music_dir_label = QLabel()
         self._music_dir_label.setObjectName("settingsRowDesc")
@@ -248,8 +260,19 @@ class SettingsPage(QWidget):
             button.setCursor(Qt.CursorShape.PointingHandCursor)
             button.clicked.connect(slot)
             music_buttons.addWidget(button)
+        self._retag_button = QPushButton("Записать теги")
+        self._retag_button.setObjectName("settingsButton")
+        self._retag_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._retag_button.clicked.connect(self._on_retag)
+        self._retag_button.setVisible(self._music is not None)
+        music_buttons.addWidget(self._retag_button)
         music_buttons.addStretch()
         music_body.addLayout(music_buttons)
+        self._retag_status = QLabel()
+        self._retag_status.setObjectName("settingsRowDesc")
+        self._retag_status.setWordWrap(True)
+        self._retag_status.setVisible(False)
+        music_body.addWidget(self._retag_status)
         panel_layout.addWidget(music_row)
 
         data_row, data_body = self._row(
@@ -454,6 +477,49 @@ class SettingsPage(QWidget):
         index.reset()
         if self._bridge is not None:
             self._bridge.schedule(index.refresh())
+
+    def _set_retag_status(self, text: str, *, busy: bool) -> None:
+        self._retag_status.setText(text)
+        self._retag_status.setVisible(bool(text))
+        self._retag_button.setEnabled(not busy)
+
+    def _on_retag(self) -> None:
+        if self._music is None or self._bridge is None or self._retag_running:
+            return
+        self._retag_running = True
+        self._set_retag_status("Обработано 0", busy=True)
+        self._bridge.schedule(self._run_retag())
+
+    async def _run_retag(self) -> None:
+        from quantis.services import library_retag
+
+        bridge = self._bridge
+
+        def progress(done: int, total: int) -> None:
+            bridge.invoke_main(
+                lambda: self._set_retag_status(
+                    f"Обработано {done} из {total}", busy=True
+                )
+            )
+
+        try:
+            downloader = self._music.downloader
+            report = await library_retag.retag_legacy(
+                downloader, downloader.index, progress
+            )
+            text = (
+                f"Готово: {report.done}, уже были: {report.already}, "
+                f"пропущено: {report.skipped}"
+            )
+        except Exception:
+            logger.exception("Не удалось записать теги в старые файлы")
+            text = "Ошибка: не удалось записать теги"
+
+        def finish() -> None:
+            self._retag_running = False
+            self._set_retag_status(text, busy=False)
+
+        bridge.invoke_main(finish)
 
     def _on_open_music_dir(self) -> None:
         self._open_folder(app_paths.music_dir())
