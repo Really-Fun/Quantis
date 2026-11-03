@@ -430,3 +430,45 @@ def test_theme_and_cinematic_render(qapp, storage) -> None:
     bar.set_cinematic(False)
     bar.refresh_theme()
     assert not bar.grab().isNull()
+
+
+def _alpha_peak(icon, mode) -> int:
+    from PySide6.QtGui import QIcon
+
+    image = icon.pixmap(32, 32, mode, QIcon.State.Off).toImage()
+    return max(
+        image.pixelColor(x, y).alpha()
+        for x in range(image.width())
+        for y in range(image.height())
+    )
+
+
+def test_disabled_icons_keep_hue_but_fade(qapp, storage) -> None:
+    # Серый значок Qt на тёмной теме не отличался от активного.
+    from PySide6.QtGui import QIcon
+
+    bar = PlayerBar(_FakeVM(), storage)
+    button = _button(bar, "Скачать")
+    assert not button.isEnabled()
+    icon = button.icon()
+    normal = _alpha_peak(icon, QIcon.Mode.Normal)
+    disabled = _alpha_peak(icon, QIcon.Mode.Disabled)
+    assert disabled < normal * 0.5
+    image = icon.pixmap(32, 32, QIcon.Mode.Disabled).toImage()
+    colors = [
+        image.pixelColor(x, y)
+        for x in range(image.width())
+        for y in range(image.height())
+    ]
+    # Градиент значка сохранился: не серый.
+    assert any(abs(c.red() - c.blue()) > 40 for c in colors if c.alpha() > 20)
+
+
+def test_seek_bar_is_flat_until_a_track_plays(qapp) -> None:
+    # Без трека — ровная линия, а не выдуманная форма волны.
+    seek = WaveformSeekSlider()
+    assert seek.is_idle
+    assert len(set(seek._peaks)) == 1
+    seek.set_seed("Track(1)")
+    assert not seek.is_idle
+    assert len(set(seek._peaks)) > 10

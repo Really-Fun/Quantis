@@ -7,7 +7,6 @@ import logging
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QDesktopServices, QShowEvent
 from PySide6.QtWidgets import (
-    QCheckBox,
     QFileDialog,
     QFrame,
     QHBoxLayout,
@@ -30,6 +29,7 @@ from quantis.plugins.installer import (
 from quantis.plugins.loader import resolve_plugins_dir
 from quantis.ui import resources
 from quantis.ui.views.widgets.glass_panel import GlassPanel
+from quantis.ui.views.widgets.switch import Switch
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +43,7 @@ class PluginsPage(QWidget):
         super().__init__(parent)
         self._bridge = bridge
         self._registry = PluginRegistry.instance()
-        self._toggles: dict[str, QCheckBox] = {}
+        self._toggles: dict[str, Switch] = {}
         self.setObjectName("pluginsPage")
 
         scroll = QScrollArea()
@@ -72,10 +72,11 @@ class PluginsPage(QWidget):
         header.addWidget(puzzle)
         panel_layout.addLayout(header)
 
-        self._path_label = QLabel(f"Папка: {resolve_plugins_dir()}")
-        self._path_label.setObjectName("settingsRowDesc")
-        self._path_label.setWordWrap(True)
-        panel_layout.addWidget(self._path_label)
+        # Полный путь — в подсказке «Открыть папку»: строкой он только шумел.
+        intro = QLabel("Плагины добавляют кнопки, страницы и действия в Quantis")
+        intro.setObjectName("settingsRowDesc")
+        intro.setWordWrap(True)
+        panel_layout.addWidget(intro)
 
         actions = QHBoxLayout()
         actions.setSpacing(8)
@@ -93,6 +94,7 @@ class PluginsPage(QWidget):
         self._folder_btn.setObjectName("nowPlayingStubBtn")
         self._folder_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._folder_btn.clicked.connect(self._open_folder)
+        self._sync_folder_hint()
 
         self._refresh_btn = QPushButton("Обновить")
         self._refresh_btn.setObjectName("nowPlayingStubBtn")
@@ -136,8 +138,11 @@ class PluginsPage(QWidget):
 
     def showEvent(self, event: QShowEvent) -> None:
         super().showEvent(event)
-        self._path_label.setText(f"Папка: {resolve_plugins_dir()}")
+        self._sync_folder_hint()
         self._refresh()
+
+    def _sync_folder_hint(self) -> None:
+        self._folder_btn.setToolTip(str(resolve_plugins_dir()))
 
     def _clear_cards(self) -> None:
         while self._cards_host.count():
@@ -205,9 +210,10 @@ class PluginsPage(QWidget):
             col.addWidget(err)
         row.addLayout(col, stretch=1)
 
-        toggle = QCheckBox("Включено")
-        toggle.setObjectName("settingsCheck")
-        toggle.setCursor(Qt.CursorShape.PointingHandCursor)
+        toggle = Switch()
+        toggle.setObjectName("pluginSwitch")
+        toggle.setToolTip("Выключить" if info.is_active else "Включить")
+        toggle.setAccessibleName(f"Плагин {meta.name}")
         toggle.blockSignals(True)
         toggle.setChecked(info.is_active)
         toggle.blockSignals(False)
@@ -215,6 +221,11 @@ class PluginsPage(QWidget):
         toggle.setEnabled(not invalid)
         pid = meta.plugin_id
         toggle.toggled.connect(lambda checked, p=pid: self._toggle(p, checked))
+        toggle.toggled.connect(
+            lambda checked, t=toggle: t.setToolTip(
+                "Выключить" if checked else "Включить"
+            )
+        )
         self._toggles[pid] = toggle
         row.addWidget(toggle, 0, Qt.AlignmentFlag.AlignTop)
         return card

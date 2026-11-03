@@ -317,7 +317,7 @@ class PlayerBar(QFrame):
         button.setAutoRaise(True)
         button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         icon_size = 18 if accent else 16
-        button.setIcon(resources.load_icon(icon_name))
+        button.setIcon(resources.faded_when_disabled(resources.load_icon(icon_name)))
         button.setIconSize(QSize(icon_size, icon_size))
         self._set_hint(button, tooltip)
         button.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -509,7 +509,9 @@ class PlayerBar(QFrame):
         self._like_btn.setEnabled(self._current_track is not None)
         self._like_btn.setProperty("liked", liked)
         self._like_btn.setIcon(
-            resources.load_icon("heart-filled.svg" if liked else "heart.svg")
+            resources.faded_when_disabled(
+                resources.load_icon("heart-filled.svg" if liked else "heart.svg")
+            )
         )
         self._set_hint(self._like_btn, "Убрать из любимых" if liked else "В любимые")
         self._repolish(self._like_btn)

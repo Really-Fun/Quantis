@@ -70,9 +70,10 @@ class LibraryPage(QWidget):
         self._empty = QLabel("Скачай трек из плеера — он появится здесь")
         self._empty.setObjectName("homeEmptyHint")
         self._empty.setWordWrap(True)
+        self._empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
         host_layout.addWidget(self._list, stretch=1)
-        host_layout.addWidget(self._empty)
+        host_layout.addWidget(self._empty, stretch=1)
         section.add_widget_block(host, expand=True)
         layout.addWidget(section, stretch=1)
 

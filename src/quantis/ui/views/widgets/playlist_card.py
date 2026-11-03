@@ -152,6 +152,15 @@ def wrap_column_count(width: int, min_item_width: int, spacing: int, count: int)
     return min(cols, count)
 
 
+def balanced_column_count(
+    width: int, min_item_width: int, spacing: int, count: int
+) -> int:
+    """Колонки, при которых ряды заполнены поровну (6 при 5 местах — 3 + 3)."""
+    cols = wrap_column_count(width, min_item_width, spacing, count)
+    rows = (count + cols - 1) // cols if count > 0 else 1
+    return max(1, (count + rows - 1) // rows) if count > 0 else cols
+
+
 def playlist_tracks_label(count: int) -> str:
     if count % 10 == 1 and count % 100 != 11:
         suffix = "трек"
@@ -388,9 +397,11 @@ class WrapGrid(QWidget):
         spacing: int = 12,
         fixed_row_height: int | None = None,
         caption_height: int = 0,
+        balanced: bool = False,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
+        self._columns = balanced_column_count if balanced else wrap_column_count
         self._min_item_width = min_item_width
         self._spacing = spacing
         self._fixed_row_height = fixed_row_height
@@ -450,7 +461,7 @@ class WrapGrid(QWidget):
         count = len(self._items)
         if count == 0 or width <= 0:
             return 0
-        cols = wrap_column_count(width, self._min_item_width, self._spacing, count)
+        cols = self._columns(width, self._min_item_width, self._spacing, count)
         cell_w = self._cell_width(width, cols)
         rows = (count + cols - 1) // cols
         row_h = self._row_height(cell_w)
@@ -474,7 +485,7 @@ class WrapGrid(QWidget):
 
         self._reflowing = True
         try:
-            cols = wrap_column_count(width, self._min_item_width, self._spacing, count)
+            cols = self._columns(width, self._min_item_width, self._spacing, count)
             cell_w = self._cell_width(width, cols)
             row_h = self._row_height(cell_w)
             for index, widget in enumerate(self._items):
@@ -520,7 +531,9 @@ class QuickPickShelf(QWidget):
         self._empty.hide()
 
         self._signature: tuple | None = None
-        self._grid = WrapGrid(min_item_width=200, spacing=10, fixed_row_height=72)
+        self._grid = WrapGrid(
+            min_item_width=200, spacing=10, fixed_row_height=72, balanced=True
+        )
         self._grid.setObjectName("quickPickShelfHost")
         outer.addWidget(self._empty)
         outer.addWidget(self._grid)

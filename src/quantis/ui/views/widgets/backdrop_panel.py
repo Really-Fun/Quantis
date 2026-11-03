@@ -24,7 +24,6 @@ from PySide6.QtGui import (
     QRadialGradient,
 )
 from PySide6.QtWidgets import (
-    QAbstractButton,
     QApplication,
     QFileDialog,
     QFrame,
@@ -41,6 +40,7 @@ from quantis.ui.preferences import BackdropMode, UiPreferences
 from quantis.ui.themes.spec import ThemeSpec, qcolor
 from quantis.ui.views.widgets.backdrop_compositor import BackdropCompositor
 from quantis.ui.views.widgets.glass import paint_glass
+from quantis.ui.views.widgets.switch import Switch
 
 IMAGE_EXT = (".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif")
 VIDEO_EXT = (".mp4", ".webm", ".mkv", ".mov", ".m4v")
@@ -282,7 +282,7 @@ class BackdropPanel(QFrame):
         label.setObjectName("backdropPanelLabel")
         row.addWidget(label)
         row.addStretch(1)
-        self._motion = _Switch(compositor)
+        self._motion = Switch(lambda: compositor.theme)
         self._motion.setObjectName("backdropMotion")
         self._motion.toggled.connect(self._prefs.set_backdrop_motion)
         row.addWidget(self._motion)
@@ -436,33 +436,6 @@ class BackdropPanel(QFrame):
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.setPen(QPen(_ink(theme, 36), 1))
         painter.drawPath(path)
-        painter.end()
-
-
-class _Switch(QAbstractButton):
-    """Переключатель цветами темы: дорожка ``tint`` и ручка ``handle``."""
-
-    def __init__(self, compositor: BackdropCompositor) -> None:
-        super().__init__()
-        self._compositor = compositor
-        self.setCheckable(True)
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setFixedSize(40, 24)
-
-    def paintEvent(self, event: QPaintEvent) -> None:
-        theme = self._compositor.theme
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        track = QRectF(self.rect()).adjusted(1, 1, -1, -1)
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(
-            qcolor(theme.colors.tint) if self.isChecked() else _ink(theme, 46)
-        )
-        painter.drawRoundedRect(track, track.height() / 2, track.height() / 2)
-        knob = track.height() - 6
-        x = track.right() - knob - 3 if self.isChecked() else track.left() + 3
-        painter.setBrush(qcolor(theme.colors.handle))
-        painter.drawEllipse(QRectF(x, track.top() + 3, knob, knob))
         painter.end()
 
 

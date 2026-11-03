@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtGui import QColor, QIcon, QPainter
+from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
 
 from quantis.ui.design_tokens import ACCENT_FALLBACK
 from quantis.utils import get_asset_path
@@ -51,6 +51,32 @@ def load_icon(name: str, color: QColor | None = None) -> QIcon:
         icon = QIcon(pixmap)
     _ICON_CACHE[key] = icon
     return icon
+
+
+_DISABLED_OPACITY = 0.32
+
+
+def faded_when_disabled(icon: QIcon) -> QIcon:
+    """Неактивный значок — тот же цвет, но полупрозрачный.
+
+    Qt сам делает неактивный значок светло-серым: на тёмной теме такой
+    значок не отличить от активного белого.
+    """
+    if icon.isNull():
+        return icon
+    source = icon.pixmap(_TINT_PX, _TINT_PX)
+    faded = QPixmap(source.size())
+    faded.setDevicePixelRatio(source.devicePixelRatio())
+    faded.fill(QColor(0, 0, 0, 0))
+    painter = QPainter(faded)
+    painter.setOpacity(_DISABLED_OPACITY)
+    painter.drawPixmap(0, 0, source)
+    painter.end()
+    # Из готовых кадров: SVG-движок QIcon рисует Disabled сам, мимо addPixmap.
+    result = QIcon()
+    result.addPixmap(source, QIcon.Mode.Normal, QIcon.State.Off)
+    result.addPixmap(faded, QIcon.Mode.Disabled, QIcon.State.Off)
+    return result
 
 
 def on_color(background: QColor) -> QColor:

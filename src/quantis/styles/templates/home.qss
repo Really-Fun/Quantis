@@ -250,6 +250,16 @@ QToolButton#waveMoodChip {
     font-weight: 600;
 }
 
+QToolButton#waveMoodArrow {
+    background: ${chip_bg};
+    border: 1px solid rgba(${ink_rgb}, 0.16);
+    border-radius: 14px;
+}
+
+QToolButton#waveMoodArrow:hover {
+    border-color: rgba(${tint_rgb}, 0.6);
+}
+
 QToolButton#waveMoodChip[control="true"] {
     border-color: rgba(${tint_rgb}, 0.45);
     color: ${title};

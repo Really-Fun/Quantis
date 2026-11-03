@@ -107,3 +107,36 @@ async def test_play_wave_mood_failure_reports_error(qapp, monkeypatch) -> None:
     playback.play_track.assert_not_awaited()
     assert errors == ["Не удалось включить «Сохранять спокойствие»"]
     assert not vm.wave_mood_busy
+
+
+def _many_moods(n: int = 20) -> list[WaveMood]:
+    return [
+        WaveMood(id=f"mood:{i}", name=f"Настроение {i}", seeds=(f"mood:{i}",))
+        for i in range(n)
+    ]
+
+
+def test_strip_arrows_show_only_where_more_chips_hide(qapp) -> None:
+    strip = WaveMoodStrip()
+    strip.resize(400, 40)
+    strip.show()
+    strip.set_moods(_many_moods())
+    qapp.processEvents()
+    assert not strip.can_scroll_back
+    assert strip.can_scroll_forward
+    strip.scroll_forward()
+    qapp.processEvents()
+    assert strip.can_scroll_back
+    strip.scroll_back()
+    qapp.processEvents()
+    assert not strip.can_scroll_back
+
+
+def test_strip_without_overflow_has_no_arrows(qapp) -> None:
+    strip = WaveMoodStrip()
+    strip.resize(1600, 40)
+    strip.show()
+    strip.set_moods([_CALM, _RUN])
+    qapp.processEvents()
+    assert not strip.can_scroll_back
+    assert not strip.can_scroll_forward

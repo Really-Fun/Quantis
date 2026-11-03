@@ -48,7 +48,18 @@ class WaveformSeekSlider(QSlider):
         self._handle = qcolor(colors.handle)
         self.update()
 
+    @property
+    def is_idle(self) -> bool:
+        """Трека нет: вместо формы волны — ровная линия без ползунка."""
+        return self._idle
+
     def set_seed(self, key: str) -> None:
+        self._idle = not key
+        if self._idle:
+            self._peaks = [0.0] * 400
+            self._cache_key = None
+            self.update()
+            return
         rnd = random.Random(key)
         raw = [rnd.random() for _ in range(400)]
         smooth = []
@@ -95,6 +106,7 @@ class WaveformSeekSlider(QSlider):
             width,
             head,
             id(self._peaks),
+            self._idle,
             self._palette.accent.rgba(),
             self._palette.accent2.rgba(),
             self._rest.rgba(),
@@ -131,5 +143,7 @@ class WaveformSeekSlider(QSlider):
             painter.drawRoundedRect(
                 QRectF(x, (h - bar_h) / 2, self.BAR, bar_h), 1.2, 1.2
             )
+        if self._idle:
+            return
         painter.setBrush(self._handle)
         painter.drawRoundedRect(QRectF(head - 1, 0, 2, h), 1, 1)

@@ -1,9 +1,19 @@
 from __future__ import annotations
 
 from quantis.ui.views.widgets.playlist_card import (
+    balanced_column_count,
     playlist_tracks_label,
     wrap_column_count,
 )
+
+
+def test_balanced_columns_avoid_a_lonely_last_tile() -> None:
+    # 6 плиток, влезает 5: два ряда по 3, а не 5 + 1.
+    assert balanced_column_count(1240, 200, 10, 6) == 3
+    assert balanced_column_count(1240, 200, 10, 7) == 4  # 4 + 3
+    assert balanced_column_count(1240, 200, 10, 5) == 5  # один ряд — как есть
+    assert balanced_column_count(1240, 200, 10, 11) == 4  # 3 ряда: 4 + 4 + 3
+    assert balanced_column_count(0, 200, 10, 4) == 1
 
 
 def test_playlist_tracks_label_plural() -> None:

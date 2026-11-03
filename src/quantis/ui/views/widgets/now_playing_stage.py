@@ -753,11 +753,29 @@ class UpNextPanel(QWidget):
                 "Вся очередь",
             )
         if not self._items:
+            # Пустая панель во всю высоту сцены: объясняем, что сюда попадёт.
+            empty = QRectF(
+                22, self.TOP, rect.width() - 44, rect.height() - self.TOP - 22
+            )
+            head = QFont(QApplication.font())
+            head.setPixelSize(14)
+            head.setWeight(QFont.Weight.DemiBold)
+            painter.setFont(head)
+            painter.setPen(text)
+            center = Qt.AlignmentFlag.AlignHCenter
+            painter.drawText(
+                QRectF(empty.x(), empty.center().y() - 30, empty.width(), 22),
+                center | Qt.AlignmentFlag.AlignVCenter,
+                "Очередь пуста",
+            )
+            hint = QFont(small)
+            hint.setWeight(QFont.Weight.Normal)
+            painter.setFont(hint)
             painter.setPen(dim)
             painter.drawText(
-                QRectF(22, self.TOP, rect.width() - 44, 60),
-                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignTop,
-                "Очередь пуста",
+                QRectF(empty.x(), empty.center().y() - 4, empty.width(), 48),
+                center | Qt.AlignmentFlag.AlignTop | Qt.TextFlag.TextWordWrap,
+                "Включи плейлист или волну — следующие треки появятся здесь",
             )
             return
         name_font = QFont(QApplication.font())
