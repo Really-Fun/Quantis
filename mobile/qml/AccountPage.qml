@@ -37,24 +37,12 @@ Item {
             font.pixelSize: 14
         }
 
-        TextField {
+        InputField {
             id: token
             Layout.fillWidth: true
             placeholderText: "Токен"
             echoMode: TextInput.Password
             inputMethodHints: Qt.ImhSensitiveData | Qt.ImhNoPredictiveText
-            font.family: theme.ui
-            color: theme.text
-            placeholderTextColor: theme.textDim
-            leftPadding: 16
-            topPadding: 14
-            bottomPadding: 14
-            background: Rectangle {
-                radius: theme.radius
-                color: theme.surface
-                border.color: token.activeFocus ? theme.accent : theme.stroke
-                border.width: token.activeFocus ? 2 : 1
-            }
             Accessible.name: "OAuth-токен Яндекс Музыки"
             onAccepted: app.saveToken(text)
         }

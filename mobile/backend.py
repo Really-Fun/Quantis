@@ -7,8 +7,10 @@
 
 from __future__ import annotations
 
+import json
 import random
 import traceback
+from dataclasses import asdict
 from urllib.parse import quote
 
 import art
@@ -36,6 +38,10 @@ from stream_proxy import StreamProxy
 
 TOKEN_KEY = "yandex/token"
 SOURCE_KEY = "search/source"
+HISTORY_KEY = "library/history"
+QUERIES_KEY = "search/recent"
+HISTORY_LIMIT = 30
+QUERIES_LIMIT = 8
 REPEAT_OFF, REPEAT_ALL, REPEAT_ONE = 0, 1, 2
 
 
@@ -136,6 +142,7 @@ class AppController(QObject):
     durationChanged = Signal()
     modeChanged = Signal()
     paletteChanged = Signal()
+    queriesChanged = Signal()
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -147,6 +154,10 @@ class AppController(QObject):
         self._status = ""
         self._searching = False
         self._results = TrackModel(self)
+        # История: что реально заиграло, новое — первым; хранится в QSettings.
+        self._history = TrackModel(self)
+        self._history.set_items(self._load_history())
+        self._queries: list[str] = self._load_queries()
         self._queue: list[Result] = []
         self._current = -1
         self._loading = False
@@ -222,6 +233,60 @@ class AppController(QObject):
     @Property(QObject, constant=True)
     def results(self) -> TrackModel:
         return self._results
+
+    @Property(QObject, constant=True)
+    def history(self) -> TrackModel:
+        return self._history
+
+    @Property("QStringList", notify=queriesChanged)
+    def recentQueries(self) -> list[str]:
+        return list(self._queries)
+
+    # --- история и недавние запросы --------------------------------------
+
+    def _load_history(self) -> list[Result]:
+        try:
+            raw = json.loads(str(self._settings.value(HISTORY_KEY, "[]") or "[]"))
+            return [Result(**item) for item in raw][:HISTORY_LIMIT]
+        except (TypeError, ValueError):
+            return []
+
+    def _remember(self, result: Result) -> None:
+        items = [
+            r
+            for r in self._history.items()
+            if (r.source, r.track_id) != (result.source, result.track_id)
+        ]
+        items.insert(0, result)
+        items = items[:HISTORY_LIMIT]
+        self._history.set_items(items)
+        self._settings.setValue(
+            HISTORY_KEY, json.dumps([asdict(r) for r in items], ensure_ascii=False)
+        )
+
+    def _load_queries(self) -> list[str]:
+        try:
+            raw = json.loads(str(self._settings.value(QUERIES_KEY, "[]") or "[]"))
+            return [str(q) for q in raw][:QUERIES_LIMIT]
+        except (TypeError, ValueError):
+            return []
+
+    def _remember_query(self, query: str) -> None:
+        queries = [q for q in self._queries if q.casefold() != query.casefold()]
+        queries.insert(0, query)
+        self._queries = queries[:QUERIES_LIMIT]
+        self._settings.setValue(
+            QUERIES_KEY, json.dumps(self._queries, ensure_ascii=False)
+        )
+        self.queriesChanged.emit()
+
+    @Slot(int)
+    def playHistory(self, row: int) -> None:
+        """Трек из «Недавно играло»: очередью становится вся история."""
+        items = self._history.items()
+        if 0 <= row < len(items):
+            self._queue = items
+            self._play_at(row)
 
     @Property(bool, notify=accountChanged)
     def loggedIn(self) -> bool:
@@ -376,6 +441,7 @@ class AppController(QObject):
         self._searching = True
         self.searchingChanged.emit()
         self._set_status("")
+        self._remember_query(query)
         if self._source == YANDEX:
             fn, args = sources.search_yandex, (self._token, query)
         else:
@@ -441,6 +507,7 @@ class AppController(QObject):
             return  # пока искали ссылку, выбрали другой трек
         self._loading = False
         self._set_status("")
+        self._remember(self._queue[row])
         self._player.setSource(QUrl(url))
         self._player.play()
         self._prefetch(self._next_index(manual=True))

@@ -42,11 +42,19 @@ ApplicationWindow {
             anchors.bottomMargin: mini.visible ? 8 : 0
             currentIndex: window.tab
             HomePage {
-                onSearchRequested: window.tab = 1
+                onSearchRequested: function (query) {
+                    window.tab = 1
+                    if (query.length > 0)
+                        searchPage.runQuery(query)
+                }
                 onPlayerRequested: player.open()
+                onAccountRequested: {
+                    window.tab = 2
+                    libraryPage.openAccount()
+                }
             }
-            SearchPage {}
-            LibraryPage {}
+            SearchPage { id: searchPage }
+            LibraryPage { id: libraryPage }
         }
 
         MiniPlayer {

@@ -26,7 +26,7 @@ import PySide6
 SCRIPTS = Path(PySide6.__file__).parent / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
-from deploy_lib.android import buildozer  # noqa: E402
+from deploy_lib.android import android_config, buildozer  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
 
@@ -119,6 +119,19 @@ def _update_config(self) -> None:
 
 
 buildozer.BuildozerConfig.update_config = _update_config
+
+# Плагины форматов изображений: инструмент берёт плагины только из файлов
+# зависимостей Qt, а там их нет. Без них на телефоне «Error decoding» у
+# SVG-значков и JPEG-обложек — интерфейс был без иконок и обложек.
+_EXTRA_PLUGINS = ("imageformats_qsvg", "imageformats_qjpeg", "iconengines_qsvgicon")
+_original_plugins = android_config.AndroidConfig.qt_plugins
+
+
+def _qt_plugins(self) -> list[str]:
+    return sorted(set(_original_plugins.fget(self) or []) | set(_EXTRA_PLUGINS))
+
+
+android_config.AndroidConfig.qt_plugins = property(_qt_plugins, _original_plugins.fset)
 
 script = SCRIPTS / "android_deploy.py"
 sys.argv = [str(script), *sys.argv[1:]]

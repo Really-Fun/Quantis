@@ -8,6 +8,11 @@ StackView {
     id: stack
     initialItem: root
 
+    function openAccount() {
+        if (stack.depth === 1)
+            stack.push(accountPage)
+    }
+
     Component {
         id: accountPage
         AccountPage { onBack: stack.pop() }

@@ -8,6 +8,12 @@ import QtQuick.Layouts
 Item {
     id: page
 
+    // Поиск снаружи (недавний запрос на главной).
+    function runQuery(text) {
+        query.text = text
+        app.search(text)
+    }
+
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
@@ -22,41 +28,17 @@ Item {
             font.weight: Font.DemiBold
         }
 
-        TextField {
+        InputField {
             id: query
             Layout.fillWidth: true
             Layout.leftMargin: theme.gutter
             Layout.rightMargin: theme.gutter
             Layout.topMargin: 16
+            iconName: "search"
             placeholderText: "Трек, артист или альбом"
-            font.family: theme.ui
-            font.pixelSize: 16
-            leftPadding: 44
-            rightPadding: 16
-            topPadding: 14
-            bottomPadding: 14
             inputMethodHints: Qt.ImhNoPredictiveText
-            color: theme.text
-            placeholderTextColor: theme.textDim
-            background: Rectangle {
-                radius: theme.radius
-                color: theme.surface
-                border.color: query.activeFocus ? theme.accent : theme.stroke
-                border.width: query.activeFocus ? 2 : 1
-                Behavior on border.color { ColorAnimation { duration: theme.fast } }
-            }
             onAccepted: app.search(text)
             Accessible.name: "Поиск музыки"
-            Image {
-                anchors.left: parent.left
-                anchors.leftMargin: 14
-                anchors.verticalCenter: parent.verticalCenter
-                width: 20; height: 20
-                source: "icons/search.svg"
-                sourceSize: Qt.size(20, 20)
-                opacity: 0.6
-                Accessible.ignored: true
-            }
         }
 
         RowLayout {
