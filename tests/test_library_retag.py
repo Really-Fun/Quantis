@@ -167,6 +167,20 @@ async def test_ambiguous_only_youtube_resolves(music, index):
     assert (ident.source, ident.track_id) == ("youtube", yt.track_id)
 
 
+async def test_ambiguous_youtube_checks_raw_service_title(music, index):
+    # Название трека взято из имени файла, но сырой заголовок ролика не совпал:
+    # прочтение не проверено, файл пропускается.
+    name, readings = _two_readings()
+    yt = next(r for r in readings if r.source == "youtube")
+    legacy(music, name)
+    m = meta("youtube", yt.track_id, "Song", "Chan")
+    m.service_title = "Something Else (Official Video)"
+    dl = FakeDownloader(index, {("youtube", yt.track_id): m})
+    report = await retag_legacy(dl, index)
+    assert report == RetagReport(done=0, already=0, skipped=1)
+    assert (music / name).exists()
+
+
 @pytest.mark.parametrize("both", [True, False])
 async def test_ambiguous_both_or_neither_skipped(music, index, both):
     name, readings = _two_readings()

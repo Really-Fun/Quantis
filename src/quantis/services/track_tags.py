@@ -47,6 +47,9 @@ class TrackMeta:
     genre: str = ""
     track_number: int | None = None
     source_url: str = ""
+    # Сырое название от сервиса (миграция): проверка неоднозначных имён.
+    # В теги не пишется.
+    service_title: str = ""
 
 
 @dataclass(frozen=True)

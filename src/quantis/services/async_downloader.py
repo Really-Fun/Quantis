@@ -100,11 +100,26 @@ def _apply_service_names(
     """
     own_title, own_artist = _text(meta.title), _text(meta.artist)
     if prefer_service:
+        meta.service_title = title
         meta.title = title or own_title
         meta.artist = artist or own_artist
     else:
         meta.title = meta.title or title
         meta.artist = meta.artist or artist
+
+
+def _legacy_or_service(own: str, service: str) -> str:
+    """Имя из старого файла, если сервис не дал чистого названия трека.
+
+    Старое имя заменило ``? / :`` и т. п. на ``_``: если значение сервиса после
+    той же замены совпадает с ним, берём версию сервиса с настоящими символами.
+    """
+    from quantis.providers.path_provider import PathProvider
+
+    if not own or not service:
+        return own or service
+    sanitized = PathProvider._sanitize_filename_part(service)
+    return service if sanitized.casefold() == own.casefold() else own
 
 
 def _year_from_date(value: Any) -> int | None:
@@ -154,15 +169,21 @@ def meta_from_ydl(
 ) -> TrackMeta:
     """Метаданные из ответа yt-dlp (prefer_service — см. meta_from_yandex)."""
     meta = _base_meta(track)
-    artist = _text(info.get("artist")) or _text(info.get("uploader"))
+    own_title, own_artist = _text(meta.title), _text(meta.artist)
+    track_name = _text(info.get("track"))
+    named_artist = _text(info.get("artist"))
+    title = track_name or _text(info.get("title"))
+    artist = named_artist or _text(info.get("uploader"))
     if artist and meta.source == "youtube":
         artist = strip_youtube_stats(artist)
-    _apply_service_names(
-        meta,
-        _text(info.get("track")) or _text(info.get("title")),
-        artist,
-        prefer_service=prefer_service,
-    )
+    _apply_service_names(meta, title, artist, prefer_service=prefer_service)
+    if prefer_service and meta.source == "youtube":
+        # Заголовок и канал обычного ролика — не название трека и исполнитель
+        # («X - Song (Official Video)»): без полей YouTube Music берём имя файла.
+        if not track_name:
+            meta.title = _legacy_or_service(own_title, title)
+        if not named_artist:
+            meta.artist = _legacy_or_service(own_artist, artist)
     meta.album = _text(info.get("album"))
     meta.genre = _text(info.get("genre"))
     meta.track_number = _int_or_none(info.get("track_number"))

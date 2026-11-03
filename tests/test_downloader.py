@@ -332,13 +332,42 @@ def test_meta_from_ydl_prefers_track_and_artist() -> None:
     assert (plain.title, plain.artist) == ("What_ Why", "Chan")
 
 
-def test_meta_from_ydl_title_and_uploader_fallbacks() -> None:
-    track = YoutubeTrack(track_id="vid", title="T", author="A")
-    info = {"title": "Video", "uploader": "Chan • 1,2 млн просмотров"}
+def test_meta_from_ydl_youtube_video_title_keeps_file_names() -> None:
+    # Заголовок обычного ролика — не название трека: оставляем имя файла.
+    track = YoutubeTrack(track_id="vid", title="Never Gonna Give You Up", author="Rick")
+    info = {
+        "title": "Rick Astley - Never Gonna Give You Up (Official Video)",
+        "uploader": "Rick Astley • 1,2 млн просмотров",
+    }
+    meta = meta_from_ydl(track, info, prefer_service=True)
+    assert (meta.title, meta.artist) == ("Never Gonna Give You Up", "Rick")
+    # Для проверки неоднозначных имён остаётся сырой заголовок сервиса.
+    assert meta.service_title == info["title"]
+    empty = meta_from_ydl(track, {"track": "", "artist": None}, prefer_service=True)
+    assert (empty.title, empty.artist) == ("Never Gonna Give You Up", "Rick")
+
+
+def test_meta_from_ydl_youtube_restores_sanitized_chars() -> None:
+    # Старое имя заменило ? и / на _: заголовок сервиса совпал после той же замены.
+    track = YoutubeTrack(track_id="vid", title="What_ Why", author="AC_DC")
+    info = {"title": "what? why", "uploader": "AC/DC • 5 тыс. просмотров"}
+    meta = meta_from_ydl(track, info, prefer_service=True)
+    assert (meta.title, meta.artist) == ("what? why", "AC/DC")
+
+
+def test_meta_from_ydl_youtube_empty_file_names_use_service() -> None:
+    track = YoutubeTrack(track_id="vid", title="", author="")
+    info = {"title": "Video", "uploader": "Chan"}
     meta = meta_from_ydl(track, info, prefer_service=True)
     assert (meta.title, meta.artist) == ("Video", "Chan")
-    empty = meta_from_ydl(track, {"track": "", "artist": None}, prefer_service=True)
-    assert (empty.title, empty.artist) == ("T", "A")
+
+
+def test_meta_from_ydl_soundcloud_prefers_service_title() -> None:
+    # Правило про заголовок ролика — только для YouTube.
+    track = Track(track_id=123, title="T", author="A", source="soundcloud")
+    info = {"title": "Real Title", "uploader": "Real Artist"}
+    meta = meta_from_ydl(track, info, prefer_service=True)
+    assert (meta.title, meta.artist) == ("Real Title", "Real Artist")
 
 
 def test_meta_from_ydl_soundcloud_release_date() -> None:

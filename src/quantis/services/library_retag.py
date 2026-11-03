@@ -108,7 +108,8 @@ async def _resolve(downloader: AsyncDownloader, entry: IndexEntry):
             )
             return None
         rest = stem[len(reading.track_id) + 1 :]
-        if meta is not None and _title_matches(meta.title, rest):
+        # Сырое название сервиса: meta.title у YouTube может быть из имени файла.
+        if meta is not None and _title_matches(meta.service_title or meta.title, rest):
             found.append((candidate, track, meta))
     # Без однозначного проверенного ответа сервиса не гадаем по имени файла.
     return found[0] if len(found) == 1 else None
