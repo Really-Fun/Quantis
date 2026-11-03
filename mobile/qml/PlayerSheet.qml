@@ -1,5 +1,7 @@
 // Полноэкранный плеер: выезжает снизу, свайп вниз или «⌄» сворачивают.
-// Фон — цвет обложки (размытая обложка — шаг 2).
+// Фишка — живая пластинка: выезжает из-под обложки и крутится, пока играет,
+// её можно «скретчить» пальцем; за ней аврора из цветов обложки, которая
+// дышит вместе с пластинкой и вспыхивает при скретче.
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Controls.Material
@@ -13,18 +15,15 @@ Drawer {
     modal: true
     dim: false
 
-    readonly property var colors: theme.coverColors(app.title)
+    readonly property bool live: app.playing && !app.loading
 
     background: Rectangle {
         color: theme.bg
-        Rectangle {
+        Aurora {
             anchors.fill: parent
-            gradient: Gradient {
-                GradientStop { position: 0; color: Qt.darker(sheet.colors[0], 1.15) }
-                GradientStop { position: 0.55; color: Qt.darker(sheet.colors[1], 1.6) }
-                GradientStop { position: 1; color: theme.bg }
-            }
-            Behavior on opacity { NumberAnimation { duration: theme.medium } }
+            visible: sheet.position > 0
+            active: sheet.live
+            flash: record.scratching ? 1.45 : 1
         }
     }
 
@@ -56,14 +55,58 @@ Drawer {
 
         Item { Layout.fillHeight: true; Layout.minimumHeight: 8 }
 
-        CoverArt {
-            id: cover
+        // «Дека»: обложка-конверт и пластинка, выезжающая справа.
+        Item {
+            id: deck
+            readonly property real coverSize: Math.min((sheet.width - 48) / 1.42, sheet.height * 0.4)
             Layout.alignment: Qt.AlignHCenter
-            Layout.preferredWidth: Math.min(sheet.width - 48, sheet.height * 0.42)
-            Layout.preferredHeight: Layout.preferredWidth
-            radius: 24
-            glyph: 0.3
-            seed: app.title
+            Layout.preferredWidth: coverSize * 1.42
+            Layout.preferredHeight: coverSize
+
+            Vinyl {
+                id: record
+                width: deck.coverSize * 0.95
+                height: width
+                y: (deck.coverSize - height) / 2
+                // Выезжает так, чтобы показалась часть «яблока» с обложкой.
+                x: sheet.live ? deck.coverSize * 0.45 : deck.coverSize * 0.03
+                Behavior on x { NumberAnimation { duration: 560; easing.type: Easing.OutCubic } }
+                cover: app.cover
+                spinning: sheet.live && sheet.opened
+                scratchable: true
+                exposedFromX: deck.coverSize - x
+            }
+
+            Rectangle { // мягкая тень под конвертом
+                x: 6; y: 10
+                width: deck.coverSize; height: width
+                radius: 22
+                color: "#000000"
+                opacity: 0.35
+            }
+            CoverArt {
+                id: cover
+                width: deck.coverSize
+                height: width
+                radius: 20
+                glyph: 0.3
+                seed: app.title
+                cover: app.cover
+                // Свайп по обложке: влево — следующий трек, вправо — предыдущий
+                // (кнопки ниже делают то же).
+                DragHandler {
+                    id: swipe
+                    target: null
+                    xAxis.enabled: true
+                    yAxis.enabled: false
+                    onActiveChanged: {
+                        if (active) return
+                        var dx = centroid.position.x - centroid.pressPosition.x
+                        if (dx < -64) app.next()
+                        else if (dx > 64) app.previous()
+                    }
+                }
+            }
         }
 
         Item { Layout.fillHeight: true; Layout.minimumHeight: 16 }

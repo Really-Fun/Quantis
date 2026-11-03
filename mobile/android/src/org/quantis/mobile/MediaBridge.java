@@ -72,6 +72,11 @@ public final class MediaBridge {
         });
     }
 
+    /** Системные анимации включены (в «Для разработчиков» их можно выключить). */
+    public static boolean animatorsEnabled() {
+        return android.animation.ValueAnimator.areAnimatorsEnabled();
+    }
+
     /** Следующая команда кнопок или NONE. */
     public static long poll() {
         Long command = commands.poll();

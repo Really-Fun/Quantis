@@ -28,6 +28,7 @@ class Result:
     title: str
     artist: str
     duration: int  # секунды, 0 — неизвестно
+    cover: str = ""  # https-адрес обложки, "" — нет
 
     @property
     def label(self) -> str:
@@ -84,6 +85,8 @@ def search_youtube(query: str) -> list[Result]:
                 title=entry.get("title") or video_id,
                 artist=entry.get("channel") or entry.get("uploader") or "",
                 duration=int(entry.get("duration") or 0),
+                # hqdefault есть у любого видео; квадрат вырезает art.py.
+                cover=f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg",
             )
         )
     return results
@@ -242,11 +245,19 @@ def search_yandex(token: str, query: str) -> list[Result]:
                 title=title,
                 artist=artist,
                 duration=int(track.duration_ms or 0) // 1000,
+                cover=_yandex_cover(track.cover_uri or track.og_image or ""),
             )
         )
         if len(results) >= SEARCH_LIMIT:
             break
     return results
+
+
+def _yandex_cover(uri: str, size: int = 400) -> str:
+    """avatars.yandex.net/…/%% → https-адрес квадратной обложки size×size."""
+    if not uri:
+        return ""
+    return "https://" + uri.replace("%%", f"{size}x{size}")
 
 
 def _best_download_info(infos: list) -> object | None:

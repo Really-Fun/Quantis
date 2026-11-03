@@ -13,10 +13,22 @@ Item {
     readonly property color stroke: "#262C3B"
     readonly property color text: "#F2F4F8"
     readonly property color textDim: "#9AA2B5"
-    readonly property color accent: "#7C6CF0"
+    // Цвета из обложки играющего трека (backend: art.palette_from) с
+    // плавным переходом, как в настольном Quantis (~0,9 с).
+    property color accent: app.accent
+    property color accent2: app.accent2
+    property color glow: app.glow
+    property color deep: app.deep
+    property color accentText: app.accentText
+    Behavior on accent { ColorAnimation { duration: 900 } }
+    Behavior on accent2 { ColorAnimation { duration: 900 } }
+    Behavior on glow { ColorAnimation { duration: 900 } }
+    Behavior on deep { ColorAnimation { duration: 900 } }
     readonly property color accentPink: "#FF2A7F"
     readonly property color accentCyan: "#00D8F0"
-    readonly property color accentText: "#FFFFFF"
+
+    // Движение: системные анимации включены и приложение на экране.
+    readonly property bool motion: app.animations && Qt.application.state === Qt.ApplicationActive
     readonly property color yandex: "#FFCC00"
     readonly property color youtube: "#FF3B30"
     readonly property color danger: "#FF6B6B"
@@ -49,7 +61,7 @@ Item {
         return Math.floor(total / 60) + ":" + (seconds < 10 ? "0" : "") + seconds
     }
 
-    // Обложки появятся на шаге 2; пока — градиент от названия трека.
+    // Запасной градиент, пока обложка грузится или если её нет.
     function coverColors(seed) {
         var hash = 0
         for (var i = 0; i < seed.length; i++)

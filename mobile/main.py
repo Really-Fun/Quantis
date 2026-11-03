@@ -57,10 +57,12 @@ def main() -> None:
     app.setOrganizationName("ReallyFun")
     _install_ca_bundle()  # после приложения: нужен путь к кэшу
 
+    from art import ArtProvider
     from backend import AppController
 
     controller = AppController()
     engine = QQmlApplicationEngine()
+    engine.addImageProvider("art", ArtProvider())
     engine.rootContext().setContextProperty("app", controller)
     engine.load(QUrl.fromLocalFile(str(HERE / "qml" / "Main.qml")))
     if not engine.rootObjects():

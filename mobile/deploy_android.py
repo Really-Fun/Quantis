@@ -40,6 +40,11 @@ EXTRA = {
     # p4a кладёт AAR в libs/ и подключает как name:/ext:, а репозитория
     # flatDir в его шаблоне нет: Gradle писал «Could not find :quantis-media:».
     "android.add_gradle_repositories": "flatDir { dirs 'libs' }",
+    # Служебное для сборки не должно попадать в архив приложения.
+    "source.exclude_dirs": "android,deployment,bin,.buildozer,__pycache__",
+    "source.exclude_patterns": (
+        "deploy_android.py,build_apk.sh,README.md,pysidedeploy.spec,buildozer.spec"
+    ),
 }
 
 _original_update = buildozer.BuildozerConfig.update_config

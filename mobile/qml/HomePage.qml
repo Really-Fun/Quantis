@@ -22,6 +22,17 @@ Flickable {
         return "Добрый вечер"
     }
 
+    // Подсветка верха страницы цветами играющего трека — та же аврора, что в
+    // плеере, только тише; без трека её нет.
+    Aurora {
+        width: page.width
+        height: 420
+        y: -page.contentY * 0.4 // лёгкий параллакс при прокрутке
+        visible: app.hasTrack
+        opacity: 0.8
+        active: app.playing && !app.loading
+    }
+
     ColumnLayout {
         id: column
         width: page.width
@@ -45,15 +56,44 @@ Flickable {
             Layout.rightMargin: theme.gutter
             Layout.preferredHeight: 176
             radius: theme.radius + 4
-            gradient: Gradient {
+            // Без трека — фирменный градиент; с треком — тёмное стекло поверх авроры.
+            gradient: app.hasTrack ? null : brand
+            color: app.hasTrack ? Qt.rgba(0.08, 0.09, 0.12, 0.55) : "transparent"
+            border.color: app.hasTrack ? Qt.rgba(1, 1, 1, 0.08) : "transparent"
+            Gradient {
+                id: brand
                 orientation: Gradient.Horizontal
                 GradientStop { position: 0; color: Qt.darker(theme.accent, 1.6) }
                 GradientStop { position: 1; color: Qt.darker(theme.accentPink, 2.4) }
             }
 
+            // Обложка с пластинкой справа, пока что-то играет.
+            Item {
+                id: heroArt
+                visible: app.hasTrack
+                anchors.right: parent.right
+                anchors.rightMargin: 16
+                anchors.verticalCenter: parent.verticalCenter
+                width: 132
+                height: 104
+                Vinyl {
+                    x: 36; y: 2
+                    width: 100; height: 100
+                    cover: app.cover
+                    spinning: app.playing && !app.loading
+                }
+                CoverArt {
+                    width: 104; height: 104
+                    radius: 14
+                    seed: app.title
+                    cover: app.cover
+                }
+            }
+
             ColumnLayout {
                 anchors.fill: parent
                 anchors.margins: 20
+                anchors.rightMargin: app.hasTrack ? heroArt.width + 28 : 20
                 spacing: 6
                 Text {
                     text: app.hasTrack ? "СЕЙЧАС ИГРАЕТ" : "QUANTIS"

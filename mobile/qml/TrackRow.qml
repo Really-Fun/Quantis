@@ -13,6 +13,7 @@ ItemDelegate {
     required property string artist
     required property int duration
     required property string source
+    required property string cover
     property bool current: false
 
     width: ListView.view ? ListView.view.width : implicitWidth
@@ -28,6 +29,7 @@ ItemDelegate {
             Layout.preferredWidth: 48
             Layout.preferredHeight: 48
             seed: row.title
+            cover: row.cover
         }
         ColumnLayout {
             Layout.fillWidth: true

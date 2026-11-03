@@ -9,7 +9,9 @@ from __future__ import annotations
 
 import random
 import traceback
+from urllib.parse import quote
 
+import art
 import sources
 from android_media import NEXT, PAUSE, PLAY, PREV, SEEK_BASE, MediaControls
 from PySide6.QtCore import (
@@ -27,6 +29,7 @@ from PySide6.QtCore import (
     Signal,
     Slot,
 )
+from PySide6.QtGui import QColor
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from sources import YANDEX, YOUTUBE, Result
 from stream_proxy import StreamProxy
@@ -72,6 +75,7 @@ class TrackModel(QAbstractListModel):
     ArtistRole = TitleRole + 1
     DurationRole = TitleRole + 2
     SourceRole = TitleRole + 3
+    CoverRole = TitleRole + 4
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -101,6 +105,7 @@ class TrackModel(QAbstractListModel):
             self.ArtistRole: QByteArray(b"artist"),
             self.DurationRole: QByteArray(b"duration"),
             self.SourceRole: QByteArray(b"source"),
+            self.CoverRole: QByteArray(b"cover"),
         }
 
     def data(self, index: QModelIndex, role: int = Qt.ItemDataRole.DisplayRole):
@@ -115,6 +120,8 @@ class TrackModel(QAbstractListModel):
             return item.duration
         if role == self.SourceRole:
             return item.source
+        if role == self.CoverRole:
+            return quote(item.cover, safe="") if item.cover else ""
         return None
 
 
@@ -128,6 +135,7 @@ class AppController(QObject):
     positionChanged = Signal()
     durationChanged = Signal()
     modeChanged = Signal()
+    paletteChanged = Signal()
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -146,6 +154,7 @@ class AppController(QObject):
         # переднего плана Android даёт запустить только с открытого
         # приложения, а без неё свёрнутое приложение замораживается.
         self._wants_play = False
+        self._palette = art.DEFAULT
         self._shuffle = False
         self._repeat = REPEAT_ALL
         saved = str(self._settings.value(SOURCE_KEY, "") or "")
@@ -155,6 +164,7 @@ class AppController(QObject):
 
         self._proxy = StreamProxy()
         self._controls = MediaControls()
+        self._animations = self._controls.animations_enabled()
         self._controls_timer = QTimer(self)
         self._controls_timer.setInterval(400)
         self._controls_timer.timeout.connect(self._poll_controls)
@@ -244,6 +254,37 @@ class AppController(QObject):
     def trackSource(self) -> str:
         track = self._track()
         return track.source if track else ""
+
+    @Property(str, notify=trackChanged)
+    def cover(self) -> str:
+        """Адрес обложки для QML: image://art/cover/… (пусто — нет обложки)."""
+        track = self._track()
+        return quote(track.cover, safe="") if track and track.cover else ""
+
+    @Property(QColor, notify=paletteChanged)
+    def accent(self) -> QColor:
+        return self._palette.accent
+
+    @Property(QColor, notify=paletteChanged)
+    def accent2(self) -> QColor:
+        return self._palette.accent2
+
+    @Property(QColor, notify=paletteChanged)
+    def deep(self) -> QColor:
+        return self._palette.deep
+
+    @Property(QColor, notify=paletteChanged)
+    def glow(self) -> QColor:
+        return self._palette.glow
+
+    @Property(QColor, notify=paletteChanged)
+    def accentText(self) -> QColor:
+        return self._palette.accent_text
+
+    @Property(bool, constant=True)
+    def animations(self) -> bool:
+        """Системные анимации включены: иначе пластинка и аврора стоят."""
+        return self._animations
 
     @Property(bool, notify=playStateChanged)
     def playing(self) -> bool:
@@ -374,12 +415,26 @@ class AppController(QObject):
         self.durationChanged.emit()
         self._sync_controls()
         result = self._queue[row]
+        self._load_palette(result)
         self._run(
             sources.resolve,
             (result, self._token, self._proxy),
             lambda url, r=row: self._on_resolved(r, url),
             self._on_resolve_failed,
         )
+
+    def _load_palette(self, result: Result) -> None:
+        """Цвета из обложки: обложка качается в фоне, палитра — по готовности."""
+
+        def work() -> art.Palette:
+            return art.palette_from(art.load_cover(result.cover))
+
+        def done(palette: art.Palette) -> None:
+            if self._track() is result:
+                self._palette = palette
+                self.paletteChanged.emit()
+
+        self._run(work, (), done, lambda _: None)
 
     def _on_resolved(self, row: int, url: str) -> None:
         if row != self._current:

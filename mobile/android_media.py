@@ -35,6 +35,7 @@ _GET_METHOD_ID = 33
 _CALL_OBJECT_METHOD_A = 36
 _GET_STATIC_METHOD_ID = 113
 _CALL_STATIC_OBJECT_METHOD_A = 116
+_CALL_STATIC_BOOLEAN_METHOD_A = 119
 _CALL_STATIC_LONG_METHOD_A = 134
 _CALL_STATIC_VOID_METHOD_A = 143
 _NEW_STRING = 163
@@ -209,6 +210,7 @@ class MediaControls:
             )
             self._poll = jni.method_id(cls, "poll", "()J", static=True)
             self._release = jni.method_id(cls, "release", "()V", static=True)
+            self._animators = jni.method_id(cls, "animatorsEnabled", "()Z", static=True)
             jni.call(
                 _CALL_STATIC_VOID_METHOD_A,
                 None,
@@ -261,6 +263,25 @@ class MediaControls:
         except Exception:
             log.exception("Не удалось прочитать команды плашки")
             return NONE
+
+    def animations_enabled(self) -> bool:
+        """False — в системе выключены анимации: пластинка и аврора стоят."""
+        jni = self._jni
+        if jni is None:
+            return True
+        try:
+            return bool(
+                jni.call(
+                    _CALL_STATIC_BOOLEAN_METHOD_A,
+                    ctypes.c_ubyte,
+                    self._cls,
+                    self._animators,
+                    jni.jvalues(),
+                )
+            )
+        except Exception:
+            log.exception("Не удалось узнать, включены ли анимации")
+            return True
 
     def release(self) -> None:
         jni = self._jni

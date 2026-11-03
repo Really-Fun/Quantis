@@ -36,10 +36,21 @@ ItemDelegate {
 
     contentItem: RowLayout {
         spacing: 12
-        CoverArt {
-            Layout.preferredWidth: 48
+        // Обложка с маленькой пластинкой, которая крутится, пока играет.
+        Item {
+            Layout.preferredWidth: 60
             Layout.preferredHeight: 48
-            seed: app.title
+            Vinyl {
+                x: 16; y: 2
+                width: 44; height: 44
+                cover: app.cover
+                spinning: app.playing && !app.loading
+            }
+            CoverArt {
+                width: 48; height: 48
+                seed: app.title
+                cover: app.cover
+            }
         }
         ColumnLayout {
             Layout.fillWidth: true
