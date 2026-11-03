@@ -49,7 +49,26 @@ _original_update = buildozer.BuildozerConfig.update_config
 # set(): порядок случайный от сборки к сборке. Когда Multimedia шла раньше
 # Core, её JNI_OnLoad падал (QJniEnvironment::getJniEnv, null) до старта
 # Python. Ставим модули в порядке зависимостей.
-_QT_ORDER = ["Core", "Gui", "Network", "Concurrent", "Widgets", "Multimedia"]
+_QT_ORDER = [
+    "Core",
+    "Gui",
+    "Network",
+    "Concurrent",
+    "Widgets",
+    "Svg",
+    "OpenGL",
+    "Qml",
+    "QmlModels",
+    "QmlWorkerScript",
+    "QmlMeta",
+    "Quick",
+    "QuickTemplates2",
+    "QuickControls2",
+    "QuickControls2Impl",
+    "QuickLayouts",
+    "Multimedia",
+    "MultimediaQuick",
+]
 
 
 def _ordered(names: list[str], key) -> list[str]:
@@ -77,6 +96,13 @@ def _fix_load_order(extra_args: str) -> str:
 
 
 def _update_config(self) -> None:
+    # Шрифты и значки QML-интерфейса: buildozer по умолчанию берёт только
+    # py, png, jpg, kv, atlas (+ qml, js от инструмента).
+    exts = self.get_value("app", "source.include_exts") or ""
+    for ext in ("ttf", "svg", "txt"):
+        if ext not in exts.split(","):
+            exts = f"{exts},{ext}" if exts else ext
+    self.set_value("app", "source.include_exts", exts, raise_warning=False)
     for key, value in EXTRA.items():
         self.set_value("app", key, value, raise_warning=False)
         print(f"[quantis] buildozer {key} = {self.get_value('app', key)}")

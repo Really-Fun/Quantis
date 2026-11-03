@@ -74,5 +74,5 @@ python "$HERE/deploy_android.py" \
     --wheel-pyside "$PYSIDE_WHEEL" \
     --wheel-shiboken "$SHIBOKEN_WHEEL" \
     --sdk-path "$CACHE/android-sdk" \
-    --extra-modules Multimedia \
+    --extra-modules Multimedia,Qml,Quick,QuickControls2,Svg \
     --force "$@"
