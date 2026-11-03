@@ -22,19 +22,9 @@ from quantis.ui.views.widgets.glass_panel import GlassPanel
 from quantis.ui.views.widgets.home_section import HomeSection
 from quantis.ui.views.widgets.listen_bars import ListenBars
 from quantis.ui.views.widgets.track_card import TrackCardDelegate
-from quantis.utils import get_ru_words_for_number
 
-
-def _ru_times(count: int) -> str:
-    n10 = count % 10
-    n100 = count % 100
-    if n10 == 1 and n100 != 11:
-        word = "раз"
-    elif n10 in (2, 3, 4) and n100 not in (12, 13, 14):
-        word = "раза"
-    else:
-        word = "раз"
-    return f"{count} {word}"
+_EMPTY_HINT = "Дослушай трек до конца — он попадёт в топ"
+_COUNTED_HINT = "Прослушивание засчитывается, когда трек дослушан до конца"
 
 
 def _format_span(ms: int) -> str:
@@ -107,14 +97,13 @@ class StatsPage(QWidget):
         hero_layout = QVBoxLayout(hero)
         hero_layout.setContentsMargins(0, 0, 0, 0)
         hero_layout.setSpacing(6)
-        kicker = QLabel("ТВОЯ СТАТИСТИКА")
-        kicker.setObjectName("homeKicker")
-        hero_layout.addWidget(kicker)
-        title = QLabel("Прослушивания")
-        title.setObjectName("homeGreeting")
+        # Как заголовки разделов («Топ треков», «Скачанные»): у прежних
+        # homeKicker/homeGreeting после редизайна не осталось стилей.
+        title = QLabel("Твоя статистика")
+        title.setObjectName("homeSectionTitle")
         hero_layout.addWidget(title)
-        self._subtitle = QLabel("Дослушай трек до конца — он попадёт в топ")
-        self._subtitle.setObjectName("homeGreetingSub")
+        self._subtitle = QLabel(_EMPTY_HINT)
+        self._subtitle.setObjectName("homeSectionSubtitle")
         self._subtitle.setWordWrap(True)
         hero_layout.addWidget(self._subtitle)
         root.addWidget(hero)
@@ -125,8 +114,10 @@ class StatsPage(QWidget):
         self._metrics_grid.setContentsMargins(0, 0, 0, 0)
         self._metrics_grid.setHorizontalSpacing(12)
         self._metrics_grid.setVerticalSpacing(12)
-        self._listens = _MetricCard("Прослушиваний")
-        self._tracks = _MetricCard("Уникальных треков")
+        # Прослушивание — трек, дослушанный до конца; в истории же все
+        # запущенные треки, поэтому треков бывает больше, чем прослушиваний.
+        self._listens = _MetricCard("Полных прослушиваний")
+        self._tracks = _MetricCard("Треков в истории")
         self._time = _MetricCard("Время в эфире")
         self._artist = _MetricCard("Любимый артист")
         for index, card in enumerate(
@@ -205,17 +196,12 @@ class StatsPage(QWidget):
     def _rebuild(self) -> None:
         snap = self._vm.snapshot
         summary = snap.summary
-        self._listens.set_value(_ru_times(summary.total_listens))
+        self._listens.set_value(str(summary.total_listens))
         self._tracks.set_value(str(summary.unique_tracks))
         self._time.set_value(_format_span(summary.listened_ms))
         self._artist.set_value(summary.top_artist or "—")
-        if summary.total_listens:
-            self._subtitle.setText(
-                f"{_ru_times(summary.total_listens)} · "
-                f"{get_ru_words_for_number(summary.unique_tracks)}"
-            )
-        else:
-            self._subtitle.setText("Дослушай трек до конца — он попадёт в топ")
+        # Числа уже в карточках ниже: подзаголовок объясняет, что считается.
+        self._subtitle.setText(_COUNTED_HINT if summary.total_listens else _EMPTY_HINT)
         self._most_section.set_badge(str(len(snap.most)) if snap.most else "")
         self._least_section.set_badge(str(len(snap.least)) if snap.least else "")
         self._bars.set_tracks(list(snap.most))

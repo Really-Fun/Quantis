@@ -186,7 +186,7 @@ def test_transport_buttons_drive_view_model(qapp, storage) -> None:
     vm = _FakeVM()
     bar = PlayerBar(vm, storage)
     vm.calls.clear()
-    for tooltip in ("Назад", "Play", "Далее", "Повтор плейлиста"):
+    for tooltip in ("Назад", "Играть", "Далее", "Повтор плейлиста"):
         _button(bar, tooltip).click()
     assert vm.calls == [
         ("play_previous",),
@@ -386,7 +386,7 @@ def test_chrome_signals(qapp, storage) -> None:
     fired: list[str] = []
     bar.now_playing_toggle_requested.connect(lambda: fired.append("now"))
     bar.hide_ui_requested.connect(lambda: fired.append("hide"))
-    _button(bar, "Now Playing").click()
+    _button(bar, "Панель «Сейчас»").click()
     _button(bar, "Скрыть интерфейс (S)").click()
     assert fired == ["now", "hide"]
 
@@ -416,7 +416,7 @@ def test_side_columns_shrink_on_narrow_window(qapp, storage, width, side) -> Non
     assert left.objectName() == "playerLeft"
     assert left.maximumWidth() == side
     assert _label(bar, "trackTitle").maximumWidth() == side - 56 - 12
-    right = _button(bar, "Now Playing").parentWidget()
+    right = _button(bar, "Панель «Сейчас»").parentWidget()
     assert right.objectName() == "playerRight"
     assert right.maximumWidth() >= side
     bar.close()

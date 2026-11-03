@@ -206,7 +206,7 @@ class PlayerBar(QFrame):
         self._repeat_btn.clicked.connect(self._vm.cycle_repeat_mode)
         self._prev_btn = self._make_button("prev.svg", "Назад", size=40)
         self._prev_btn.clicked.connect(self._vm.play_previous)
-        self._play_btn = self._make_button("play.svg", "Play", accent=True, size=44)
+        self._play_btn = self._make_button("play.svg", "Играть", accent=True, size=44)
         self._play_btn.clicked.connect(self._vm.toggle_pause)
         self._refresh_play_icon()
         self._next_btn = self._make_button("next.svg", "Далее", size=40)
@@ -261,7 +261,7 @@ class PlayerBar(QFrame):
             "hide-ui-neon.svg", "Скрыть интерфейс (S)"
         )
         self._hide_ui_btn.clicked.connect(self.hide_ui_requested.emit)
-        self._now_btn = self._make_button("radio.svg", "Now Playing")
+        self._now_btn = self._make_button("radio.svg", "Панель «Сейчас»")
         self._now_btn.clicked.connect(self.now_playing_toggle_requested.emit)
         self._download_btn = self._make_button("download.svg", "Скачать")
         self._download_btn.setEnabled(False)
@@ -319,11 +319,17 @@ class PlayerBar(QFrame):
         icon_size = 18 if accent else 16
         button.setIcon(resources.load_icon(icon_name))
         button.setIconSize(QSize(icon_size, icon_size))
-        button.setToolTip(tooltip)
+        self._set_hint(button, tooltip)
         button.setCursor(Qt.CursorShape.PointingHandCursor)
         button.setFixedSize(size, size)
         self._repolish(button)
         return button
+
+    @staticmethod
+    def _set_hint(button: QToolButton, text: str) -> None:
+        """Подсказка и имя для экранного диктора: у кнопок только значок."""
+        button.setToolTip(text)
+        button.setAccessibleName(text)
 
     def _make_plugin_button(self, action: PlayerActionExtension) -> QToolButton:
         button = QToolButton()
@@ -455,7 +461,7 @@ class PlayerBar(QFrame):
     def _update_repeat_button(self, mode: RepeatMode) -> None:
         icon_name, tooltip = _REPEAT_LOOK[mode]
         self._repeat_btn.setIcon(resources.load_icon(icon_name))
-        self._repeat_btn.setToolTip(tooltip)
+        self._set_hint(self._repeat_btn, tooltip)
         self._repeat_btn.setProperty("repeatMode", mode.value)
         self._repolish(self._repeat_btn)
 
@@ -464,6 +470,7 @@ class PlayerBar(QFrame):
         icon = "pause.svg" if self._is_playing else "play.svg"
         color = resources.on_color(AccentStyles.instance().color)
         self._play_btn.setIcon(resources.load_icon(icon, color))
+        self._set_hint(self._play_btn, "Пауза" if self._is_playing else "Играть")
 
     def _set_title_playing(self, playing: bool) -> None:
         self._title.setProperty("playing", playing)
@@ -504,7 +511,7 @@ class PlayerBar(QFrame):
         self._like_btn.setIcon(
             resources.load_icon("heart-filled.svg" if liked else "heart.svg")
         )
-        self._like_btn.setToolTip("Убрать из любимых" if liked else "В любимые")
+        self._set_hint(self._like_btn, "Убрать из любимых" if liked else "В любимые")
         self._repolish(self._like_btn)
 
     def _on_add_to_playlist_clicked(self) -> None:

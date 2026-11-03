@@ -103,10 +103,10 @@ class SettingsPage(QWidget):
         panel_layout.addWidget(theme_row)
 
         now_row, now_body = self._row(
-            "Now Playing",
+            "Панель «Сейчас»",
             "Правая колонка с обложкой и метаданными (на широком окне)",
         )
-        self._now_playing_cb = QCheckBox("Показывать панель Now Playing")
+        self._now_playing_cb = QCheckBox("Показывать панель «Сейчас»")
         self._now_playing_cb.setObjectName("settingsCheck")
         self._now_playing_cb.setCursor(Qt.CursorShape.PointingHandCursor)
         self._now_playing_cb.toggled.connect(self._on_now_playing_toggled)

@@ -135,12 +135,23 @@ class SearchPage(QWidget):
         self._list.doubleClicked.connect(self._on_play_index)
         panel_layout.addWidget(self._list, stretch=1)
 
+        # Пустая выдача — не пустая панель: подсказка, что сюда вводить.
+        self._empty = QLabel()
+        self._empty.setObjectName("homeEmptyHint")
+        self._empty.setWordWrap(True)
+        self._empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        panel_layout.addWidget(self._empty, stretch=1)
+        self._loading = False
+        self._searched = False  # был ли поиск по текущему тексту
+
         layout.addWidget(panel, stretch=1)
 
         self._vm.loading_changed.connect(self._on_loading)
         self._vm.error_occurred.connect(self._on_error)
         self._vm.results_changed.connect(self._on_results)
         self._vm.status_message.connect(self._status.setText)
+        self._query.textChanged.connect(self._on_query_edited)
+        self._sync_empty()
 
     # ──────────────────────────────────────────────────────────────────────
     # Построение панели расширенного поиска
@@ -263,11 +274,34 @@ class SearchPage(QWidget):
     def _on_loading(self, loading: bool) -> None:
         if loading and not self._status.text():
             self._status.setText("Ищем…")
+        self._loading = loading
+        if loading:
+            self._searched = True
+        self._sync_empty()
+
+    def _on_query_edited(self, text: str) -> None:
+        if not text.strip():
+            self._searched = False
+        self._sync_empty()
+
+    def _sync_empty(self) -> None:
+        has_rows = self._vm.model.rowCount() > 0
+        show = not has_rows and not self._loading
+        if show:
+            self._empty.setText(
+                "Ничего не нашлось. Попробуй другой запрос или источник."
+                if self._searched and self._query.text().strip()
+                else "Найди трек по названию или артисту — или вставь ссылку "
+                "на YouTube, Яндекс Музыку или SoundCloud."
+            )
+        self._empty.setVisible(show)
+        self._list.setVisible(not show)
 
     def _on_error(self, message: str) -> None:
         self._status.setText(message)
 
     def _on_results(self) -> None:
+        self._sync_empty()
         self._list.scheduleDelayedItemsLayout()
         self._list.viewport().update()
 

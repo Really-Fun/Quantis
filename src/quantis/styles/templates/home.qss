@@ -85,7 +85,8 @@ QLabel#homePillBadge[variant="continue"] {
 
 QLabel#homeEmptyHint {
     font-size: 13px;
-    color: rgba(${mist_rgb}, 0.4);
+    /* 0.4 давало контраст ниже 4.5:1 на тёмном и светлом фоне. */
+    color: rgba(${mist_rgb}, 0.7);
     padding: 16px 4px;
     background: transparent;
 }
