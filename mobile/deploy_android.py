@@ -4,9 +4,9 @@
 которые нам нужны, не пробрасывает. Запускаем его скрипт в этом процессе
 и дописываем ключи перед записью spec:
 
-- android.meta_data: android.app.background_running=true — без него Qt
-  останавливает цикл событий в свёрнутом приложении (не включался
-  следующий трек, не работали бы кнопки плашки);
+- android.manifest.intent_filters: <meta-data background_running=true>
+  внутрь <activity> — без него Qt останавливает цикл событий в свёрнутом
+  приложении (не включался следующий трек, не работали кнопки плашки);
 - android.add_aars: quantis-media.aar (MediaBridge + служба mediaPlayback)
   и репозиторий flatDir, через который Gradle его находит.
 
@@ -28,8 +28,12 @@ sys.path.insert(0, str(SCRIPTS))
 
 from deploy_lib.android import buildozer  # noqa: E402
 
+HERE = Path(__file__).resolve().parent
+
 EXTRA = {
-    "android.meta_data": "android.app.background_running=true",
+    # Метаданные активности: Qt читает background_running оттуда, а
+    # android.meta_data p4a кладёт в <application> (см. android/activity_meta.xml).
+    "android.manifest.intent_filters": str(HERE / "android" / "activity_meta.xml"),
     "android.add_aars": os.environ["QUANTIS_AAR"],
     # p4a кладёт AAR в libs/ и подключает как name:/ext:, а репозитория
     # flatDir в его шаблоне нет: Gradle писал «Could not find :quantis-media:».
