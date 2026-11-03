@@ -7,7 +7,8 @@
 - android.meta_data: android.app.background_running=true — без него Qt
   останавливает цикл событий в свёрнутом приложении (не включался
   следующий трек, не работали бы кнопки плашки);
-- android.add_aars: quantis-media.aar (MediaBridge + служба mediaPlayback).
+- android.add_aars: quantis-media.aar (MediaBridge + служба mediaPlayback)
+  и репозиторий flatDir, через который Gradle его находит.
 
 Запуск: tool-venv/bin/python deploy_android.py <аргументы pyside6-android-deploy>
 Переменная QUANTIS_AAR — путь к собранному AAR.
@@ -30,6 +31,9 @@ from deploy_lib.android import buildozer  # noqa: E402
 EXTRA = {
     "android.meta_data": "android.app.background_running=true",
     "android.add_aars": os.environ["QUANTIS_AAR"],
+    # p4a кладёт AAR в libs/ и подключает как name:/ext:, а репозитория
+    # flatDir в его шаблоне нет: Gradle писал «Could not find :quantis-media:».
+    "android.add_gradle_repositories": "flatDir { dirs 'libs' }",
 }
 
 _original_update = buildozer.BuildozerConfig.update_config
