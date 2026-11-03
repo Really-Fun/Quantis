@@ -25,9 +25,12 @@ ApplicationWindow {
 
     property int tab: 0
 
-    // Отступы от выреза и системных панелей Android (edge-to-edge).
-    readonly property real safeTop: SafeArea.margins.top
-    readonly property real safeBottom: SafeArea.margins.bottom
+    // Окно python-for-android уже начинается под строкой состояния и
+    // кончается над панелью навигации, а SafeArea.margins всё равно сообщает
+    // их высоту: с ними отступ получался двойным (чёрные полосы сверху и
+    // снизу на телефоне). Поэтому своих отступов не добавляем.
+    readonly property real safeTop: 0
+    readonly property real safeBottom: 0
 
     Item {
         anchors.fill: parent
