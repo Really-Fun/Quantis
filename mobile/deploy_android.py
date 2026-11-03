@@ -31,8 +31,10 @@ from deploy_lib.android import buildozer  # noqa: E402
 HERE = Path(__file__).resolve().parent
 
 EXTRA = {
-    # Метаданные активности: Qt читает background_running оттуда, а
-    # android.meta_data p4a кладёт в <application> (см. android/activity_meta.xml).
+    # Метаданные активности: Qt читает background_running оттуда
+    # (QtLoader.getMetaData → ComponentInfo.metaData), а android.meta_data
+    # p4a кладёт в <application>. Файл вставляется в <activity> как есть,
+    # поэтому без комментариев: «--» внутри XML-комментария ломал манифест.
     "android.manifest.intent_filters": str(HERE / "android" / "activity_meta.xml"),
     "android.add_aars": os.environ["QUANTIS_AAR"],
     # p4a кладёт AAR в libs/ и подключает как name:/ext:, а репозитория

@@ -1,6 +1,1 @@
-<!-- Вставляется внутрь <activity> через --intent-filters python-for-android.
-     Qt читает android.app.background_running из метаданных активности
-     (QtLoader.getMetaData → ComponentInfo.metaData), а не приложения: в
-     <application> он не действовал, и в свёрнутом приложении цикл Qt стоял —
-     не включался следующий трек, не работали кнопки плашки. -->
 <meta-data android:name="android.app.background_running" android:value="true"/>
