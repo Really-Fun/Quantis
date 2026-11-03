@@ -124,3 +124,9 @@ mobile/*.apk
 mobile/buildozer.spec
 mobile/pysidedeploy.spec
 mobile/android/build/
+mobile/yandex_music/
+mobile/requests/
+mobile/urllib3/
+mobile/idna/
+mobile/typing_extensions.py
+mobile/socks.py

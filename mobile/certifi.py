@@ -12,7 +12,14 @@ import os
 
 
 def where() -> str:
-    return os.environ.get("QUANTIS_CA_FILE", "")
+    path = os.environ.get("QUANTIS_CA_FILE", "")
+    if path:
+        return path
+    # На компьютере (запуск из этой папки) файл не пишется: системный набор.
+    import ssl
+
+    paths = ssl.get_default_verify_paths()
+    return paths.cafile or paths.openssl_cafile or ""
 
 
 def contents() -> str:

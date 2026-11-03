@@ -1,10 +1,10 @@
-"""Quantis Mobile — бета для Android: поиск на YouTube и воспроизведение.
+"""Quantis Mobile — бета для Android: Яндекс Музыка и YouTube.
 
 Отдельное маленькое приложение, а не настольный Quantis: тот тянет
-aiohttp, qasync, keyring и интерфейс под мышь. Здесь только yt-dlp
-(чистый Python, кладётся рядом при сборке) и QtMultimedia.
+aiohttp, qasync, keyring и интерфейс под мышь. Здесь yt-dlp и
+yandex-music (чистый Python, кладутся рядом при сборке) и QtMultimedia.
 
-Трек сначала скачивается в кэш приложения, затем играет как файл:
+Яндекс играет потоком по прямой ссылке. YouTube сначала качается в кэш:
 ссылкам googlevideo нужны заголовки, а QMediaPlayer их не передаёт.
 """
 
@@ -13,19 +13,20 @@ from __future__ import annotations
 import os
 import sys
 import traceback
-from dataclasses import dataclass
 from pathlib import Path
 
 # На телефоне FFmpeg-бэкенд Qt открывал поток AAudio, тот сразу отключался
 # («stream disconnected»), и так по кругу: трек «играл» без звука. Системный
-# MediaPlayer Android файл m4a играет сам. Задать до импорта QtMultimedia.
+# MediaPlayer Android играет и файлы, и ссылки сам. Задать до QtMultimedia.
 if hasattr(sys, "getandroidapilevel"):
     os.environ.setdefault("QT_MEDIA_BACKEND", "android")
 
+import sources
 from android_media import NEXT, PAUSE, PLAY, PREV, SEEK_BASE, MediaControls
 from PySide6.QtCore import (
     QObject,
     QRunnable,
+    QSettings,
     QStandardPaths,
     Qt,
     QThreadPool,
@@ -36,6 +37,8 @@ from PySide6.QtCore import (
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtWidgets import (
     QApplication,
+    QButtonGroup,
+    QDialog,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -47,14 +50,16 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from sources import YANDEX, YOUTUBE, Result
 
-SEARCH_LIMIT = 20
+TOKEN_KEY = "yandex/token"
+SOURCE_KEY = "search/source"
 
 
 def _install_ca_bundle() -> None:
     """У Python на Android нет системных сертификатов для OpenSSL.
 
-    Без них любой HTTPS-запрос yt-dlp падает на проверке. Сборка кладёт
+    Без них любой HTTPS-запрос падает на проверке. Сборка кладёт
     сертификаты в модуль ca_bundle.py (файлы .pem в APK не попадают).
     """
     try:
@@ -77,20 +82,6 @@ def _install_ca_bundle() -> None:
     os.environ["QUANTIS_CA_FILE"] = str(target)  # для certifi.py рядом
 
 
-@dataclass(frozen=True)
-class Result:
-    video_id: str
-    title: str
-    channel: str
-    duration: int  # секунды, 0 — неизвестно
-
-    @property
-    def label(self) -> str:
-        minutes, seconds = divmod(self.duration, 60)
-        length = f"  ·  {minutes}:{seconds:02d}" if self.duration else ""
-        return f"{self.title}\n{self.channel}{length}"
-
-
 def cache_dir() -> Path:
     base = QStandardPaths.writableLocation(
         QStandardPaths.StandardLocation.CacheLocation
@@ -100,84 +91,13 @@ def cache_dir() -> Path:
     return path
 
 
-def search_youtube(query: str) -> list[Result]:
-    import yt_dlp
-
-    opts = {"quiet": True, "no_warnings": True, "extract_flat": True}
-    with yt_dlp.YoutubeDL(opts) as ydl:
-        info = ydl.extract_info(f"ytsearch{SEARCH_LIMIT}:{query}", download=False)
-    results = []
-    for entry in (info or {}).get("entries") or []:
-        video_id = entry.get("id")
-        if not video_id:
-            continue
-        results.append(
-            Result(
-                video_id=video_id,
-                title=entry.get("title") or video_id,
-                channel=entry.get("channel") or entry.get("uploader") or "",
-                duration=int(entry.get("duration") or 0),
-            )
-        )
-    return results
-
-
-def _audio_attempts(outtmpl: str) -> list[dict]:
-    """Те же попытки, что у настольного Quantis: сначала быстрый android."""
-    common = {
-        "quiet": True,
-        "no_warnings": True,
-        "noplaylist": True,
-        "noprogress": True,
-        "outtmpl": outtmpl,
-        "format": (
-            "ba[protocol=https][ext=m4a]/ba[protocol=https]/"
-            "bestaudio[protocol=https]/bestaudio"
-        ),
-    }
-    android = {
-        **common,
-        "extractor_args": {
-            "youtube": {
-                "player_client": ["android"],
-                "skip": ["hls", "dash", "translated_subs"],
-                "player_skip": ["webpage", "configs"],
-            }
-        },
-    }
-    return [android, common]
-
-
-def fetch_audio(video_id: str) -> Path:
-    """Путь к скачанному звуку; уже скачанный трек не качается снова."""
-    import yt_dlp
-
-    folder = cache_dir()
-    for existing in folder.glob(f"{video_id}.*"):
-        if existing.suffix not in (".part", ".ytdl"):
-            return existing
-    outtmpl = str(folder / "%(id)s.%(ext)s")
-    url = f"https://www.youtube.com/watch?v={video_id}"
-    error: Exception | None = None
-    for opts in _audio_attempts(outtmpl):
-        try:
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                info = ydl.extract_info(url, download=True)
-                path = Path(ydl.prepare_filename(info))
-            if path.exists():
-                return path
-        except Exception as exc:  # следующая попытка
-            error = exc
-    raise RuntimeError(f"Не удалось скачать трек: {error}")
-
-
 class _Signals(QObject):
     done = Signal(object)
     failed = Signal(str)
 
 
 class Job(QRunnable):
-    """Функция в пуле потоков: сеть и yt-dlp не должны держать интерфейс."""
+    """Функция в пуле потоков: сеть не должна держать интерфейс."""
 
     def __init__(self, fn, *args) -> None:
         super().__init__()
@@ -213,10 +133,12 @@ QPushButton {
 QPushButton:pressed { background: #343a4a; }
 QPushButton:disabled { color: #6b7080; }
 QPushButton#play { background: #6c5ce7; font-weight: 700; min-width: 72px; }
+QPushButton#source { padding: 8px 14px; border-radius: 16px; font-size: 14px; }
+QPushButton#source:checked { background: #6c5ce7; color: #ffffff; }
 QListWidget { background: transparent; border: none; }
 QListWidget::item { padding: 12px 6px; border-bottom: 1px solid #1f2230; }
 QListWidget::item:selected { background: #222638; color: #ffffff; }
-QLabel#status { color: #9aa0b4; font-size: 14px; }
+QLabel#status, QLabel#hint { color: #9aa0b4; font-size: 14px; }
 QLabel#now { font-weight: 700; }
 QSlider::groove:horizontal { height: 6px; background: #2c3040; border-radius: 3px; }
 QSlider::sub-page:horizontal { background: #6c5ce7; border-radius: 3px; }
@@ -226,15 +148,89 @@ QSlider::handle:horizontal {
 """
 
 
+class AccountDialog(QDialog):
+    """Вход в Яндекс Музыку по OAuth-токену, как в настольном Quantis."""
+
+    def __init__(self, window: MobileWindow) -> None:
+        super().__init__(window)
+        self.setWindowTitle("Аккаунт")
+        self._window = window
+        root = QVBoxLayout(self)
+        root.setContentsMargins(18, 18, 18, 18)
+        root.setSpacing(12)
+        title = QLabel("Яндекс Музыка")
+        title.setObjectName("now")
+        root.addWidget(title)
+        hint = QLabel(
+            "Вставь OAuth-токен Яндекс Музыки — тот же, что в Quantis на "
+            "компьютере. Он хранится только на этом телефоне."
+        )
+        hint.setObjectName("hint")
+        hint.setWordWrap(True)
+        root.addWidget(hint)
+        self._token = QLineEdit(window.token)
+        self._token.setPlaceholderText("Токен")
+        self._token.setEchoMode(QLineEdit.EchoMode.Password)
+        root.addWidget(self._token)
+        self._status = QLabel()
+        self._status.setObjectName("status")
+        self._status.setWordWrap(True)
+        root.addWidget(self._status)
+        row = QHBoxLayout()
+        self._save = QPushButton("Сохранить")
+        self._save.clicked.connect(self._on_save)
+        logout = QPushButton("Выйти")
+        logout.clicked.connect(self._on_logout)
+        close = QPushButton("Закрыть")
+        close.clicked.connect(self.accept)
+        for button in (self._save, logout, close):
+            row.addWidget(button, 1)
+        root.addLayout(row)
+        root.addStretch(1)
+        if window.token:
+            self._check(window.token)
+
+    def _check(self, token: str) -> None:
+        self._save.setEnabled(False)
+        self._status.setText("Проверяем токен…")
+        self._window.run_job(
+            sources.check_yandex_token,
+            (token,),
+            lambda who: self._on_checked(token, who),
+            self._on_failed,
+        )
+
+    def _on_save(self) -> None:
+        token = self._token.text().strip()
+        if token:
+            self._check(token)
+
+    def _on_checked(self, token: str, who: str) -> None:
+        self._save.setEnabled(True)
+        self._window.set_token(token)
+        self._status.setText(f"Вход выполнен: {who}")
+
+    def _on_failed(self, text: str) -> None:
+        self._save.setEnabled(True)
+        self._status.setText(f"Токен не подошёл: {text}")
+
+    def _on_logout(self) -> None:
+        self._token.clear()
+        self._window.set_token("")
+        self._status.setText("Вы вышли из аккаунта")
+
+
 class MobileWindow(QWidget):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("Quantis")
+        self._settings = QSettings()
         self._pool = QThreadPool.globalInstance()
         self._jobs: set[Job] = set()  # держим ссылки, пока задачи идут
         self._results: list[Result] = []
         self._current = -1
         self._seeking = False
+        self.token = str(self._settings.value(TOKEN_KEY, "") or "")
 
         # Плашка в шторке Android; на компьютере — пустышка.
         self._controls = MediaControls()
@@ -268,7 +264,28 @@ class MobileWindow(QWidget):
         search_row.addWidget(self._search_btn)
         root.addLayout(search_row)
 
-        self._status = QLabel("Найди трек на YouTube")
+        source_row = QHBoxLayout()
+        self._sources = QButtonGroup(self)
+        self._yandex_btn = QPushButton("Яндекс")
+        self._youtube_btn = QPushButton("YouTube")
+        for button, source in (
+            (self._yandex_btn, YANDEX),
+            (self._youtube_btn, YOUTUBE),
+        ):
+            button.setObjectName("source")
+            button.setCheckable(True)
+            button.setProperty("source", source)
+            self._sources.addButton(button)
+            source_row.addWidget(button)
+        self._sources.buttonClicked.connect(self._on_source_clicked)
+        source_row.addStretch(1)
+        account = QPushButton("Аккаунт")
+        account.setObjectName("source")
+        account.clicked.connect(lambda: AccountDialog(self).showMaximized())
+        source_row.addWidget(account)
+        root.addLayout(source_row)
+
+        self._status = QLabel()
         self._status.setObjectName("status")
         self._status.setWordWrap(True)
         root.addWidget(self._status)
@@ -313,11 +330,16 @@ class MobileWindow(QWidget):
         for button in (self._prev_btn, self._play_btn, self._next_btn):
             controls.addWidget(button, 1)
         root.addLayout(controls)
+
+        saved = str(self._settings.value(SOURCE_KEY, "") or "")
+        self._select_source(saved or (YANDEX if self.token else YOUTUBE))
         self._sync_play_button()
+        # Импорт yt-dlp и yandex-music на телефоне — секунды: заранее, в фоне.
+        self.run_job(sources.warm_up, (), lambda _: None, lambda _: None)
 
     # --- фоновые задачи ---------------------------------------------------
 
-    def _run(self, fn, args, on_done, on_fail) -> None:
+    def run_job(self, fn, args, on_done, on_fail) -> None:
         job = Job(fn, *args)
         self._jobs.add(job)
         job.setAutoDelete(False)
@@ -333,6 +355,39 @@ class MobileWindow(QWidget):
     def _set_status(self, text: str) -> None:
         self._status.setText(text)
 
+    # --- источник и аккаунт ----------------------------------------------
+
+    @property
+    def source(self) -> str:
+        button = self._sources.checkedButton()
+        return button.property("source") if button else YOUTUBE
+
+    def _select_source(self, source: str) -> None:
+        if source == YANDEX and not self.token:
+            source = YOUTUBE
+        button = self._yandex_btn if source == YANDEX else self._youtube_btn
+        button.setChecked(True)
+        self._settings.setValue(SOURCE_KEY, source)
+        self._set_status(
+            "Поиск в Яндекс Музыке"
+            if source == YANDEX
+            else "Поиск на YouTube"
+            + ("" if self.token else " · войди в Яндекс в «Аккаунте»")
+        )
+
+    def _on_source_clicked(self, button: QPushButton) -> None:
+        source = button.property("source")
+        if source == YANDEX and not self.token:
+            self._select_source(YOUTUBE)
+            self._set_status("Чтобы искать в Яндексе, войди в «Аккаунте»")
+            return
+        self._select_source(source)
+
+    def set_token(self, token: str) -> None:
+        self.token = token
+        self._settings.setValue(TOKEN_KEY, token)
+        self._select_source(YANDEX if token else YOUTUBE)
+
     # --- поиск ------------------------------------------------------------
 
     def _search(self) -> None:
@@ -341,7 +396,11 @@ class MobileWindow(QWidget):
             return
         self._search_btn.setEnabled(False)
         self._set_status("Ищем…")
-        self._run(search_youtube, (query,), self._on_results, self._on_search_failed)
+        if self.source == YANDEX:
+            fn, args = sources.search_yandex, (self.token, query)
+        else:
+            fn, args = sources.search_youtube, (query,)
+        self.run_job(fn, args, self._on_results, self._on_search_failed)
 
     def _on_results(self, results: list[Result]) -> None:
         self._search_btn.setEnabled(True)
@@ -364,41 +423,53 @@ class MobileWindow(QWidget):
         self._current = row
         self._list.setCurrentRow(row)
         result = self._results[row]
-        self._now.setText(f"{result.title}\n{result.channel}")
+        self._now.setText(f"{result.title}\n{result.artist}")
         self._sync_controls()
         self._player.stop()
         self._set_status("Загружаем трек…")
-        self._run(
-            fetch_audio,
-            (result.video_id,),
-            lambda path, r=row: self._on_fetched(r, path),
-            lambda text: self._set_status(text),
+        self.run_job(
+            sources.resolve,
+            (result, self.token, cache_dir()),
+            lambda url, r=row: self._on_resolved(r, url),
+            self._set_status,
         )
 
-    def _on_fetched(self, row: int, path: Path) -> None:
+    def _on_resolved(self, row: int, url: str) -> None:
         if row != self._current:
-            return  # пока качали, выбрали другой трек
+            return  # пока искали ссылку, выбрали другой трек
         self._set_status("")
-        self._player.setSource(QUrl.fromLocalFile(str(path)))
+        self._player.setSource(QUrl(url))
         self._player.play()
+        self._prefetch(row + 1)
+
+    def _prefetch(self, row: int) -> None:
+        """YouTube качается долго — следующий трек готовим, пока играет этот.
+
+        Ссылки Яндекса живут недолго, а получаются за доли секунды: их не
+        готовим заранее.
+        """
+        if 0 <= row < len(self._results) and self._results[row].source == YOUTUBE:
+            self.run_job(
+                sources.fetch_youtube,
+                (self._results[row].track_id, cache_dir()),
+                lambda _: None,
+                lambda _: None,
+            )
 
     def _toggle(self) -> None:
-        if self._player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
+        if self._is_playing():
             self._player.pause()
         elif self._player.source().isEmpty():
             self._play_at(max(0, self._current))
         else:
             self._player.play()
 
-    def _sync_play_button(self, *_: object) -> None:
-        playing = (
-            self._player.playbackState() == QMediaPlayer.PlaybackState.PlayingState
-        )
-        self._play_btn.setText("⏸" if playing else "▶")
-        self._sync_controls()
-
     def _is_playing(self) -> bool:
         return self._player.playbackState() == QMediaPlayer.PlaybackState.PlayingState
+
+    def _sync_play_button(self, *_: object) -> None:
+        self._play_btn.setText("⏸" if self._is_playing() else "▶")
+        self._sync_controls()
 
     def _sync_controls(self) -> None:
         if not 0 <= self._current < len(self._results):
@@ -406,7 +477,7 @@ class MobileWindow(QWidget):
         result = self._results[self._current]
         self._controls.update(
             result.title,
-            result.channel,
+            result.artist,
             self._is_playing(),
             self._player.position(),
             self._player.duration() or result.duration * 1000,
@@ -453,12 +524,12 @@ class MobileWindow(QWidget):
 
 def main() -> None:
     app = QApplication(sys.argv)
-    app.setApplicationName("Quantis")
+    app.setApplicationName("QuantisMobile")
     app.setOrganizationName("ReallyFun")
     app.setStyleSheet(STYLE)
     _install_ca_bundle()  # после QApplication: нужен путь к кэшу приложения
     window = MobileWindow()
-    if os.environ.get("ANDROID_ARGUMENT") or hasattr(sys, "getandroidapilevel"):
+    if hasattr(sys, "getandroidapilevel"):
         window.showMaximized()
     else:
         window.resize(420, 820)  # проверка на компьютере: размер телефона

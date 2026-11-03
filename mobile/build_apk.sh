@@ -14,12 +14,21 @@ ORIG_PYSIDE_WHEEL="$CACHE/wheels/pyside6-6.12.0-6.12.0-cp310-abi3-android_${ARCH
 PYSIDE_WHEEL="$CACHE/wheels/patched/$(basename "$ORIG_PYSIDE_WHEEL")"
 SHIBOKEN_WHEEL="$CACHE/wheels/shiboken6-6.12.0-6.12.0-cp310-abi3-android_${ARCH}.whl"
 
-# yt-dlp — чистый Python: кладём исходники рядом с main.py,
-# python-for-android упакует их вместе с приложением.
+# Зависимости — чистый Python: кладём исходники рядом с main.py,
+# python-for-android упакует их вместе с приложением. charset_normalizer
+# не берём: он скомпилирован под компьютер, а requests работает и без него.
 SITE="$("$ROOT/.venv/bin/python" -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
-rm -rf "${HERE:?}/yt_dlp"
-cp -r "$SITE/yt_dlp" "$HERE/yt_dlp"
-find "$HERE/yt_dlp" -name __pycache__ -type d -prune -exec rm -rf {} +
+VENDORED=(yt_dlp yandex_music requests urllib3 idna typing_extensions.py socks.py)
+for item in "${VENDORED[@]}"; do
+    rm -rf "${HERE:?}/$item"
+    cp -r "$SITE/$item" "$HERE/$item"
+done
+find "$HERE" -name __pycache__ -type d -prune -exec rm -rf {} +
+if find "$HERE" -name '*.so' | grep -q .; then
+    echo "В зависимостях есть скомпилированные модули — на телефоне не загрузятся" >&2
+    find "$HERE" -name '*.so' >&2
+    exit 1
+fi
 
 # Сертификаты — модулем .py: buildozer не упаковывает .pem. Рядом лежит
 # свой certifi.py: yt-dlp грузит сертификаты по его where().
