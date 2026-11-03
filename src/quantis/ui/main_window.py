@@ -1,8 +1,18 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, QPoint, QPropertyAnimation, QRect, QSize, Qt, QUrl
+from PySide6.QtCore import (
+    QEvent,
+    QPoint,
+    QPropertyAnimation,
+    QRect,
+    QSize,
+    Qt,
+    QTimer,
+    QUrl,
+)
 from PySide6.QtGui import (
     QColor,
     QDesktopServices,
@@ -307,11 +317,16 @@ class QuantisMainWindow(QMainWindow):
         )
         from quantis.providers.library_index import LibraryIndex
 
-        # Слушатель зовётся из рабочего потока скана — в UI переходим через мост.
+        # Индекс меняется на каждом скачанном, удалённом или переименованном
+        # файле («Записать теги» — сотни подряд): обновляем «Скачанные» один
+        # раз после серии изменений.
+        self._downloaded_refresh_timer = QTimer(self)
+        self._downloaded_refresh_timer.setSingleShot(True)
+        self._downloaded_refresh_timer.setInterval(300)
+        self._downloaded_refresh_timer.timeout.connect(self._on_library_changed)
+        # Слушатель зовётся из рабочего потока — в UI переходим через мост.
         LibraryIndex.instance().add_listener(
-            lambda: self._bridge.invoke_main(
-                lambda: self._home_vm.refresh_downloaded(self._bridge)
-            )
+            lambda: self._bridge.invoke_main(self._downloaded_refresh_timer.start)
         )
         self._playlist_vm.tracks_mutated.connect(self._on_playlist_tracks_mutated)
         self._ui_prefs.theme_changed.connect(self._on_theme_changed)
@@ -347,7 +362,6 @@ class QuantisMainWindow(QMainWindow):
         self._sync_background_layers()
         self._on_page_changed(self.PAGE_HOME)
         # Данные главной — после первого кадра, чтобы не тормозить show().
-        from PySide6.QtCore import QTimer
 
         QTimer.singleShot(0, lambda: self._home_vm.request_load(self._bridge))
         QTimer.singleShot(0, self._maybe_check_for_update)
@@ -366,8 +380,6 @@ class QuantisMainWindow(QMainWindow):
             return
         self._prewarm_queue.pop(0)()
         if self._prewarm_queue:
-            from PySide6.QtCore import QTimer
-
             QTimer.singleShot(400, self._prewarm_next_page)
 
     def _on_app_state_changed(self, state) -> None:
@@ -901,6 +913,33 @@ class QuantisMainWindow(QMainWindow):
             self._home_vm.refresh_downloaded(self._bridge)
         elif isinstance(playlist, UserPlaylist):
             schedule(self._home_vm.refresh_user_playlists(self._bridge), self._bridge)
+
+    def _on_library_changed(self) -> None:
+        from quantis.models import DownloadPlaylist
+        from quantis.ui.async_ui import schedule
+
+        self._home_vm.refresh_downloaded(self._bridge)
+        if self._playlist_page is not None and isinstance(
+            self._playlist_vm.playlist, DownloadPlaylist
+        ):
+            schedule(self._reload_open_downloaded_playlist(), self._bridge)
+
+    async def _reload_open_downloaded_playlist(self) -> None:
+        from quantis.models import DownloadPlaylist
+
+        tracks = await asyncio.to_thread(DownloadPlaylist.get_tracks_from_music_dir)
+
+        def apply() -> None:
+            # Пока читали индекс, пользователь мог уйти со страницы.
+            if self._playlist_page is None or not isinstance(
+                self._playlist_vm.playlist, DownloadPlaylist
+            ):
+                return
+            playlist = DownloadPlaylist(tracks=tracks)
+            self._playlist_vm.set_playlist(playlist)
+            self._header.set_page(playlist.name, f"{len(playlist)} треков")
+
+        self._bridge.invoke_main(apply)
 
     async def _reload_open_user_playlist(self, name: str) -> None:
         from quantis.services.user_playlists import UserPlaylistsService

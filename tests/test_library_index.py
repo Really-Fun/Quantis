@@ -161,6 +161,50 @@ async def test_listener_called_after_refresh(music, cache):
     assert calls == [True]
 
 
+def test_listener_called_after_put_and_discard(music, cache):
+    # Скачивание и удаление меняют индекс без скана: список «Скачанные»
+    # должен узнать об этом.
+    calls = []
+    index = new_index(music, cache)
+    index.add_listener(lambda: calls.append("x"))
+    path = make_audio(music, "42_Song_A.mp3")
+    index.put(path)
+    assert calls == ["x"]
+    path.unlink()
+    index.discard(path)
+    assert calls == ["x", "x"]
+
+
+def test_listener_not_called_when_nothing_changed(music, cache):
+    calls = []
+    index = new_index(music, cache)
+    index.add_listener(lambda: calls.append("x"))
+    index.put(music / "missing.mp3")  # файла нет
+    index.discard(music / "never_indexed.mp3")
+    assert calls == []
+
+
+def test_listener_called_when_lookup_drops_missing_file(music, cache):
+    calls = []
+    index = new_index(music, cache)
+    path = make_audio(music, "42_Song_A.mp3")
+    index.put(path)
+    index.add_listener(lambda: calls.append("x"))
+    path.unlink()  # файл удалили мимо приложения
+    assert index.path_for("yandex", "42") is None
+    assert calls == ["x"]
+
+
+def test_listener_error_does_not_break_put(music, cache):
+    index = new_index(music, cache)
+
+    def boom():
+        raise RuntimeError("listener failed")
+
+    index.add_listener(boom)
+    assert index.put(make_audio(music, "42_Song_A.mp3")) is not None
+
+
 def test_has_without_source(music, cache):
     index = new_index(music, cache)
     index.put(make_audio(music, "42_Song_A.mp3"))

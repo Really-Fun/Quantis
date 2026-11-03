@@ -296,12 +296,15 @@ class LibraryIndex:
             self._save_cache(music_dir, new)
         except OSError:
             logger.warning("Не удалось сохранить кэш индекса", exc_info=True)
+        self._notify()
+        return True
+
+    def _notify(self) -> None:
         for callback in list(self._listeners):
             try:
                 callback()
             except Exception:
                 logger.exception("Ошибка слушателя индекса")
-        return True
 
     async def refresh(self) -> None:
         """Пересканирует папку в рабочем потоке; читает теги только у изменившихся."""
@@ -346,7 +349,10 @@ class LibraryIndex:
         await self._event.wait()
 
     def add_listener(self, callback: Callable[[], None]) -> None:
-        """Слушатель вызывается из рабочего потока после `refresh`."""
+        """Слушатель любого изменения: скан, `put`, удаление записи.
+
+        Вызывается из того потока, где случилось изменение (часто рабочего).
+        """
         self._listeners.append(callback)
 
     def reset(self) -> None:
@@ -383,6 +389,7 @@ class LibraryIndex:
             self._rebuild_keys(music_dir)
             files = dict(self._files)
         self._save_cache(music_dir, files)
+        self._notify()
 
     def entry_for(self, source: str, track_id: str) -> IndexEntry | None:
         return self._lookup(_key(source, track_id))
@@ -438,6 +445,7 @@ class LibraryIndex:
             files = dict(self._files)
             entry = self._entry(path.name, music_dir) if rec else None
         self._save_cache(music_dir, files)
+        self._notify()
         return entry
 
     def discard(self, path: Path) -> None:
