@@ -38,7 +38,6 @@ from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from PySide6.QtWidgets import (
     QApplication,
     QButtonGroup,
-    QDialog,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -47,6 +46,7 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScroller,
     QSlider,
+    QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -148,12 +148,16 @@ QSlider::handle:horizontal {
 """
 
 
-class AccountDialog(QDialog):
-    """Вход в Яндекс Музыку по OAuth-токену, как в настольном Quantis."""
+class AccountPage(QWidget):
+    """Вход в Яндекс Музыку по OAuth-токену, как в настольном Quantis.
+
+    Страница внутри главного окна, а не QDialog: второе окно верхнего
+    уровня на Android роняло Qt («Failed to acquire deadlock protector for
+    QAndroidPlatformOpenGLWindow::eglSurface()»).
+    """
 
     def __init__(self, window: MobileWindow) -> None:
-        super().__init__(window)
-        self.setWindowTitle("Аккаунт")
+        super().__init__()
         self._window = window
         root = QVBoxLayout(self)
         root.setContentsMargins(18, 18, 18, 18)
@@ -182,13 +186,18 @@ class AccountDialog(QDialog):
         logout = QPushButton("Выйти")
         logout.clicked.connect(self._on_logout)
         close = QPushButton("Закрыть")
-        close.clicked.connect(self.accept)
-        for button in (self._save, logout, close):
-            row.addWidget(button, 1)
+        close.clicked.connect(window.show_player)
+        row.addWidget(self._save, 2)  # самая длинная надпись
+        row.addWidget(logout, 1)
+        row.addWidget(close, 1)
         root.addLayout(row)
         root.addStretch(1)
-        if window.token:
-            self._check(window.token)
+
+    def refresh(self) -> None:
+        self._token.setText(self._window.token)
+        self._status.clear()
+        if self._window.token:
+            self._check(self._window.token)
 
     def _check(self, token: str) -> None:
         self._save.setEnabled(False)
@@ -250,7 +259,13 @@ class MobileWindow(QWidget):
             lambda _err, text: self._set_status(f"Ошибка плеера: {text}")
         )
 
-        root = QVBoxLayout(self)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(0, 0, 0, 0)
+        self._stack = QStackedWidget()
+        outer.addWidget(self._stack)
+        player_page = QWidget()
+        self._stack.addWidget(player_page)
+        root = QVBoxLayout(player_page)
         root.setContentsMargins(14, 14, 14, 14)
         root.setSpacing(10)
 
@@ -281,7 +296,7 @@ class MobileWindow(QWidget):
         source_row.addStretch(1)
         account = QPushButton("Аккаунт")
         account.setObjectName("source")
-        account.clicked.connect(lambda: AccountDialog(self).showMaximized())
+        account.clicked.connect(self.show_account)
         source_row.addWidget(account)
         root.addLayout(source_row)
 
@@ -330,6 +345,9 @@ class MobileWindow(QWidget):
         for button in (self._prev_btn, self._play_btn, self._next_btn):
             controls.addWidget(button, 1)
         root.addLayout(controls)
+
+        self._account = AccountPage(self)
+        self._stack.addWidget(self._account)
 
         saved = str(self._settings.value(SOURCE_KEY, "") or "")
         self._select_source(saved or (YANDEX if self.token else YOUTUBE))
@@ -382,6 +400,13 @@ class MobileWindow(QWidget):
             self._set_status("Чтобы искать в Яндексе, войди в «Аккаунте»")
             return
         self._select_source(source)
+
+    def show_account(self) -> None:
+        self._account.refresh()
+        self._stack.setCurrentWidget(self._account)
+
+    def show_player(self) -> None:
+        self._stack.setCurrentIndex(0)
 
     def set_token(self, token: str) -> None:
         self.token = token
