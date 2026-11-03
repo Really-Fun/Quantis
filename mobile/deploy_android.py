@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import os
 import runpy
+import shutil
 import sys
 from pathlib import Path
 
@@ -26,6 +27,7 @@ import PySide6
 SCRIPTS = Path(PySide6.__file__).parent / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
+import deploy_lib  # noqa: E402
 from deploy_lib.android import android_config, buildozer  # noqa: E402
 
 HERE = Path(__file__).resolve().parent
@@ -43,7 +45,7 @@ EXTRA = {
     # Служебное для сборки не должно попадать в архив приложения.
     "source.exclude_dirs": "android,deployment,bin,.buildozer,__pycache__",
     "source.exclude_patterns": (
-        "deploy_android.py,build_apk.sh,README.md,pysidedeploy.spec,buildozer.spec"
+        "deploy_android.py,slim_wheel.py,build_apk.sh,README.md,pysidedeploy.spec,buildozer.spec"
     ),
 }
 
@@ -132,6 +134,46 @@ def _qt_plugins(self) -> list[str]:
 
 
 android_config.AndroidConfig.qt_plugins = property(_qt_plugins, _original_plugins.fset)
+
+
+# Инструмент в начале и в конце удаляет .buildozer — сборку p4a с Python,
+# OpenSSL и dist, и каждая сборка шла с нуля (~6 мин). build_apk.sh делает
+# .buildozer ссылкой на кэш и сам решает, когда его сбросить; здесь чистим
+# только сгенерированное (deployment/ и spec).
+def _cleanup(config, is_android: bool = False) -> None:
+    generated = config.generated_files_path.resolve()
+    if generated.is_relative_to(config.project_dir.resolve()) and generated.exists():
+        shutil.rmtree(generated)  # .buildozer там — ссылка, rmtree её не раскрывает
+    (config.project_dir / "buildozer.spec").unlink(missing_ok=True)
+
+
+deploy_lib.cleanup = _cleanup
+
+# Рецепт PySide6 распаковывает колесо в site-packages и копирует Qt/lib в
+# lib/ APK. Вторая копия библиотек в site-packages не нужна: загрузчик
+# находит их по имени в lib/. Минус ~60 МБ в libpybundle.so.
+_original_create_recipe = android_config.create_recipe
+_RECIPE_TAIL = """
+        info("[quantis] Qt/lib и jar уже в lib/ APK: убираем их из site-packages")
+        shutil.rmtree(lib_dir)
+        shutil.rmtree(lib_dir.parent.parent / "jar", ignore_errors=True)
+"""
+
+
+def _create_recipe(*args, **kwargs) -> None:
+    _original_create_recipe(*args, **kwargs)
+    component = kwargs.get("component", args[1] if len(args) > 1 else "")
+    if not component.startswith("PySide"):
+        return
+    path = Path(kwargs["generated_files_path"]) / "recipes" / component / "__init__.py"
+    text = path.read_text(encoding="utf-8")
+    marker = "\n\nrecipe = PySideRecipe()"
+    if marker not in text:
+        raise RuntimeError(f"[quantis] не нашёл конец build_arch в {path}")
+    path.write_text(text.replace(marker, _RECIPE_TAIL + marker, 1), encoding="utf-8")
+
+
+android_config.create_recipe = _create_recipe
 
 script = SCRIPTS / "android_deploy.py"
 sys.argv = [str(script), *sys.argv[1:]]

@@ -117,7 +117,7 @@ wallpaper_clips/*
 mobile/yt_dlp/
 
 mobile/ca_bundle.py
-mobile/.buildozer/
+mobile/.buildozer
 mobile/bin/
 mobile/deployment/
 mobile/*.apk
