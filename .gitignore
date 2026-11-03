@@ -115,7 +115,7 @@ cookie.txt
 wallpaper_clips/*
 # Quantis Mobile: копии пакетов и файлы сборки APK
 mobile/yt_dlp/
-mobile/certifi/
+
 mobile/ca_bundle.py
 mobile/.buildozer/
 mobile/bin/

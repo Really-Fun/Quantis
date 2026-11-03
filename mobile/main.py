@@ -49,8 +49,6 @@ def _install_ca_bundle() -> None:
     Без них любой HTTPS-запрос yt-dlp падает на проверке. Сборка кладёт
     сертификаты в модуль ca_bundle.py (файлы .pem в APK не попадают).
     """
-    if os.environ.get("SSL_CERT_FILE"):
-        return
     try:
         from ca_bundle import PEM
     except ImportError:  # на компьютере сертификаты есть и без него
@@ -68,6 +66,7 @@ def _install_ca_bundle() -> None:
     if not target.exists() or target.read_text(encoding="ascii") != PEM:
         target.write_text(PEM, encoding="ascii")
     os.environ["SSL_CERT_FILE"] = str(target)
+    os.environ["QUANTIS_CA_FILE"] = str(target)  # для certifi.py рядом
 
 
 @dataclass(frozen=True)
