@@ -72,6 +72,8 @@ database/*.sqlite
 database/*.sqlite3
 player_history.db*
 player_history.db-shm*
+library_index.json
+library_index.json.part
 player_history.db-wal*
 
 # Local playlists storage
