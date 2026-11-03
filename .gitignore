@@ -123,3 +123,4 @@ mobile/deployment/
 mobile/*.apk
 mobile/buildozer.spec
 mobile/pysidedeploy.spec
+mobile/android/build/

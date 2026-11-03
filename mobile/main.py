@@ -22,12 +22,14 @@ from pathlib import Path
 if hasattr(sys, "getandroidapilevel"):
     os.environ.setdefault("QT_MEDIA_BACKEND", "android")
 
+from android_media import NEXT, PAUSE, PLAY, PREV, SEEK_BASE, MediaControls
 from PySide6.QtCore import (
     QObject,
     QRunnable,
     QStandardPaths,
     Qt,
     QThreadPool,
+    QTimer,
     QUrl,
     Signal,
 )
@@ -234,6 +236,13 @@ class MobileWindow(QWidget):
         self._current = -1
         self._seeking = False
 
+        # Плашка в шторке Android; на компьютере — пустышка.
+        self._controls = MediaControls()
+        self._controls_timer = QTimer(self)
+        self._controls_timer.setInterval(400)
+        self._controls_timer.timeout.connect(self._poll_controls)
+        self._controls_timer.start()
+
         self._player = QMediaPlayer(self)
         self._audio = QAudioOutput(self)
         self._player.setAudioOutput(self._audio)
@@ -356,6 +365,7 @@ class MobileWindow(QWidget):
         self._list.setCurrentRow(row)
         result = self._results[row]
         self._now.setText(f"{result.title}\n{result.channel}")
+        self._sync_controls()
         self._player.stop()
         self._set_status("Загружаем трек…")
         self._run(
@@ -385,6 +395,37 @@ class MobileWindow(QWidget):
             self._player.playbackState() == QMediaPlayer.PlaybackState.PlayingState
         )
         self._play_btn.setText("⏸" if playing else "▶")
+        self._sync_controls()
+
+    def _is_playing(self) -> bool:
+        return self._player.playbackState() == QMediaPlayer.PlaybackState.PlayingState
+
+    def _sync_controls(self) -> None:
+        if not 0 <= self._current < len(self._results):
+            return
+        result = self._results[self._current]
+        self._controls.update(
+            result.title,
+            result.channel,
+            self._is_playing(),
+            self._player.position(),
+            self._player.duration() or result.duration * 1000,
+        )
+
+    def _poll_controls(self) -> None:
+        """Кнопки плашки: Java складывает нажатия в очередь, забираем здесь."""
+        while (command := self._controls.poll()) >= 0:
+            if command == PLAY and not self._is_playing():
+                self._toggle()
+            elif command == PAUSE:
+                self._player.pause()
+            elif command == NEXT:
+                self._play_at(self._current + 1)
+            elif command == PREV:
+                self._play_at(self._current - 1)
+            elif command >= SEEK_BASE:
+                self._player.setPosition(command - SEEK_BASE)
+                self._sync_controls()
 
     def _on_media_status(self, status: QMediaPlayer.MediaStatus) -> None:
         if status == QMediaPlayer.MediaStatus.EndOfMedia:
@@ -398,10 +439,16 @@ class MobileWindow(QWidget):
     def _on_duration(self, ms: int) -> None:
         self._seek.setRange(0, max(0, ms))
         self._len_label.setText(_fmt(ms))
+        self._sync_controls()
 
     def _on_seek_released(self) -> None:
         self._seeking = False
         self._player.setPosition(self._seek.value())
+        self._sync_controls()
+
+    def closeEvent(self, event) -> None:
+        self._controls.release()
+        super().closeEvent(event)
 
 
 def main() -> None:

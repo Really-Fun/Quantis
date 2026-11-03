@@ -54,10 +54,13 @@ with zipfile.ZipFile(src) as zin, zipfile.ZipFile(dst, "w", zipfile.ZIP_DEFLATED
         zout.writestr(item, data)
 PY
 # Список библиотек инструмент кэширует в spec: пусть считает заново.
-rm -f "$HERE/pysidedeploy.spec"
+rm -f "$HERE/pysidedeploy.spec" "$HERE/buildozer.spec"
+
+# Плашка в шторке и служба mediaPlayback: Java-библиотека quantis-media.aar.
+export QUANTIS_AAR="$("$HERE/android/build_aar.sh")"
 
 cd "$HERE"
-pyside6-android-deploy \
+python "$HERE/deploy_android.py" \
     --name QuantisMobile \
     --wheel-pyside "$PYSIDE_WHEEL" \
     --wheel-shiboken "$SHIBOKEN_WHEEL" \

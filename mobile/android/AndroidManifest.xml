@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Манифест библиотеки quantis-media.aar: Gradle вливает его в манифест
+     приложения. Так объявляется служба с foregroundServiceType, которую
+     шаблон python-for-android объявить не даёт. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="org.quantis.mobile">
+
+    <uses-sdk android:minSdkVersion="28" />
+
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+
+    <application>
+        <service
+            android:name="org.quantis.mobile.PlaybackService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+    </application>
+</manifest>
