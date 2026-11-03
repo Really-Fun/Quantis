@@ -39,10 +39,45 @@ EXTRA = {
 _original_update = buildozer.BuildozerConfig.update_config
 
 
+# Загрузчик Qt грузит --qt-libs по порядку, а инструмент собирает их через
+# set(): порядок случайный от сборки к сборке. Когда Multimedia шла раньше
+# Core, её JNI_OnLoad падал (QJniEnvironment::getJniEnv, null) до старта
+# Python. Ставим модули в порядке зависимостей.
+_QT_ORDER = ["Core", "Gui", "Network", "Concurrent", "Widgets", "Multimedia"]
+
+
+def _ordered(names: list[str], key) -> list[str]:
+    return sorted(names, key=lambda n: (key(n), n))
+
+
+def _fix_load_order(extra_args: str) -> str:
+    parts = []
+    for part in extra_args.split():
+        if "=" not in part:
+            parts.append(part)
+            continue
+        option, _, value = part.partition("=")
+        names = [n for n in value.split(",") if n]
+        if option == "--qt-libs":
+            names = _ordered(
+                names,
+                lambda n: _QT_ORDER.index(n) if n in _QT_ORDER else len(_QT_ORDER),
+            )
+        elif option == "--load-local-libs":
+            # платформенный плагин — первым: остальным нужен готовый Qt
+            names = _ordered(names, lambda n: 0 if "platforms" in n else 1)
+        parts.append(f"{option}={','.join(names)}")
+    return " ".join(parts)
+
+
 def _update_config(self) -> None:
     for key, value in EXTRA.items():
         self.set_value("app", key, value, raise_warning=False)
         print(f"[quantis] buildozer {key} = {self.get_value('app', key)}")
+    extra_args = self.get_value("app", "p4a.extra_args") or ""
+    fixed = _fix_load_order(extra_args)
+    self.set_value("app", "p4a.extra_args", fixed, raise_warning=False)
+    print(f"[quantis] buildozer p4a.extra_args = {fixed}")
     _original_update(self)
 
 
