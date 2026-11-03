@@ -231,6 +231,12 @@ class MobileWindow(QWidget):
         self._results: list[Result] = []
         self._current = -1
         self._seeking = False
+        # Пользователь хочет, чтобы играло: трек выбран и не поставлен на паузу.
+        # Пока ссылка готовится, плашке и службе сообщаем «играет»: службу
+        # переднего плана Android даёт запустить только с открытого
+        # приложения, а без неё свёрнутое приложение замораживается — и
+        # трек, выбранный перед сворачиванием, так и не начинался.
+        self._wants_play = False
         self.token = str(self._settings.value(TOKEN_KEY, "") or "")
         self._proxy = StreamProxy()
 
@@ -442,6 +448,7 @@ class MobileWindow(QWidget):
         self._list.setCurrentRow(row)
         result = self._results[row]
         self._now.setText(f"{result.title}\n{result.artist}")
+        self._wants_play = True
         self._sync_controls()
         self._player.stop()
         self._set_status("Загружаем трек…")
@@ -449,8 +456,13 @@ class MobileWindow(QWidget):
             sources.resolve,
             (result, self.token, self._proxy),
             lambda url, r=row: self._on_resolved(r, url),
-            self._set_status,
+            self._on_resolve_failed,
         )
+
+    def _on_resolve_failed(self, text: str) -> None:
+        self._wants_play = False
+        self._set_status(text)
+        self._sync_controls()
 
     def _on_resolved(self, row: int, url: str) -> None:
         if row != self._current:
@@ -476,10 +488,12 @@ class MobileWindow(QWidget):
 
     def _toggle(self) -> None:
         if self._is_playing():
+            self._wants_play = False
             self._player.pause()
         elif self._player.source().isEmpty():
             self._play_at(max(0, self._current))
         else:
+            self._wants_play = True
             self._player.play()
 
     def _is_playing(self) -> bool:
@@ -496,7 +510,7 @@ class MobileWindow(QWidget):
         self._controls.update(
             result.title,
             result.artist,
-            self._is_playing(),
+            self._is_playing() or self._wants_play,
             self._player.position(),
             self._player.duration() or result.duration * 1000,
         )
@@ -507,6 +521,7 @@ class MobileWindow(QWidget):
             if command == PLAY and not self._is_playing():
                 self._toggle()
             elif command == PAUSE:
+                self._wants_play = False
                 self._player.pause()
             elif command == NEXT:
                 self._play_at(self._current + 1)
