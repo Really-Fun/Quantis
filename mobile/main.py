@@ -16,6 +16,12 @@ import traceback
 from dataclasses import dataclass
 from pathlib import Path
 
+# На телефоне FFmpeg-бэкенд Qt открывал поток AAudio, тот сразу отключался
+# («stream disconnected»), и так по кругу: трек «играл» без звука. Системный
+# MediaPlayer Android файл m4a играет сам. Задать до импорта QtMultimedia.
+if hasattr(sys, "getandroidapilevel"):
+    os.environ.setdefault("QT_MEDIA_BACKEND", "android")
+
 from PySide6.QtCore import (
     QObject,
     QRunnable,
