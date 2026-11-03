@@ -1,9 +1,11 @@
 """Плашка плеера в шторке Android: Python → Java MediaBridge через JNI.
 
-В PySide для Android нет QJniObject, поэтому JNI вызывается через ctypes:
-JavaVM и Context отдаёт сам Qt (QtAndroidPrivate::javaVM/context из
-libQt6Core). Класс приложения грузится через ClassLoader контекста —
-FindClass из потока Qt видит только системные классы.
+В PySide для Android нет QJniObject, поэтому JNI вызывается через ctypes.
+JavaVM отдаёт Qt (QtAndroidPrivate::javaVM из libQt6Core — голый указатель).
+Context — через Java: QtNative.getContext(). Сишный QtAndroidPrivate::context()
+не годится: он возвращает QJniObject по значению (через скрытый указатель
+на результат), и ctypes получал мусор — JNI ронял приложение. Класс
+приложения грузится через ClassLoader контекста.
 
 Все вызовы — из главного потока Qt (слоты и QTimer): JNIEnv привязан к
 потоку. Ссылки, созданные здесь, удаляются сразу: Python не возвращается
@@ -32,6 +34,7 @@ _GET_OBJECT_CLASS = 31
 _GET_METHOD_ID = 33
 _CALL_OBJECT_METHOD_A = 36
 _GET_STATIC_METHOD_ID = 113
+_CALL_STATIC_OBJECT_METHOD_A = 116
 _CALL_STATIC_LONG_METHOD_A = 134
 _CALL_STATIC_VOID_METHOD_A = 143
 _NEW_STRING = 163
@@ -54,8 +57,6 @@ class _Jni:
         qtcore = ctypes.CDLL(f"libQt6Core_{abi}.so")
         java_vm = qtcore._ZN16QtAndroidPrivate6javaVMEv
         java_vm.restype = _P
-        context = qtcore._ZN16QtAndroidPrivate7contextEv
-        context.restype = _P
         vm = java_vm()
         if not vm:
             raise RuntimeError("Qt не отдал JavaVM")
@@ -64,9 +65,45 @@ class _Jni:
         if attach(vm, ctypes.byref(env), None) != 0:
             raise RuntimeError("AttachCurrentThread не удался")
         self.env = env.value
-        self.context = context()
-        if not self.context:
-            raise RuntimeError("Qt не отдал Context")
+        self.context = self._app_context()
+
+    def _static_object(self, class_name: str, method: str, sig: str) -> int:
+        cls = self.call(
+            _FIND_CLASS, _P, class_name.encode(), argtypes=(ctypes.c_char_p,)
+        )
+        if not cls:
+            raise RuntimeError(f"нет класса {class_name}")
+        try:
+            mid = self.method_id(cls, method, sig, static=True)
+            return self.call(_CALL_STATIC_OBJECT_METHOD_A, _P, cls, mid, self.jvalues())
+        finally:
+            self.delete(cls)
+
+    def _app_context(self) -> int:
+        """Context приложения глобальной ссылкой (переживает любые кадры)."""
+        attempts = (
+            (
+                "org/qtproject/qt/android/QtNative",
+                "getContext",
+                "()Landroid/content/Context;",
+            ),
+            (
+                "android/app/ActivityThread",
+                "currentApplication",
+                "()Landroid/app/Application;",
+            ),
+        )
+        for class_name, method, sig in attempts:
+            try:
+                local = self._static_object(class_name, method, sig)
+            except RuntimeError:
+                log.warning("Context через %s.%s не получен", class_name, method)
+                continue
+            if local:
+                context = self.call(_NEW_GLOBAL_REF, _P, local)
+                self.delete(local)
+                return context
+        raise RuntimeError("Не удалось получить Context приложения")
 
     @staticmethod
     def _fn(obj: int, index: int, restype, *argtypes):
