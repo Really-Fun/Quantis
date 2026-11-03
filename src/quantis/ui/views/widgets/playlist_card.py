@@ -152,19 +152,24 @@ def wrap_column_count(width: int, min_item_width: int, spacing: int, count: int)
     return min(cols, count)
 
 
+_BALANCED_MAX_ITEM = 320
+
+
 def balanced_column_count(
     width: int, min_item_width: int, spacing: int, count: int
 ) -> int:
     """Колонки, при которых ряды заполнены поровну (6 при 5 местах — 3 + 3).
 
-    Если всё влезает в один ряд, колонок столько, сколько влезает: одна
-    плитка не растягивается во всю ширину.
+    Если всё влезает в один ряд, плитки растягиваются на весь ряд, но не
+    шире ``_BALANCED_MAX_ITEM``: одна плитка не занимает всю ширину, а шесть
+    на широком окне не оставляют пустое место справа.
     """
     if count <= 0 or width <= 0:
         return 1
     fit = max(1, (width + spacing) // (min_item_width + spacing))
     if count <= fit:
-        return fit
+        narrowest = -(-(width + spacing) // (_BALANCED_MAX_ITEM + spacing))
+        return min(fit, max(count, narrowest))
     rows = (count + fit - 1) // fit
     return (count + rows - 1) // rows
 
