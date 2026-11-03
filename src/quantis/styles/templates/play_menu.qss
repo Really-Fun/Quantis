@@ -24,10 +24,11 @@ QWidget#playerRight {
     background: rgba(${tint_rgb}, 0.2);
 }
 
+/* Высота — только PlayerBar.setFixedHeight: min-height здесь её перебивал,
+   и док сжимался на страницах с длинным содержимым. */
 #playerDock {
     background: transparent;
     border: none;
-    min-height: 80px;
 }
 
 #controlButton[accent=true]:hover {

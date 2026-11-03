@@ -17,10 +17,6 @@ QScrollBar::handle:vertical {
     background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #00e5ff, stop:1 ${tint});
 }
 
-#playerDock {
-    min-height: 0;
-}
-
 QFrame#appHeader {
     border-bottom: none;
 }

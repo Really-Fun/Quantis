@@ -16,10 +16,6 @@ QScrollBar:vertical {
     width: 4px;
 }
 
-#playerDock {
-    min-height: 0;
-}
-
 QFrame#appHeader {
     border-bottom: none;
 }
