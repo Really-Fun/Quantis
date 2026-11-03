@@ -1,9 +1,9 @@
 """Источники треков беты: YouTube (yt-dlp) и Яндекс Музыка (yandex-music).
 
 Все функции блокирующие: их вызывают из пула потоков, а не из интерфейса.
-resolve() отдаёт адрес для QMediaPlayer: локальный файл (YouTube качается
-целиком — ссылкам googlevideo нужны заголовки, которых QMediaPlayer не
-передаёт) или прямую ссылку Яндекса, которая играет потоком сразу.
+resolve() отдаёт адрес для QMediaPlayer: прямую ссылку Яндекса или адрес
+локального прокси для YouTube (ссылкам googlevideo нужны заголовки, которых
+QMediaPlayer не передаёт — их добавляет stream_proxy). Оба играют сразу.
 """
 
 from __future__ import annotations
@@ -13,7 +13,6 @@ import threading
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
-from pathlib import Path
 from typing import TypeVar
 
 SEARCH_LIMIT = 20
@@ -51,8 +50,20 @@ _AUDIO_FORMAT = (
 # Клиент android быстрее, но для многих видео отвечает «формат недоступен»:
 # после первого такого отказа за сессию его больше не пробуем (−1,2 с на трек).
 _android_client_ok = True
-_fetch_locks: dict[str, threading.Lock] = {}
-_fetch_locks_guard = threading.Lock()
+_stream_locks: dict[str, threading.Lock] = {}
+_stream_locks_guard = threading.Lock()
+_streams: dict[str, YoutubeStream] = {}
+
+
+@dataclass(frozen=True)
+class YoutubeStream:
+    """Прямая ссылка googlevideo и заголовки, без которых она не отвечает."""
+
+    url: str
+    headers: dict[str, str]
+    content_type: str
+    size: int | None
+    expires: float
 
 
 def search_youtube(query: str) -> list[Result]:
@@ -78,13 +89,11 @@ def search_youtube(query: str) -> list[Result]:
     return results
 
 
-def _youtube_attempts(outtmpl: str) -> list[tuple[str, dict]]:
+def _youtube_attempts() -> list[tuple[str, dict]]:
     common = {
         "quiet": True,
         "no_warnings": True,
         "noplaylist": True,
-        "noprogress": True,
-        "outtmpl": outtmpl,
         "format": _AUDIO_FORMAT,
     }
     attempts = []
@@ -108,36 +117,63 @@ def _youtube_attempts(outtmpl: str) -> list[tuple[str, dict]]:
     return attempts
 
 
-def fetch_youtube(video_id: str, cache: Path) -> Path:
-    """Скачанный звук; уже скачанный (или качающийся сейчас) — не качается снова."""
+def _expires(url: str) -> float:
+    """Срок ссылки из её параметра expire, с запасом в 5 минут."""
+    from urllib.parse import parse_qs, urlparse
+
+    try:
+        expire = float(parse_qs(urlparse(url).query)["expire"][0])
+    except (KeyError, IndexError, ValueError):
+        return time.time() + 1800
+    return expire - 300
+
+
+def youtube_stream(video_id: str, *, fresh: bool = False) -> YoutubeStream:
+    """Ссылка на звук без скачивания; живая ссылка берётся из кэша.
+
+    fresh=True — googlevideo ответил 403, ссылку нужно получить заново.
+    """
     global _android_client_ok
     import yt_dlp
 
-    with _fetch_locks_guard:
-        lock = _fetch_locks.setdefault(video_id, threading.Lock())
-    with lock:  # трек и его предзагрузка не качают один файл вдвоём
-        for existing in cache.glob(f"{video_id}.*"):
-            if existing.suffix not in (".part", ".ytdl"):
-                return existing
+    with _stream_locks_guard:
+        lock = _stream_locks.setdefault(video_id, threading.Lock())
+    with lock:  # трек и его предзагрузка не разбирают одно видео вдвоём
+        cached = _streams.get(video_id)
+        if cached is not None and not fresh and cached.expires > time.time():
+            return cached
         url = f"https://www.youtube.com/watch?v={video_id}"
         error: Exception | None = None
-        for name, opts in _youtube_attempts(str(cache / "%(id)s.%(ext)s")):
+        for name, opts in _youtube_attempts():
             try:
                 with yt_dlp.YoutubeDL(opts) as ydl:
-                    info = ydl.extract_info(url, download=True)
-                    path = Path(ydl.prepare_filename(info))
-                if path.exists():
-                    return path
+                    info = ydl.extract_info(url, download=False)
             except Exception as exc:
                 error = exc
                 if name == "android" and "format is not available" in str(exc):
                     _android_client_ok = False
+                continue
+            stream_url = info.get("url")
+            if not stream_url:
+                continue
+            ext = info.get("ext") or "m4a"
+            stream = YoutubeStream(
+                url=stream_url,
+                headers={
+                    str(k): str(v) for k, v in (info.get("http_headers") or {}).items()
+                },
+                content_type="audio/webm" if ext == "webm" else "audio/mp4",
+                size=info.get("filesize") or None,
+                expires=_expires(stream_url),
+            )
+            _streams[video_id] = stream
+            return stream
         if error is not None and "not a bot" in str(error):
             raise RuntimeError(
                 "YouTube просит подтвердить, что вы не бот. Попробуйте позже "
                 "или найдите трек в Яндексе."
             )
-        raise RuntimeError(f"Не удалось скачать трек: {error}")
+        raise RuntimeError(f"YouTube не отдал звук: {error}")
 
 
 # --- Яндекс Музыка ----------------------------------------------------------
@@ -245,8 +281,9 @@ def resolve_yandex(token: str, track_id: str) -> str:
 # --- общее ------------------------------------------------------------------
 
 
-def resolve(result: Result, token: str, cache: Path) -> str:
-    """Адрес для QMediaPlayer: file:// для YouTube, https:// для Яндекса."""
+def resolve(result: Result, token: str, proxy) -> str:
+    """Адрес для QMediaPlayer: https:// Яндекса или http://127.0.0.1 прокси."""
     if result.source == YANDEX:
         return resolve_yandex(token, result.track_id)
-    return fetch_youtube(result.track_id, cache).as_uri()
+    youtube_stream(result.track_id)  # ошибка YouTube — сейчас, а не в плеере
+    return proxy.url_for(result.track_id)

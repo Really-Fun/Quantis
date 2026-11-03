@@ -10,7 +10,9 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 
-    <application>
+    <!-- usesCleartextTraffic: плеер ходит к локальному прокси YouTube по
+         http://127.0.0.1 — с API 28 обычный http по умолчанию запрещён. -->
+    <application android:usesCleartextTraffic="true">
         <service
             android:name="org.quantis.mobile.PlaybackService"
             android:exported="false"

@@ -4,8 +4,8 @@
 aiohttp, qasync, keyring и интерфейс под мышь. Здесь yt-dlp и
 yandex-music (чистый Python, кладутся рядом при сборке) и QtMultimedia.
 
-Яндекс играет потоком по прямой ссылке. YouTube сначала качается в кэш:
-ссылкам googlevideo нужны заголовки, а QMediaPlayer их не передаёт.
+Оба источника играют сразу: Яндекс — по прямой ссылке, YouTube — через
+локальный прокси (stream_proxy.py), который добавляет нужные заголовки.
 """
 
 from __future__ import annotations
@@ -51,6 +51,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 from sources import YANDEX, YOUTUBE, Result
+from stream_proxy import StreamProxy
 
 TOKEN_KEY = "yandex/token"
 SOURCE_KEY = "search/source"
@@ -80,15 +81,6 @@ def _install_ca_bundle() -> None:
         target.write_text(PEM, encoding="ascii")
     os.environ["SSL_CERT_FILE"] = str(target)
     os.environ["QUANTIS_CA_FILE"] = str(target)  # для certifi.py рядом
-
-
-def cache_dir() -> Path:
-    base = QStandardPaths.writableLocation(
-        QStandardPaths.StandardLocation.CacheLocation
-    )
-    path = Path(base or Path.home() / ".cache" / "quantis-mobile") / "audio"
-    path.mkdir(parents=True, exist_ok=True)
-    return path
 
 
 class _Signals(QObject):
@@ -180,14 +172,14 @@ class AccountPage(QWidget):
         self._status.setObjectName("status")
         self._status.setWordWrap(True)
         root.addWidget(self._status)
-        row = QHBoxLayout()
         self._save = QPushButton("Сохранить")
         self._save.clicked.connect(self._on_save)
+        root.addWidget(self._save)  # отдельной строкой: втроём надписи не влезали
+        row = QHBoxLayout()
         logout = QPushButton("Выйти")
         logout.clicked.connect(self._on_logout)
         close = QPushButton("Закрыть")
         close.clicked.connect(window.show_player)
-        row.addWidget(self._save, 2)  # самая длинная надпись
         row.addWidget(logout, 1)
         row.addWidget(close, 1)
         root.addLayout(row)
@@ -240,6 +232,7 @@ class MobileWindow(QWidget):
         self._current = -1
         self._seeking = False
         self.token = str(self._settings.value(TOKEN_KEY, "") or "")
+        self._proxy = StreamProxy()
 
         # Плашка в шторке Android; на компьютере — пустышка.
         self._controls = MediaControls()
@@ -454,7 +447,7 @@ class MobileWindow(QWidget):
         self._set_status("Загружаем трек…")
         self.run_job(
             sources.resolve,
-            (result, self.token, cache_dir()),
+            (result, self.token, self._proxy),
             lambda url, r=row: self._on_resolved(r, url),
             self._set_status,
         )
@@ -468,15 +461,15 @@ class MobileWindow(QWidget):
         self._prefetch(row + 1)
 
     def _prefetch(self, row: int) -> None:
-        """YouTube качается долго — следующий трек готовим, пока играет этот.
+        """Ссылку YouTube разбирать секунды — для следующего трека заранее.
 
         Ссылки Яндекса живут недолго, а получаются за доли секунды: их не
         готовим заранее.
         """
         if 0 <= row < len(self._results) and self._results[row].source == YOUTUBE:
             self.run_job(
-                sources.fetch_youtube,
-                (self._results[row].track_id, cache_dir()),
+                sources.youtube_stream,
+                (self._results[row].track_id,),
                 lambda _: None,
                 lambda _: None,
             )
@@ -544,6 +537,7 @@ class MobileWindow(QWidget):
 
     def closeEvent(self, event) -> None:
         self._controls.release()
+        self._proxy.close()
         super().closeEvent(event)
 
 
