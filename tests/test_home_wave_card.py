@@ -71,3 +71,12 @@ def test_home_shows_wave_card_until_queue_has_tracks(qapp) -> None:
 def test_home_has_no_separate_moods_section(qapp) -> None:
     page = _home(qapp)
     assert not hasattr(page, "_wave_moods_section")
+
+
+def test_recent_and_recommendations_side_by_side_when_wide(qapp) -> None:
+    page = _home(qapp)
+    grid = page._lists_grid
+    assert grid.getItemPosition(grid.indexOf(page._recommend_section))[:2] == (0, 1)
+    page.resize(800, 900)
+    qapp.processEvents()
+    assert grid.getItemPosition(grid.indexOf(page._recommend_section))[:2] == (1, 0)

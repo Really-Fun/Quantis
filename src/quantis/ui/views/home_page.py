@@ -17,7 +17,7 @@ from PySide6.QtWidgets import (
 
 from quantis.core.async_bridge import AsyncBridge
 from quantis.models import Track, UserPlaylist
-from quantis.models.playlist import Playlist
+from quantis.models.playlist import Playlist, RecentlyPlayedPlaylist
 from quantis.ui.async_ui import schedule
 from quantis.ui.models import TrackListModel
 from quantis.ui.playlist_actions import (
@@ -36,7 +36,10 @@ from quantis.ui.views.widgets.playlist_card import PlaylistShelf, QuickPickShelf
 from quantis.ui.views.widgets.track_card import TrackCardDelegate
 from quantis.ui.views.widgets.wave_card import WaveCard
 
-_MAX_VISIBLE_TRACKS = 12
+_MAX_VISIBLE_TRACKS = 6
+"""Строк в «Недавнем» и «Рекомендациях»: остальное — по «Все» и «Слушать»."""
+_TWO_COLUMNS_MIN = 880
+"""Уже этого «Недавнее» и «Рекомендации» встают друг под другом."""
 _SIDE_MARGIN = 28
 _STAGE_GAP = 24
 _STAGE_TEXT_MIN = 240
@@ -118,19 +121,6 @@ class HomePage(QWidget):
         self._quick_section.add_widget_block(self._quick_shelf)
         self._layout.addWidget(self._quick_section)
 
-        self._library_section = HomeSection("Плейлисты")
-        create_btn = QToolButton()
-        create_btn.setObjectName("homeSectionAction")
-        create_btn.setText("+ Плейлист")
-        create_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        create_btn.setToolTip("Создать плейлист")
-        create_btn.clicked.connect(self._on_create_playlist)
-        self._library_section.set_header_action(create_btn)
-        self._playlist_shelf = PlaylistShelf()
-        self._playlist_shelf.playlist_activated.connect(self._on_playlist)
-        self._library_section.add_widget_block(self._playlist_shelf)
-        self._layout.addWidget(self._library_section)
-
         self._recommend_section = HomeSection(
             "Рекомендации",
             "5 треков с YouTube · в конце подгрузим ещё",
@@ -153,9 +143,9 @@ class HomePage(QWidget):
         rec_host_layout.addWidget(self._recommend_list)
         rec_host_layout.addWidget(self._recommend_empty)
         self._recommend_section.add_widget_block(rec_host)
-        self._layout.addWidget(self._recommend_section)
 
-        self._recent_section = HomeSection("Недавнее")
+        # Подзаголовок и у «Недавнего»: колонки рядом, заголовки — на одной линии.
+        self._recent_section = HomeSection("Недавнее", "Последние треки из истории")
         self._recent_list = self._make_track_table(
             self._vm.recent_model,
             on_download=self._on_download_recent,
@@ -170,7 +160,37 @@ class HomePage(QWidget):
         recent_host_layout.addWidget(self._recent_list)
         recent_host_layout.addWidget(self._recent_empty)
         self._recent_section.add_widget_block(recent_host)
-        self._layout.addWidget(self._recent_section)
+        all_recent = QToolButton()
+        all_recent.setObjectName("homeSectionAction")
+        all_recent.setText("Все")
+        all_recent.setCursor(Qt.CursorShape.PointingHandCursor)
+        all_recent.setToolTip("Вся история прослушивания")
+        all_recent.clicked.connect(self._on_recent_open)
+        self._recent_section.set_header_action(all_recent)
+
+        # «Недавнее» и «Рекомендации» рядом: на всю ширину у строк оставалось
+        # по 800 px пустоты. На узком окне — друг под другом (_relayout_lists).
+        lists = QWidget()
+        lists.setObjectName("homeTrackColumns")
+        self._lists_grid = QGridLayout(lists)
+        self._lists_grid.setContentsMargins(0, 0, 0, 0)
+        self._lists_grid.setHorizontalSpacing(_STAGE_GAP)
+        self._lists_grid.setVerticalSpacing(26)
+        self._lists_side_by_side: bool | None = None
+        self._layout.addWidget(lists)
+
+        self._library_section = HomeSection("Плейлисты")
+        create_btn = QToolButton()
+        create_btn.setObjectName("homeSectionAction")
+        create_btn.setText("+ Плейлист")
+        create_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        create_btn.setToolTip("Создать плейлист")
+        create_btn.clicked.connect(self._on_create_playlist)
+        self._library_section.set_header_action(create_btn)
+        self._playlist_shelf = PlaylistShelf()
+        self._playlist_shelf.playlist_activated.connect(self._on_playlist)
+        self._library_section.add_widget_block(self._playlist_shelf)
+        self._layout.addWidget(self._library_section)
 
         self._layout.addStretch(1)
         scroll.setWidget(content)
@@ -180,6 +200,7 @@ class HomePage(QWidget):
         self._vm.home_changed.connect(self._rebuild)
         self._vm.recent_changed.connect(self._on_recent_changed)
         self._vm.wave_moods_changed.connect(self._sync_wave_moods)
+        self._relayout_lists()
         self._sync_stage()
 
     def _make_track_table(
@@ -313,6 +334,26 @@ class HomePage(QWidget):
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
         self._relayout_stage()
+        self._relayout_lists()
+
+    def _relayout_lists(self) -> None:
+        side_by_side = self.width() - 2 * _SIDE_MARGIN >= _TWO_COLUMNS_MIN
+        if side_by_side == self._lists_side_by_side:
+            return
+        self._lists_side_by_side = side_by_side
+        grid = self._lists_grid
+        for section in (self._recent_section, self._recommend_section):
+            grid.removeWidget(section)
+        top = Qt.AlignmentFlag.AlignTop
+        grid.addWidget(self._recent_section, 0, 0, top)
+        if side_by_side:
+            grid.addWidget(self._recommend_section, 0, 1, top)
+            grid.setColumnStretch(0, 1)
+            grid.setColumnStretch(1, 1)
+        else:
+            grid.addWidget(self._recommend_section, 1, 0, top)
+            grid.setColumnStretch(0, 1)
+            grid.setColumnStretch(1, 0)
 
     def _relayout_stage(self) -> None:
         """Размер сцены и место «Дальше» — от ширины и высоты страницы.
@@ -433,6 +474,11 @@ class HomePage(QWidget):
         if self._bridge is None:
             return
         schedule(self._vm.play_wave_mood(mood), self._bridge)
+
+    def _on_recent_open(self) -> None:
+        tracks = self._vm.recent_model.all_tracks()
+        if tracks:
+            self.playlist_open_requested.emit(RecentlyPlayedPlaylist(tracks=tracks))
 
     def _on_recommendations_open(self) -> None:
         if self._bridge is None:

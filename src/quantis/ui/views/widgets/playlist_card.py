@@ -532,7 +532,7 @@ class QuickPickShelf(QWidget):
 
         self._signature: tuple | None = None
         self._grid = WrapGrid(
-            min_item_width=200, spacing=10, fixed_row_height=72, balanced=True
+            min_item_width=180, spacing=10, fixed_row_height=72, balanced=True
         )
         self._grid.setObjectName("quickPickShelfHost")
         outer.addWidget(self._empty)
