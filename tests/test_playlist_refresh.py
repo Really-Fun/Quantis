@@ -95,3 +95,18 @@ def test_plugin_track_actions_in_menu(qapp) -> None:
     finally:
         host.unregister_track_action("t.show")
         host.unregister_track_action("t.hidden")
+
+
+def test_quick_picks_skip_entries_with_their_own_home_block() -> None:
+    # Волна — карточка у сцены, «Рекомендации» и «Недавнее» — свои разделы.
+    from quantis.ui.viewmodels.home_vm import _quick_picks
+
+    wave = _CountedShell("Моя волна", count=5, cover_path=None, kind="wave")
+    recs = _CountedShell(
+        "Рекомендации", count=5, cover_path=None, kind="recommendations"
+    )
+    recent = _CountedShell("Недавно", count=5, cover_path=None, kind="recent")
+    liked = _CountedShell("Любимые", count=3, cover_path=None, kind="liked")
+    lists = [UserPlaylist(f"П{i}", (), None) for i in range(8)]
+    picks = _quick_picks([wave, recs, recent, liked, *lists])
+    assert picks == (liked, *lists[:5])

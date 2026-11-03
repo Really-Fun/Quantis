@@ -72,6 +72,21 @@ class HomeSnapshot:
     wave_source: str = "yandex"
 
 
+_OWN_HOME_BLOCK = frozenset({"wave", "recommendations", "recent"})
+"""У этих карточек на главной свой блок: в «Быстром доступе» они повторялись."""
+_QUICK_PICKS = 6
+
+
+def _quick_picks(library: list[Playlist]) -> tuple[Playlist, ...]:
+    picks = [
+        pl
+        for pl in library
+        if getattr(pl, "kind", None) not in _OWN_HOME_BLOCK
+        and not isinstance(pl, RecentlyPlayedPlaylist)
+    ]
+    return tuple(picks[:_QUICK_PICKS])
+
+
 def _with_user_playlists(
     snapshot: HomeSnapshot, user_playlists: list[UserPlaylist]
 ) -> HomeSnapshot:
@@ -82,7 +97,7 @@ def _with_user_playlists(
     library.extend(user_playlists)
     return replace(
         snapshot,
-        quick_playlists=tuple(library[:6]),
+        quick_playlists=_quick_picks(list(library)),
         library_playlists=tuple(library),
     )
 
@@ -322,10 +337,9 @@ class HomeViewModel(BaseViewModel):
                 )
             )
         library_playlists.extend(user_playlists)
-        quick = list(library_playlists[:6])
         return HomeSnapshot(
             greeting=_greeting_text(),
-            quick_playlists=tuple(quick),
+            quick_playlists=_quick_picks(library_playlists),
             library_playlists=tuple(library_playlists),
             recommendation_tracks=recommendation_tracks,
             recent_tracks=tuple(recent_tracks),
@@ -371,10 +385,9 @@ class HomeViewModel(BaseViewModel):
                         kind="liked",
                     ),
                 )
-            quick = list(library_playlists[:6])
             new_snap = HomeSnapshot(
                 greeting=_greeting_text(),
-                quick_playlists=tuple(quick),
+                quick_playlists=_quick_picks(library_playlists),
                 library_playlists=tuple(library_playlists),
                 recommendation_tracks=snap.recommendation_tracks,
                 recent_tracks=tuple(recent_tracks),
@@ -447,7 +460,7 @@ class HomeViewModel(BaseViewModel):
                     library.insert(0, wave_shell)
                 self._snapshot = HomeSnapshot(
                     greeting=snap.greeting,
-                    quick_playlists=tuple(library[:6]),
+                    quick_playlists=_quick_picks(list(library)),
                     library_playlists=tuple(library),
                     recommendation_tracks=snap.recommendation_tracks,
                     recent_tracks=snap.recent_tracks,
@@ -745,7 +758,7 @@ class HomeViewModel(BaseViewModel):
         )
         self._snapshot = HomeSnapshot(
             greeting=snap.greeting,
-            quick_playlists=tuple(list(library)[:6]),
+            quick_playlists=_quick_picks(list(library)),
             library_playlists=tuple(library),
             recommendation_tracks=tuple(tracks),
             recent_tracks=snap.recent_tracks,
@@ -802,7 +815,7 @@ class HomeViewModel(BaseViewModel):
                 )
             self._snapshot = HomeSnapshot(
                 greeting=snap.greeting,
-                quick_playlists=tuple(library[:6]),
+                quick_playlists=_quick_picks(list(library)),
                 library_playlists=tuple(library),
                 recommendation_tracks=snap.recommendation_tracks,
                 recent_tracks=snap.recent_tracks,
