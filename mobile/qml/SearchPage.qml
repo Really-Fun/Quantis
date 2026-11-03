@@ -89,8 +89,8 @@ Item {
                 model: app.results
                 boundsBehavior: Flickable.DragOverBounds
                 delegate: TrackRow {
+                    listName: "results"
                     current: app.hasTrack && title === app.title && artist === app.artist
-                    onClicked: app.playResult(index)
                 }
                 ScrollIndicator.vertical: ScrollIndicator {}
             }

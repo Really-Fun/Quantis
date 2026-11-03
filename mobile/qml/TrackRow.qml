@@ -15,12 +15,14 @@ ItemDelegate {
     required property string source
     required property string cover
     property bool current: false
+    property string listName: "results" // какой список (для меню и касания)
+    onClicked: app.playFrom(listName, index)
 
     width: ListView.view ? ListView.view.width : implicitWidth
     height: 72
     padding: 0
     leftPadding: theme.gutter
-    rightPadding: theme.gutter
+    rightPadding: 4
     Accessible.name: title + ", " + artist
 
     contentItem: RowLayout {
@@ -57,5 +59,17 @@ ItemDelegate {
                 }
             }
         }
+        IconButton {
+            iconName: "more-vertical"
+            label: "Действия с треком"
+            tint: theme.textDim
+            onClicked: menu.popup(this, 0, height)
+        }
+    }
+
+    TrackMenu {
+        id: menu
+        listName: row.listName
+        trackIndex: row.index
     }
 }

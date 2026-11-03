@@ -130,6 +130,14 @@ Drawer {
                     spacing: 8
                     SourceBadge { source: app.trackSource }
                     Text {
+                        visible: app.waveActive
+                        text: "Моя волна"
+                        color: theme.accentCyan
+                        font.family: theme.ui
+                        font.pixelSize: 12
+                        font.weight: Font.Bold
+                    }
+                    Text {
                         Layout.fillWidth: true
                         text: app.loading ? "Загружаем…" : app.artist
                         color: Qt.rgba(1, 1, 1, 0.72)
@@ -138,6 +146,14 @@ Drawer {
                         elide: Text.ElideRight
                     }
                 }
+            }
+            IconButton {
+                Layout.rightMargin: -12
+                iconName: app.currentLiked ? "heart-filled" : "heart"
+                label: app.currentLiked ? "Убрать из любимого" : "В любимое"
+                tint: app.currentLiked ? theme.accentPink : theme.text
+                iconSize: 26
+                onClicked: app.toggleLike()
             }
         }
 
@@ -201,13 +217,85 @@ Drawer {
             }
         }
 
+        // Таймер сна и очередь.
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.topMargin: 4
+            Layout.leftMargin: -12
+            Layout.rightMargin: -12
+            AbstractButton {
+                id: sleepButton
+                implicitHeight: theme.touch
+                implicitWidth: sleepRow.implicitWidth + 24
+                Accessible.name: "Таймер сна"
+                onClicked: sleepMenu.popup(sleepButton, 0, -sleepMenu.implicitHeight)
+                contentItem: RowLayout {
+                    id: sleepRow
+                    spacing: 6
+                    Image {
+                        Layout.leftMargin: 12
+                        source: "icons/moon.svg"
+                        sourceSize: Qt.size(22, 22)
+                        opacity: app.sleepLeft > 0 || app.sleepEndOfTrack ? 1 : 0.7
+                        Accessible.ignored: true
+                    }
+                    Text {
+                        visible: app.sleepLeft > 0 || app.sleepEndOfTrack
+                        text: app.sleepEndOfTrack ? "до конца трека" : theme.formatTime(app.sleepLeft * 1000)
+                        color: theme.accentCyan
+                        font.family: theme.ui
+                        font.pixelSize: 13
+                        font.weight: Font.Bold
+                        font.features: { "tnum": 1 }
+                    }
+                }
+                background: Rectangle {
+                    radius: height / 2
+                    color: "#FFFFFF"
+                    opacity: sleepButton.down ? 0.12 : 0
+                }
+            }
+            Item { Layout.fillWidth: true }
+            IconButton {
+                iconName: "list-music"
+                label: "Очередь"
+                onClicked: queueSheet.open()
+            }
+        }
+
+        Menu {
+            id: sleepMenu
+            background: Rectangle {
+                implicitWidth: 220
+                radius: 14
+                color: theme.surfaceHigh
+                border.color: theme.stroke
+            }
+            Repeater {
+                model: [
+                    { label: "Через 15 минут", minutes: 15 },
+                    { label: "Через 30 минут", minutes: 30 },
+                    { label: "Через 45 минут", minutes: 45 },
+                    { label: "Через час", minutes: 60 },
+                    { label: "В конце трека", minutes: -1 },
+                    { label: "Выключить таймер", minutes: 0 }
+                ]
+                delegate: MenuItem {
+                    required property var modelData
+                    text: modelData.label
+                    onTriggered: app.setSleep(modelData.minutes)
+                }
+            }
+        }
+
         Text {
             Layout.fillWidth: true
             Layout.topMargin: 8
             horizontalAlignment: Text.AlignHCenter
             visible: text.length > 0
             text: app.status
-            color: theme.danger
+            // Подсказки о действиях — бирюзой, ошибки — красным.
+            color: /^(Сыграет|Добавлено)/.test(app.status) ? theme.accentCyan : theme.danger
             wrapMode: Text.WordWrap
             font.family: theme.ui
             font.pixelSize: 13

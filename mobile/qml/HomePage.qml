@@ -1,6 +1,6 @@
-// Главная: логотип и аккаунт, карточка «Сейчас играет» (или «Найти музыку»),
-// «Недавно играло» лентой обложек и «Недавние запросы» чипами.
-// «Моя волна» — шаг 4.
+// Главная: логотип и аккаунт, карточка «Сейчас играет» (без трека — «Моя волна»
+// или «Найти музыку»), настроения волны, «Недавно играло» лентой обложек и
+// «Недавние запросы» чипами.
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Controls.Material
@@ -102,7 +102,11 @@ Flickable {
                 anchors.rightMargin: app.hasTrack ? heroArt.width + 28 : 20
                 spacing: 6
                 Text {
-                    text: app.hasTrack ? "СЕЙЧАС ИГРАЕТ" : "ЯНДЕКС МУЗЫКА · YOUTUBE"
+                    text: app.hasTrack
+                          ? (app.waveActive ? (app.waveName === "Моя волна" ? "МОЯ ВОЛНА"
+                                             : "МОЯ ВОЛНА · " + app.waveName.toUpperCase())
+                                          : "СЕЙЧАС ИГРАЕТ")
+                          : (app.loggedIn ? "МОЯ ВОЛНА" : "ЯНДЕКС МУЗЫКА · YOUTUBE")
                     color: Qt.rgba(1, 1, 1, 0.7)
                     font.family: theme.ui
                     font.pixelSize: 12
@@ -111,13 +115,16 @@ Flickable {
                 }
                 Text {
                     Layout.fillWidth: true
-                    text: app.hasTrack ? app.title : "Что послушаем?"
+                    text: app.hasTrack ? app.title
+                          : (app.loggedIn ? "Поток под твой вкус" : "Что послушаем?")
                     color: theme.text
                     font.family: theme.display
                     font.pixelSize: 20
                     font.weight: Font.DemiBold
                     wrapMode: Text.WordWrap
-                    maximumLineCount: 2
+                    // С треком — одна строка: иначе с исполнителем и кнопкой
+                    // не помещалось в карточку.
+                    maximumLineCount: app.hasTrack ? 1 : 2
                     elide: Text.ElideRight
                 }
                 Text {
@@ -131,9 +138,86 @@ Flickable {
                 }
                 Item { Layout.fillHeight: true }
                 PillButton {
-                    text: app.hasTrack ? "Открыть плеер" : "Найти музыку"
+                    text: app.hasTrack ? "Открыть плеер"
+                          : (app.waveLoading ? "Запускаем…" : (app.loggedIn ? "Слушать волну" : "Найти музыку"))
                     variant: "light"
-                    onClicked: app.hasTrack ? page.playerRequested() : page.searchRequested("")
+                    enabled: !app.waveLoading
+                    onClicked: {
+                        if (app.hasTrack) page.playerRequested()
+                        else if (app.loggedIn) app.startWave("", "Моя волна")
+                        else page.searchRequested("")
+                    }
+                }
+            }
+        }
+
+        // «Моя волна» по настроению: касание запускает волну с этими сидами.
+        ColumnLayout {
+            Layout.fillWidth: true
+            visible: app.loggedIn
+            spacing: 12
+            RowLayout {
+                Layout.leftMargin: theme.gutter
+                Layout.rightMargin: theme.gutter
+                Text {
+                    Layout.fillWidth: true
+                    text: "Моя волна"
+                    color: theme.text
+                    font.family: theme.display
+                    font.pixelSize: 18
+                    font.weight: Font.DemiBold
+                }
+                BusyIndicator {
+                    implicitWidth: 28; implicitHeight: 28
+                    running: app.waveLoading
+                    visible: running
+                }
+            }
+            ListView {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 44
+                orientation: ListView.Horizontal
+                spacing: 8
+                leftMargin: theme.gutter
+                rightMargin: theme.gutter
+                clip: true
+                boundsBehavior: Flickable.DragOverBounds
+                model: [{ name: "Моя волна", seeds: "", color: "#7C4DFF" }].concat(app.moods)
+                delegate: AbstractButton {
+                    id: mood
+                    required property var modelData
+                    readonly property bool active: app.waveActive && app.waveName === modelData.name
+                    height: 40
+                    width: moodRow.implicitWidth + 28
+                    enabled: !app.waveLoading
+                    Accessible.name: "Волна: " + modelData.name
+                    onClicked: app.startWave(modelData.seeds, modelData.name)
+                    background: Rectangle {
+                        radius: height / 2
+                        color: mood.active ? Qt.rgba(1, 1, 1, 0.12) : "transparent"
+                        border.color: mood.active ? mood.modelData.color : theme.stroke
+                        border.width: mood.active ? 2 : 1
+                        scale: mood.down ? 0.96 : 1
+                        Behavior on scale { NumberAnimation { duration: theme.fast } }
+                    }
+                    contentItem: Row {
+                        id: moodRow
+                        spacing: 8
+                        leftPadding: 14
+                        Rectangle { // цвет настроения — точкой, рядом с подписью
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 10; height: 10; radius: 5
+                            color: mood.modelData.color
+                        }
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: mood.modelData.name
+                            color: theme.text
+                            font.family: theme.ui
+                            font.pixelSize: 14
+                            font.weight: Font.DemiBold
+                        }
+                    }
                 }
             }
         }

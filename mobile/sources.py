@@ -232,25 +232,30 @@ def search_yandex(token: str, query: str) -> list[Result]:
     tracks = found.tracks.results if found and found.tracks else []
     results = []
     for track in tracks:
-        if track.available is False or not track.id:
-            continue
-        title = track.title or str(track.id)
-        if track.version:
-            title = f"{title} ({track.version})"
-        artist = ", ".join(a.name for a in (track.artists or []) if a.name)
-        results.append(
-            Result(
-                source=YANDEX,
-                track_id=str(track.id),
-                title=title,
-                artist=artist,
-                duration=int(track.duration_ms or 0) // 1000,
-                cover=_yandex_cover(track.cover_uri or track.og_image or ""),
-            )
-        )
+        result = yandex_result(track)
+        if result is not None:
+            results.append(result)
         if len(results) >= SEARCH_LIMIT:
             break
     return results
+
+
+def yandex_result(track) -> Result | None:
+    """Трек yandex-music → Result; недоступный (нет прав, удалён) — None."""
+    if track is None or track.available is False or not track.id:
+        return None
+    title = track.title or str(track.id)
+    if track.version:
+        title = f"{title} ({track.version})"
+    artist = ", ".join(a.name for a in (track.artists or []) if a.name)
+    return Result(
+        source=YANDEX,
+        track_id=str(track.id),
+        title=title,
+        artist=artist,
+        duration=int(track.duration_ms or 0) // 1000,
+        cover=_yandex_cover(track.cover_uri or track.og_image or ""),
+    )
 
 
 def _yandex_cover(uri: str, size: int = 400) -> str:

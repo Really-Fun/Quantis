@@ -57,7 +57,7 @@ ApplicationWindow {
                 }
             }
             SearchPage { id: searchPage }
-            LibraryPage { id: libraryPage }
+            LibraryPage { id: libraryPage; objectName: "libraryPage" }
         }
 
         MiniPlayer {
@@ -82,8 +82,18 @@ ApplicationWindow {
         }
     }
 
+    QueueSheet {
+        id: queueSheet
+        objectName: "queueSheet"
+        z: 1 // открывается поверх плеера
+        width: window.width
+        height: window.height * 0.72
+        bottomPadding: window.safeBottom
+    }
+
     PlayerSheet {
         id: player
+        objectName: "playerSheet"
         width: window.width
         height: window.height
         topPadding: window.safeTop
@@ -92,7 +102,10 @@ ApplicationWindow {
 
     // «Назад» на Android: сначала свернуть плеер, потом на главную.
     onClosing: function (close) {
-        if (player.opened) {
+        if (queueSheet.opened) {
+            close.accepted = false
+            queueSheet.close()
+        } else if (player.opened) {
             close.accepted = false
             player.close()
         } else if (window.tab !== 0) {

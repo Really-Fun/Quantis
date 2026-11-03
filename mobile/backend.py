@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import random
 import traceback
+import wave
 from dataclasses import asdict
 from urllib.parse import quote
 
@@ -39,6 +40,7 @@ from stream_proxy import StreamProxy
 TOKEN_KEY = "yandex/token"
 SOURCE_KEY = "search/source"
 HISTORY_KEY = "library/history"
+LIKES_KEY = "library/likes"
 QUERIES_KEY = "search/recent"
 HISTORY_LIMIT = 30
 QUERIES_LIMIT = 8
@@ -143,6 +145,9 @@ class AppController(QObject):
     modeChanged = Signal()
     paletteChanged = Signal()
     queriesChanged = Signal()
+    likesChanged = Signal()
+    waveChanged = Signal()
+    sleepChanged = Signal()
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -158,6 +163,24 @@ class AppController(QObject):
         self._history = TrackModel(self)
         self._history.set_items(self._load_history())
         self._queries: list[str] = self._load_queries()
+        self._liked = TrackModel(self)
+        self._liked.set_items(self._load_tracks(LIKES_KEY))
+        # Очередь для экрана «Очередь» — та же, что играет.
+        self._queue_model = TrackModel(self)
+        # «Моя волна»: сессия, имя волны и признак, что очередь — волна.
+        self._wave: wave.WaveSession | None = None
+        self._wave_name = ""
+        self._wave_loading = False
+        self._wave_more_pending = False
+        self._started_at: tuple[Result, int] | None = (
+            None  # трек и позиция для feedback
+        )
+        # Таймер сна: секунд до паузы (0 — выключен) или «до конца трека».
+        self._sleep_left = 0
+        self._sleep_end_of_track = False
+        self._sleep_timer = QTimer(self)
+        self._sleep_timer.setInterval(1000)
+        self._sleep_timer.timeout.connect(self._sleep_tick)
         self._queue: list[Result] = []
         self._current = -1
         self._loading = False
@@ -211,6 +234,11 @@ class AppController(QObject):
         job.signals.failed.connect(lambda text: finish(on_fail, text))
         self._pool.start(job)
 
+    def _flash(self, text: str) -> None:
+        """Короткая подсказка о действии: сама исчезает через 2,5 с."""
+        self._set_status(text)
+        QTimer.singleShot(2500, lambda: self._status == text and self._set_status(""))
+
     def _set_status(self, text: str) -> None:
         if text != self._status:
             self._status = text
@@ -242,14 +270,243 @@ class AppController(QObject):
     def recentQueries(self) -> list[str]:
         return list(self._queries)
 
+    @Property(QObject, constant=True)
+    def liked(self) -> TrackModel:
+        return self._liked
+
+    @Property(QObject, constant=True)
+    def queue(self) -> TrackModel:
+        return self._queue_model
+
+    @Property(int, notify=trackChanged)
+    def queueIndex(self) -> int:
+        return self._current
+
+    @Property(bool, notify=likesChanged)
+    def currentLiked(self) -> bool:
+        track = self._track()
+        return track is not None and self._is_liked(track)
+
+    @Property(bool, notify=waveChanged)
+    def waveActive(self) -> bool:
+        return self._wave is not None
+
+    @Property(str, notify=waveChanged)
+    def waveName(self) -> str:
+        return self._wave_name
+
+    @Property(bool, notify=waveChanged)
+    def waveLoading(self) -> bool:
+        return self._wave_loading
+
+    @Property("QVariantList", constant=True)
+    def moods(self) -> list[dict]:
+        return [
+            {"name": m.name, "seeds": ",".join(m.seeds), "color": m.color}
+            for m in wave.MOODS
+        ]
+
+    @Property(int, notify=sleepChanged)
+    def sleepLeft(self) -> int:
+        return self._sleep_left
+
+    @Property(bool, notify=sleepChanged)
+    def sleepEndOfTrack(self) -> bool:
+        return self._sleep_end_of_track
+
+    # --- любимое ----------------------------------------------------------
+
+    def _is_liked(self, result: Result) -> bool:
+        key = (result.source, result.track_id)
+        return any((r.source, r.track_id) == key for r in self._liked.items())
+
+    def _toggle_like(self, result: Result) -> None:
+        key = (result.source, result.track_id)
+        items = [r for r in self._liked.items() if (r.source, r.track_id) != key]
+        if len(items) == len(self._liked.items()):
+            items.insert(0, result)
+        self._liked.set_items(items)
+        self._save_tracks(LIKES_KEY, items)
+        self.likesChanged.emit()
+
+    @Slot()
+    def toggleLike(self) -> None:
+        track = self._track()
+        if track is not None:
+            self._toggle_like(track)
+
+    # --- действия со строками любого списка -------------------------------
+
+    def _model(self, name: str) -> TrackModel | None:
+        return {
+            "results": self._results,
+            "history": self._history,
+            "liked": self._liked,
+            "queue": self._queue_model,
+        }.get(name)
+
+    def _item(self, name: str, row: int) -> Result | None:
+        model = self._model(name)
+        items = model.items() if model is not None else []
+        return items[row] if 0 <= row < len(items) else None
+
+    @Slot(str, int)
+    def playFrom(self, name: str, row: int) -> None:
+        """Касание трека в списке: очередью становится весь список."""
+        if name == "queue":
+            self._play_at(row)
+            return
+        model = self._model(name)
+        if model is not None and 0 <= row < model.count:
+            self._stop_wave()
+            self._set_queue(model.items())
+            self._play_at(row)
+
+    @Slot(str, int)
+    def playNextFrom(self, name: str, row: int) -> None:
+        item = self._item(name, row)
+        if item is None:
+            return
+        if self._track() is None:
+            self._set_queue([item])
+            self._play_at(0)
+            return
+        queue = list(self._queue)
+        queue.insert(self._current + 1, item)
+        self._set_queue(queue)
+        self._flash("Сыграет следующим")
+
+    @Slot(str, int)
+    def enqueueFrom(self, name: str, row: int) -> None:
+        item = self._item(name, row)
+        if item is None:
+            return
+        self._set_queue([*self._queue, item])
+        if self._track() is None:
+            self._play_at(len(self._queue) - 1)
+        else:
+            self._flash("Добавлено в конец очереди")
+
+    @Slot(str, int)
+    def toggleLikeFrom(self, name: str, row: int) -> None:
+        item = self._item(name, row)
+        if item is not None:
+            self._toggle_like(item)
+
+    @Slot(str, int, result=bool)
+    def isLikedFrom(self, name: str, row: int) -> bool:
+        item = self._item(name, row)
+        return item is not None and self._is_liked(item)
+
+    def _set_queue(self, items: list[Result]) -> None:
+        self._queue = list(items)
+        self._queue_model.set_items(self._queue)
+
+    # --- моя волна --------------------------------------------------------
+
+    @Slot(str, str)
+    def startWave(self, seeds: str, name: str) -> None:
+        if not self._token:
+            self._set_status(
+                "Моя волна — из Яндекс Музыки: войди в аккаунт в «Медиатеке»"
+            )
+            return
+        session = wave.WaveSession(self._token)
+        seed_tuple = tuple(x for x in seeds.split(",") if x) or wave.MY_WAVE.seeds
+        self._wave_loading = True
+        self.waveChanged.emit()
+
+        def done(tracks: list[Result]) -> None:
+            self._wave = session
+            self._wave_name = name or wave.MY_WAVE.name
+            self._wave_loading = False
+            self.waveChanged.emit()
+            self._set_queue(tracks)
+            self._play_at(0)
+
+        def failed(text: str) -> None:
+            self._wave_loading = False
+            self.waveChanged.emit()
+            self._set_status(text)
+
+        self._run(session.start, (seed_tuple,), done, failed)
+
+    def _stop_wave(self) -> None:
+        if self._wave is not None:
+            self._wave = None
+            self._wave_name = ""
+            self.waveChanged.emit()
+
+    def _wave_feedback_end(self) -> None:
+        """Яндексу — дослушали трек или пропустили (по позиции)."""
+        if self._wave is None or self._started_at is None:
+            return
+        result, _ = self._started_at
+        played = self._player.position() / 1000
+        self._run(
+            self._wave.finished,
+            (result, played, result.duration),
+            lambda _: None,
+            lambda _: None,
+        )
+        self._started_at = None
+
+    def _wave_top_up(self) -> None:
+        """Осталось два трека — догружаем следующую порцию волны."""
+        if self._wave is None or self._wave_more_pending:
+            return
+        if self._current < len(self._queue) - 2:
+            return
+        self._wave_more_pending = True
+        session = self._wave
+
+        def done(tracks: list[Result]) -> None:
+            self._wave_more_pending = False
+            if session is self._wave and tracks:
+                self._set_queue([*self._queue, *tracks])
+
+        def failed(_text: str) -> None:
+            self._wave_more_pending = False
+
+        self._run(session.more, (list(self._queue),), done, failed)
+
+    # --- таймер сна -------------------------------------------------------
+
+    @Slot(int)
+    def setSleep(self, minutes: int) -> None:
+        """minutes > 0 — пауза через столько минут; -1 — в конце трека; 0 — выкл."""
+        self._sleep_end_of_track = minutes < 0
+        self._sleep_left = max(0, minutes) * 60
+        if self._sleep_left:
+            self._sleep_timer.start()
+        else:
+            self._sleep_timer.stop()
+        self.sleepChanged.emit()
+
+    def _sleep_tick(self) -> None:
+        self._sleep_left = max(0, self._sleep_left - 1)
+        if self._sleep_left == 0:
+            self._sleep_timer.stop()
+            if self._is_playing():
+                self.toggle()
+        self.sleepChanged.emit()
+
     # --- история и недавние запросы --------------------------------------
 
     def _load_history(self) -> list[Result]:
+        return self._load_tracks(HISTORY_KEY)[:HISTORY_LIMIT]
+
+    def _load_tracks(self, key: str) -> list[Result]:
         try:
-            raw = json.loads(str(self._settings.value(HISTORY_KEY, "[]") or "[]"))
-            return [Result(**item) for item in raw][:HISTORY_LIMIT]
+            raw = json.loads(str(self._settings.value(key, "[]") or "[]"))
+            return [Result(**item) for item in raw]
         except (TypeError, ValueError):
             return []
+
+    def _save_tracks(self, key: str, items: list[Result]) -> None:
+        self._settings.setValue(
+            key, json.dumps([asdict(r) for r in items], ensure_ascii=False)
+        )
 
     def _remember(self, result: Result) -> None:
         items = [
@@ -260,9 +517,7 @@ class AppController(QObject):
         items.insert(0, result)
         items = items[:HISTORY_LIMIT]
         self._history.set_items(items)
-        self._settings.setValue(
-            HISTORY_KEY, json.dumps([asdict(r) for r in items], ensure_ascii=False)
-        )
+        self._save_tracks(HISTORY_KEY, items)
 
     def _load_queries(self) -> list[str]:
         try:
@@ -282,11 +537,7 @@ class AppController(QObject):
 
     @Slot(int)
     def playHistory(self, row: int) -> None:
-        """Трек из «Недавно играло»: очередью становится вся история."""
-        items = self._history.items()
-        if 0 <= row < len(items):
-            self._queue = items
-            self._play_at(row)
+        self.playFrom("history", row)
 
     @Property(bool, notify=accountChanged)
     def loggedIn(self) -> bool:
@@ -463,23 +714,22 @@ class AppController(QObject):
 
     @Slot(int)
     def playResult(self, row: int) -> None:
-        """Нажатие на трек в выдаче: очередью становится вся выдача."""
-        items = self._results.items()
-        if 0 <= row < len(items):
-            self._queue = items
-            self._play_at(row)
+        self.playFrom("results", row)
 
     def _play_at(self, row: int) -> None:
         if not 0 <= row < len(self._queue):
             return
+        self._wave_feedback_end()
         self._current = row
         self._wants_play = True
         self._loading = True
         self._player.stop()
         self.trackChanged.emit()
+        self.likesChanged.emit()
         self.playStateChanged.emit()
         self.durationChanged.emit()
         self._sync_controls()
+        self._wave_top_up()
         result = self._queue[row]
         self._load_palette(result)
         self._run(
@@ -508,6 +758,11 @@ class AppController(QObject):
         self._loading = False
         self._set_status("")
         self._remember(self._queue[row])
+        if self._wave is not None:
+            self._started_at = (self._queue[row], 0)
+            self._run(
+                self._wave.started, (self._queue[row],), lambda _: None, lambda _: None
+            )
         self._player.setSource(QUrl(url))
         self._player.play()
         self._prefetch(self._next_index(manual=True))
@@ -541,6 +796,8 @@ class AppController(QObject):
         following = self._current + 1
         if following < count:
             return following
+        if self._wave is not None:
+            return None  # волна догрузится, по кругу не идём
         return 0 if self._repeat == REPEAT_ALL else None
 
     @Slot()
@@ -600,6 +857,12 @@ class AppController(QObject):
 
     def _on_media_status(self, status: QMediaPlayer.MediaStatus) -> None:
         if status == QMediaPlayer.MediaStatus.EndOfMedia:
+            if self._sleep_end_of_track:  # таймер «до конца трека»
+                self.setSleep(0)
+                self._wants_play = False
+                self.playStateChanged.emit()
+                self._sync_controls()
+                return
             row = self._next_index(manual=False)
             if row is None:
                 self._wants_play = False
