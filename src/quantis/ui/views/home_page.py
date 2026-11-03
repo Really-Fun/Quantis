@@ -34,7 +34,7 @@ from quantis.ui.views.widgets.now_playing_stage import (
 )
 from quantis.ui.views.widgets.playlist_card import PlaylistShelf, QuickPickShelf
 from quantis.ui.views.widgets.track_card import TrackCardDelegate
-from quantis.ui.views.widgets.wave_moods import WaveMoodStrip
+from quantis.ui.views.widgets.wave_card import WaveCard
 
 _MAX_VISIBLE_TRACKS = 12
 _SIDE_MARGIN = 28
@@ -53,6 +53,8 @@ class HomePage(QWidget):
     """«Вся очередь» на панели «Дальше» — открыть играющий плейлист."""
     up_next_activated = Signal(int)
     """Трек из «Дальше»: индекс в играющем плейлисте."""
+    wave_page_requested = Signal()
+    """«Настроения» на карточке волны — страница «Моя волна»."""
 
     def __init__(
         self,
@@ -84,8 +86,9 @@ class HomePage(QWidget):
         self._layout.setContentsMargins(_SIDE_MARGIN, 20, _SIDE_MARGIN, 40)
         self._layout.setSpacing(26)
 
-        # Сцена «Сейчас играет» и «Дальше». «Продолжить слушать» — состояние
-        # сцены, «Моя волна» — первая плитка быстрого доступа.
+        # Сцена «Сейчас играет» и справа «Дальше». Пока очередь пуста, на месте
+        # «Дальше» карточка «Моя волна» с настроениями: пустая рамка ничего не
+        # давала, а волна так видна с первого экрана.
         self._now_track: Track | None = None
         self._playing = False
         # «Дальше» справа от сцены, а на узком окне — под ней (_relayout_stage)
@@ -93,6 +96,7 @@ class HomePage(QWidget):
         stage_row.setSpacing(_STAGE_GAP)
         self._stage_row = stage_row
         self._up_next_below: bool | None = None
+        self._side: QWidget | None = None
         self._stage = NowPlayingStage()
         self._stage.resume_requested.connect(lambda: self._on_featured_play(0))
         self._stage.wave_requested.connect(self._on_wave_play)
@@ -101,6 +105,10 @@ class HomePage(QWidget):
         self._up_next = UpNextPanel()
         self._up_next.track_activated.connect(self.up_next_activated.emit)
         self._up_next.queue_requested.connect(self.queue_requested.emit)
+        self._wave_card = WaveCard()
+        self._wave_card.play_requested.connect(self._on_wave_play)
+        self._wave_card.open_requested.connect(self.wave_page_requested.emit)
+        self._wave_card.mood_activated.connect(self._on_wave_mood)
         self._layout.addLayout(stage_row)
 
         self._quick_section = HomeSection("Быстрый доступ")
@@ -109,13 +117,6 @@ class HomePage(QWidget):
         self._quick_shelf.wave_play_requested.connect(self._on_wave_play)
         self._quick_section.add_widget_block(self._quick_shelf)
         self._layout.addWidget(self._quick_section)
-
-        self._wave_moods_section = HomeSection("Моя волна по настроению")
-        self._wave_moods = WaveMoodStrip()
-        self._wave_moods.mood_activated.connect(self._on_wave_mood)
-        self._wave_moods_section.add_widget_block(self._wave_moods)
-        self._wave_moods_section.hide()
-        self._layout.addWidget(self._wave_moods_section)
 
         self._library_section = HomeSection("Плейлисты")
         create_btn = QToolButton()
@@ -233,7 +234,7 @@ class HomePage(QWidget):
         self._stage.set_greeting(snap.greeting)
 
         # Без токена Яндекса волна играет с YouTube — плитка доступна всегда.
-        self._quick_shelf.set_wave_state(
+        self._set_wave_state(
             available=True,
             track_count=snap.wave_track_count,
             loading=not snap.wave_ready,
@@ -288,6 +289,14 @@ class HomePage(QWidget):
     def stage(self) -> NowPlayingStage:
         return self._stage
 
+    @property
+    def up_next(self) -> UpNextPanel:
+        return self._up_next
+
+    @property
+    def wave_card(self) -> WaveCard:
+        return self._wave_card
+
     def _sync_stage(self) -> None:
         if self._now_track is not None:
             self._stage.set_track(self._now_track, mode="playing")
@@ -324,28 +333,35 @@ class HomePage(QWidget):
         self._stage.set_cover_size(min(by_width, by_height))
 
         count = len(self._up_next.items())
-        # под сценой пустая очередь только отнимает высоту
-        self._up_next.setVisible(not below or count > 0)
+        side = self._up_next if count else self._wave_card
+        other = self._wave_card if count else self._up_next
+        other.hide()
+        side.show()
         if below:
-            self._up_next.setMinimumWidth(0)
-            self._up_next.setMaximumWidth(16777215)
-            cols = 2 if width >= 560 else 1
-            rows = max(1, -(-min(4, count) // cols))
-            self._up_next.setFixedHeight(UpNextPanel.height_for(rows))
+            side.setMinimumWidth(0)
+            side.setMaximumWidth(16777215)
+            if count:
+                cols = 2 if width >= 560 else 1
+                rows = max(1, -(-min(4, count) // cols))
+                side.setFixedHeight(UpNextPanel.height_for(rows))
+            else:
+                side.setFixedHeight(side.sizeHint().height())
         else:
             rows = min(_UP_NEXT_BESIDE_ROWS, max(1, count))
-            self._up_next.setFixedSize(
+            side.setFixedSize(
                 panel_w,
                 max(self._stage.height(), UpNextPanel.height_for(rows)),
             )
-        if below == self._up_next_below:
+        if below == self._up_next_below and side is self._side:
             return
         self._up_next_below = below
-        self._stage_row.removeWidget(self._up_next)
+        for widget in (self._up_next, self._wave_card):
+            self._stage_row.removeWidget(widget)
+        self._side = side
         if below:
-            self._stage_row.addWidget(self._up_next, 1, 0)
+            self._stage_row.addWidget(side, 1, 0)
         else:
-            self._stage_row.addWidget(self._up_next, 0, 1, Qt.AlignmentFlag.AlignTop)
+            self._stage_row.addWidget(side, 0, 1, Qt.AlignmentFlag.AlignTop)
         self._stage_row.setColumnStretch(0, 1)
         self._stage_row.setColumnStretch(1, 0)
 
@@ -369,24 +385,24 @@ class HomePage(QWidget):
         schedule(self._play_wave_async(), self._bridge)
 
     async def _open_wave_async(self) -> None:
-        self._quick_shelf.set_wave_state(
+        self._set_wave_state(
             available=True,
             track_count=self._vm.snapshot.wave_track_count,
             loading=True,
         )
         playlist = await self._vm.open_wave()
         if playlist is None or not len(playlist):
-            self._quick_shelf.set_wave_state(
+            self._set_wave_state(
                 available=True,
                 track_count=0,
                 error="Не удалось загрузить волну",
             )
             return
-        self._quick_shelf.set_wave_state(available=True, track_count=len(playlist))
+        self._set_wave_state(available=True, track_count=len(playlist))
         self.playlist_open_requested.emit(playlist)
 
     async def _play_wave_async(self) -> None:
-        self._quick_shelf.set_wave_state(
+        self._set_wave_state(
             available=True,
             track_count=self._vm.snapshot.wave_track_count,
             loading=True,
@@ -394,16 +410,24 @@ class HomePage(QWidget):
         await self._vm.play_wave()
         wave = getattr(self._vm, "_wave_playlist", None)
         count = len(wave) if wave is not None else self._vm.snapshot.wave_track_count
-        self._quick_shelf.set_wave_state(available=True, track_count=count)
+        self._set_wave_state(available=True, track_count=count)
+
+    def _set_wave_state(self, **state) -> None:
+        """Состояние волны — и на плитке быстрого доступа, и на карточке."""
+        self._quick_shelf.set_wave_state(**state)
+        self._wave_card.set_state(
+            track_count=int(state.get("track_count") or 0),
+            loading=bool(state.get("loading")),
+            error=str(state.get("error") or ""),
+        )
 
     def _sync_wave_moods(self) -> None:
         moods = self._vm.wave_moods
-        self._wave_moods.set_moods(
+        self._wave_card.set_moods(
             moods,
             active_seeds=self._vm.active_wave_seeds,
             busy=self._vm.wave_mood_busy,
         )
-        self._wave_moods_section.setVisible(bool(moods))
 
     def _on_wave_mood(self, mood) -> None:
         if self._bridge is None:

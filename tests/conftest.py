@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+import os
 import sys
 import tempfile
+
+# Виджеты с show() открывали на экране разработчика настоящие окна. Свою
+# платформу можно задать явно: QT_QPA_PLATFORM=wayland pytest.
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 import pytest
 from PySide6.QtCore import QSettings

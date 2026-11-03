@@ -347,3 +347,49 @@ QLabel#wavePanelHint {
     color: rgba(255, 255, 255, 0.62);
     font-size: 12px;
 }
+
+/* Карточка «Моя волна» справа от сцены главной */
+QWidget#homeWaveCard {
+    background: transparent;
+}
+
+QLabel#homeWaveKicker {
+    color: ${tint};
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.6px;
+    background: transparent;
+}
+
+QLabel#homeWaveTitle {
+    color: ${title};
+    font-family: ${font_display};
+    font-size: 21px;
+    font-weight: 700;
+    background: transparent;
+}
+
+QLabel#homeWaveStatus {
+    color: ${text_soft};
+    font-size: 12px;
+    background: transparent;
+}
+
+QToolButton#homeWavePlay {
+    background: rgb(${tint_rgb});
+    border: none;
+    border-radius: 18px;
+    padding: 9px 20px;
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+QToolButton#homeWavePlay:hover {
+    background: rgba(${tint_rgb}, 0.85);
+}
+
+QToolButton#homeWavePlay:disabled {
+    background: rgba(${tint_rgb}, 0.4);
+    color: rgba(255, 255, 255, 0.7);
+}

@@ -241,6 +241,9 @@ class QuantisMainWindow(QMainWindow):
         self._home_page.search_requested.connect(
             lambda: self._goto_page(self.PAGE_SEARCH)
         )
+        self._home_page.wave_page_requested.connect(
+            lambda: self._goto_page(self.PAGE_WAVE)
+        )
         self._home_page.queue_requested.connect(self._open_playing_queue)
         self._home_page.up_next_activated.connect(self._play_up_next)
         self._player_vm.is_playing_changed.connect(self._home_page.set_playing)
