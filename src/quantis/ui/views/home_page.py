@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (
     QAbstractItemView,
     QFrame,
     QGridLayout,
+    QHBoxLayout,
     QHeaderView,
     QLabel,
     QScrollArea,
@@ -160,7 +161,7 @@ class HomePage(QWidget):
         recent_host_layout.addWidget(self._recent_list)
         recent_host_layout.addWidget(self._recent_empty)
         self._recent_section.add_widget_block(recent_host)
-        all_recent = QToolButton()
+        self._all_recent_btn = all_recent = QToolButton()
         all_recent.setObjectName("homeSectionAction")
         all_recent.setText("Все")
         all_recent.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -186,9 +187,25 @@ class HomePage(QWidget):
         create_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         create_btn.setToolTip("Создать плейлист")
         create_btn.clicked.connect(self._on_create_playlist)
-        self._library_section.set_header_action(create_btn)
+        self._all_playlists_btn = QToolButton()
+        self._all_playlists_btn.setObjectName("homeSectionAction")
+        self._all_playlists_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        actions = QWidget()
+        actions_row = QHBoxLayout(actions)
+        actions_row.setContentsMargins(0, 0, 0, 0)
+        actions_row.setSpacing(8)
+        actions_row.addWidget(self._all_playlists_btn)
+        actions_row.addWidget(create_btn)
+        self._library_section.set_header_action(actions)
         self._playlist_shelf = PlaylistShelf()
         self._playlist_shelf.playlist_activated.connect(self._on_playlist)
+        self._all_playlists_btn.clicked.connect(
+            lambda: self._playlist_shelf.set_expanded(not self._playlist_shelf.expanded)
+        )
+        self._playlist_shelf.expanded_changed.connect(self._sync_all_playlists_btn)
+        self._playlist_shelf.ribbon.scroll_area.horizontalScrollBar().rangeChanged.connect(
+            self._sync_all_playlists_btn
+        )
         self._library_section.add_widget_block(self._playlist_shelf)
         self._layout.addWidget(self._library_section)
 
@@ -270,11 +287,13 @@ class HomePage(QWidget):
             if isinstance(playlist, UserPlaylist)
         ]
         self._playlist_shelf.set_playlists(user_playlists)
+        self._sync_all_playlists_btn()
 
         rec_count = len(snap.recommendation_tracks)
         self._recommend_empty.setVisible(rec_count == 0)
         recent_count = len(snap.recent_tracks)
         self._recent_empty.setVisible(recent_count == 0)
+        self._all_recent_btn.setVisible(recent_count > 0)
         self._sync_table_height(self._recommend_list, self._vm.recommendation_model)
         self._sync_table_height(self._recent_list, self._vm.recent_model)
         self._sync_stage()
@@ -285,6 +304,7 @@ class HomePage(QWidget):
         self._quick_section.setVisible(bool(snap.quick_playlists))
         recent_count = len(snap.recent_tracks)
         self._recent_empty.setVisible(recent_count == 0)
+        self._all_recent_btn.setVisible(recent_count > 0)
         self._sync_table_height(self._recent_list, self._vm.recent_model)
         self._sync_stage()
 
@@ -474,6 +494,19 @@ class HomePage(QWidget):
         if self._bridge is None:
             return
         schedule(self._vm.play_wave_mood(mood), self._bridge)
+
+    def _sync_all_playlists_btn(self, *_: object) -> None:
+        shelf = self._playlist_shelf
+        expanded = shelf.expanded
+        self._all_playlists_btn.setText(
+            "Свернуть" if expanded else f"Все ({shelf.count()})"
+        )
+        self._all_playlists_btn.setToolTip(
+            "Показать одной лентой" if expanded else "Показать все плейлисты сеткой"
+        )
+        ribbon = shelf.ribbon
+        overflows = ribbon.scroll_area.horizontalScrollBar().maximum() > 0
+        self._all_playlists_btn.setVisible(expanded or overflows)
 
     def _on_recent_open(self) -> None:
         tracks = self._vm.recent_model.all_tracks()

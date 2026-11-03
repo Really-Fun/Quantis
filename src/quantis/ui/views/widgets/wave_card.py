@@ -9,8 +9,14 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 from PySide6.QtCore import QRectF, Qt, Signal
-from PySide6.QtGui import QPainter, QPainterPath, QPaintEvent, QPen
-from PySide6.QtWidgets import QHBoxLayout, QLabel, QToolButton, QVBoxLayout, QWidget
+from PySide6.QtGui import QPainter, QPainterPath, QPaintEvent, QPen, QResizeEvent
+from PySide6.QtWidgets import (
+    QBoxLayout,
+    QLabel,
+    QToolButton,
+    QVBoxLayout,
+    QWidget,
+)
 
 from quantis.services.async_wave import WaveMood
 from quantis.ui.preferences import UiPreferences
@@ -52,8 +58,9 @@ class WaveCard(QWidget):
 
         root.addStretch(1)
 
-        actions = QHBoxLayout()
+        actions = QBoxLayout(QBoxLayout.Direction.LeftToRight)
         actions.setSpacing(8)
+        self._actions = actions
         self._play_btn = QToolButton()
         self._play_btn.setObjectName("homeWavePlay")
         self._play_btn.setText("▶  Слушать")
@@ -78,6 +85,33 @@ class WaveCard(QWidget):
         root.addWidget(self._moods)
 
         self.set_state(track_count=0, loading=True)
+
+    @property
+    def actions_direction(self) -> QBoxLayout.Direction:
+        return self._actions.direction()
+
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        super().resizeEvent(event)
+        # Узкая карточка (Windows, 150 %): кнопки рядом не влезали, и
+        # «Слушать» обрезалось до «…ать» — ставим их друг под другом.
+        margins = self.layout().contentsMargins()
+        needed = (
+            self._play_btn.sizeHint().width()
+            + self._open_btn.sizeHint().width()
+            + self._actions.spacing()
+            + margins.left()
+            + margins.right()
+        )
+        direction = (
+            QBoxLayout.Direction.LeftToRight
+            if self.width() >= needed
+            else QBoxLayout.Direction.TopToBottom
+        )
+        if direction != self._actions.direction():
+            self._actions.setDirection(direction)
+            align = Qt.AlignmentFlag.AlignLeft
+            for button in (self._play_btn, self._open_btn):
+                self._actions.setAlignment(button, align)
 
     @property
     def play_button(self) -> QToolButton:

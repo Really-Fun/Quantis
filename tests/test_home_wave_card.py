@@ -37,6 +37,19 @@ def test_wave_card_states_and_actions(qapp) -> None:
     assert played == [True] and opened == [True] and moods == [_CALM]
 
 
+def test_wave_card_stacks_buttons_when_narrow(qapp) -> None:
+    from PySide6.QtWidgets import QBoxLayout
+
+    card = WaveCard()
+    card.setFixedSize(360, 316)  # главная задаёт карточке размер явно
+    card.show()
+    qapp.processEvents()
+    assert card.actions_direction == QBoxLayout.Direction.LeftToRight
+    card.setFixedSize(200, 316)
+    qapp.processEvents()
+    assert card.actions_direction == QBoxLayout.Direction.TopToBottom
+
+
 def test_wave_card_hides_moods_row_without_moods(qapp) -> None:
     card = WaveCard()
     card.set_moods([])
@@ -80,3 +93,23 @@ def test_recent_and_recommendations_side_by_side_when_wide(qapp) -> None:
     page.resize(800, 900)
     qapp.processEvents()
     assert grid.getItemPosition(grid.indexOf(page._recommend_section))[:2] == (1, 0)
+
+
+def test_playlist_shelf_is_one_ribbon_until_expanded(qapp) -> None:
+    from quantis.models import UserPlaylist
+    from quantis.ui.views.widgets.playlist_card import PlaylistShelf
+
+    shelf = PlaylistShelf()
+    shelf.resize(900, 300)
+    shelf.show()
+    shelf.set_playlists([UserPlaylist(f"П{i}", (), None) for i in range(18)])
+    qapp.processEvents()
+    assert not shelf.expanded
+    assert not shelf.ribbon.isHidden() and shelf.grid.isHidden()
+    assert len(shelf.ribbon_cards()) == 18
+    assert shelf.ribbon.can_scroll_forward
+    shelf.set_expanded(True)
+    assert shelf.ribbon.isHidden() and not shelf.grid.isHidden()
+    assert len(shelf.grid.items()) == 18
+    shelf.set_expanded(False)
+    assert not shelf.ribbon.isHidden()

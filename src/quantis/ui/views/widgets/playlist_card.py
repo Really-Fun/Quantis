@@ -155,10 +155,18 @@ def wrap_column_count(width: int, min_item_width: int, spacing: int, count: int)
 def balanced_column_count(
     width: int, min_item_width: int, spacing: int, count: int
 ) -> int:
-    """Колонки, при которых ряды заполнены поровну (6 при 5 местах — 3 + 3)."""
-    cols = wrap_column_count(width, min_item_width, spacing, count)
-    rows = (count + cols - 1) // cols if count > 0 else 1
-    return max(1, (count + rows - 1) // rows) if count > 0 else cols
+    """Колонки, при которых ряды заполнены поровну (6 при 5 местах — 3 + 3).
+
+    Если всё влезает в один ряд, колонок столько, сколько влезает: одна
+    плитка не растягивается во всю ширину.
+    """
+    if count <= 0 or width <= 0:
+        return 1
+    fit = max(1, (width + spacing) // (min_item_width + spacing))
+    if count <= fit:
+        return fit
+    rows = (count + fit - 1) // fit
+    return (count + rows - 1) // rows
 
 
 def playlist_tracks_label(count: int) -> str:
@@ -591,14 +599,21 @@ class QuickPickShelf(QWidget):
 
 
 class PlaylistShelf(QWidget):
-    """Сетка обложек плейлистов — перестраивается по ширине окна."""
+    """Плейлисты одной лентой со стрелками; «Все» разворачивает сетку.
+
+    Сетка из 18 плейлистов занимала три ряда и сдвигала главную вниз.
+    """
 
     playlist_activated = Signal(object)
+    expanded_changed = Signal(bool)
+    RIBBON_CARD = 150
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setObjectName("playlistShelf")
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
+        self._expanded = False
+        self._playlists: list[Playlist] = []
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -609,26 +624,86 @@ class PlaylistShelf(QWidget):
         self._empty.setWordWrap(True)
         self._empty.hide()
 
+        from quantis.ui.views.widgets.scroll_ribbon import ScrollRibbon
+
+        caption = PlaylistCard.GAP + PlaylistCard.TITLE_H
+        self._ribbon = ScrollRibbon(spacing=14, object_name="playlistRibbon")
+        self._ribbon.setFixedHeight(self.RIBBON_CARD + caption)
+        self._ribbon.set_arrow_band(self.RIBBON_CARD)
+        self._ribbon_cards: list[PlaylistCard] = []
+
         self._grid = WrapGrid(
             min_item_width=136,
             spacing=14,
-            caption_height=PlaylistCard.GAP + PlaylistCard.TITLE_H,
+            caption_height=caption,
         )
         self._grid.setObjectName("playlistShelfHost")
         outer.addWidget(self._empty)
+        outer.addWidget(self._ribbon)
         outer.addWidget(self._grid)
+        self._grid.hide()
+
+    @property
+    def expanded(self) -> bool:
+        return self._expanded
+
+    @property
+    def ribbon(self):  # type: ignore[no-untyped-def]
+        return self._ribbon
+
+    @property
+    def grid(self) -> WrapGrid:
+        return self._grid
+
+    def ribbon_cards(self) -> list[PlaylistCard]:
+        return list(self._ribbon_cards)
+
+    def count(self) -> int:
+        return len(self._playlists)
+
+    def set_expanded(self, expanded: bool) -> None:
+        if expanded == self._expanded:
+            return
+        self._expanded = expanded
+        self._rebuild()
+        self.expanded_changed.emit(expanded)
 
     def set_playlists(self, playlists: list[Playlist]) -> None:
+        self._playlists = list(playlists)
+        self._rebuild()
+
+    def _card(self, playlist: Playlist) -> PlaylistCard:
+        card = PlaylistCard(playlist)
+        card.activated.connect(self.playlist_activated.emit)
+        return card
+
+    def _rebuild(self) -> None:
+        playlists = self._playlists
+        self._empty.setVisible(not playlists)
+        row = self._ribbon.row
+        for card in self._ribbon_cards:
+            row.removeWidget(card)
+            card.deleteLater()
+        self._ribbon_cards = []
         if not playlists:
             self._grid.set_widgets([])
             self._grid.hide()
-            self._empty.show()
+            self._ribbon.hide()
             return
-        self._empty.hide()
-        self._grid.show()
-        cards: list[QWidget] = []
-        for playlist in playlists:
-            card = PlaylistCard(playlist)
-            card.activated.connect(self.playlist_activated.emit)
-            cards.append(card)
-        self._grid.set_widgets(cards)
+        if self._expanded:
+            # Лента не держит свои карточки, пока видна сетка: один набор.
+            self._ribbon.hide()
+            self._grid.set_widgets([self._card(p) for p in playlists])
+            self._grid.show()
+            return
+        self._grid.set_widgets([])
+        self._grid.hide()
+        size = self.RIBBON_CARD
+        height = size + PlaylistCard.GAP + PlaylistCard.TITLE_H
+        for index, playlist in enumerate(playlists):
+            card = self._card(playlist)
+            card.setFixedSize(size, height)
+            row.insertWidget(index, card)
+            self._ribbon_cards.append(card)
+        self._ribbon.show()
+        self._ribbon.scroll_area.horizontalScrollBar().setValue(0)
