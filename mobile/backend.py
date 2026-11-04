@@ -53,6 +53,10 @@ YANDEX_LIKED_KEY = "yandex/liked"
 YANDEX_PLAYLISTS_KEY = "yandex/playlists"
 LIBRARY_REFRESH_S = 300
 PLAYLISTS_KEY = "library/playlists"  # свои плейлисты на телефоне
+HOME_CHART_KEY = "home/chart"
+HOME_RELEASES_KEY = "home/releases"
+HOME_REFRESH_S = 1800
+COLLECTIONS_LIMIT = 40
 HISTORY_LIMIT = 30
 QUERIES_LIMIT = 8
 REPEAT_OFF, REPEAT_ALL, REPEAT_ONE = 0, 1, 2
@@ -103,6 +107,21 @@ class TrackModel(QAbstractListModel):
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
         self._items: list[Result] = []
+
+    @Slot(int, result=str)
+    def titleAt(self, row: int) -> str:
+        return self._items[row].title if 0 <= row < len(self._items) else ""
+
+    @Slot(int, result=str)
+    def artistAt(self, row: int) -> str:
+        return self._items[row].artist if 0 <= row < len(self._items) else ""
+
+    @Slot(int, result=str)
+    def coverAt(self, row: int) -> str:
+        """Обложка строки для QML (url-encoded, как роль cover)."""
+        if 0 <= row < len(self._items) and self._items[row].cover:
+            return quote(self._items[row].cover, safe="")
+        return ""
 
     def refresh_offline(self) -> None:
         if self._items:
@@ -157,6 +176,73 @@ class TrackModel(QAbstractListModel):
         return None
 
 
+class Collection(QObject):
+    """Открытая страница: альбом, исполнитель, плейлист или чарт. У каждой —
+    своя модель треков (listName для playFrom и меню), так страницы в разных
+    вкладках не мешают друг другу."""
+
+    changed = Signal()
+
+    def __init__(self, name: str, title: str, parent: QObject) -> None:
+        super().__init__(parent)
+        self._name = name
+        self._tracks = TrackModel(self)
+        self._loading = True
+        self._error = ""
+        self._title = title
+        self._subtitle = ""
+        self._cover = ""
+        self._albums: list[dict] = []
+
+    def fill(self, data: dict) -> None:
+        self._tracks.set_items(data.get("tracks", []))
+        self._title = data.get("title") or self._title
+        self._subtitle = data.get("subtitle", "")
+        tracks = data.get("tracks", [])
+        # Нет своей обложки (чарт, плейлист из треков) — обложка первого трека.
+        self._cover = data.get("cover") or next((t.cover for t in tracks if t.cover), "")
+        self._albums = data.get("albums", [])
+        self._loading = False
+        self.changed.emit()
+
+    def fail(self, text: str) -> None:
+        self._loading = False
+        self._error = f"Не удалось загрузить: {text}"
+        self.changed.emit()
+
+    @Property(str, constant=True)
+    def listName(self) -> str:
+        return self._name
+
+    @Property(QObject, constant=True)
+    def tracks(self) -> TrackModel:
+        return self._tracks
+
+    @Property(bool, notify=changed)
+    def loading(self) -> bool:
+        return self._loading
+
+    @Property(str, notify=changed)
+    def error(self) -> str:
+        return self._error
+
+    @Property(str, notify=changed)
+    def title(self) -> str:
+        return self._title
+
+    @Property(str, notify=changed)
+    def subtitle(self) -> str:
+        return self._subtitle
+
+    @Property(str, notify=changed)
+    def cover(self) -> str:
+        return self._cover
+
+    @Property("QVariantList", notify=changed)
+    def albums(self) -> list[dict]:
+        return self._albums
+
+
 class AppController(QObject):
     sourceChanged = Signal()
     statusChanged = Signal()
@@ -177,6 +263,8 @@ class AppController(QObject):
     downloadsChanged = Signal()
     lyricsChanged = Signal()
     playlistsChanged = Signal()
+    searchExtrasChanged = Signal()
+    homeChanged = Signal()
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -219,6 +307,16 @@ class AppController(QObject):
         self._playlists: list[dict] = self._load_local_playlists()
         self._playlist_model = TrackModel(self)
         self._playlist_id = ""
+        # Открытые страницы альбомов, исполнителей, плейлистов (по listName).
+        self._collections: dict[str, Collection] = {}
+        self._collection_seq = 0
+        # Поиск Яндекса по всему: кроме треков — исполнители, альбомы, плейлисты.
+        self._search_extras: dict = {}
+        # Главная: чарт и новые релизы Яндекса (кэш, обновление раз в 30 минут).
+        self._home_chart = TrackModel(self)
+        self._home_chart.set_items(self._load_tracks(HOME_CHART_KEY))
+        self._home_releases = self._load_json(HOME_RELEASES_KEY)
+        self._home_at = -HOME_REFRESH_S
         # Текст песни текущего трека: грузится, только пока открыт экран текста.
         self._lyrics_open = False
         self._lyrics_for: Result | None = None
@@ -416,6 +514,30 @@ class AppController(QObject):
         found = self._find_playlist(self._playlist_id)
         return found["name"] if found else ""
 
+    @Property("QVariantList", notify=searchExtrasChanged)
+    def searchArtists(self) -> list[dict]:
+        return self._search_extras.get("artists", [])
+
+    @Property("QVariantList", notify=searchExtrasChanged)
+    def searchAlbums(self) -> list[dict]:
+        return self._search_extras.get("albums", [])
+
+    @Property("QVariantList", notify=searchExtrasChanged)
+    def searchPlaylists(self) -> list[dict]:
+        return self._search_extras.get("playlists", [])
+
+    @Property("QVariantMap", notify=searchExtrasChanged)
+    def searchBest(self) -> dict:
+        return self._search_extras.get("best") or {}
+
+    @Property(QObject, constant=True)
+    def homeChart(self) -> TrackModel:
+        return self._home_chart
+
+    @Property("QVariantList", notify=homeChanged)
+    def homeReleases(self) -> list[dict]:
+        return self._home_releases
+
     @Property(QObject, constant=True)
     def queue(self) -> TrackModel:
         return self._queue_model
@@ -510,7 +632,10 @@ class AppController(QObject):
             "remote": self._remote,
             "downloaded": self._downloaded,
             "playlist": self._playlist_model,
-        }.get(name)
+            "homeChart": self._home_chart,
+        }.get(name) or (
+            self._collections[name].tracks if name in self._collections else None
+        )
 
     def _item(self, name: str, row: int) -> Result | None:
         model = self._model(name)
@@ -624,7 +749,8 @@ class AppController(QObject):
         self._downloaded.set_items(self._offline.tracks())
         for model in (
             self._results, self._history, self._liked, self._queue_model,
-            self._yandex_liked, self._remote, self._playlist_model,
+            self._yandex_liked, self._remote, self._playlist_model, self._home_chart,
+            *(c.tracks for c in self._collections.values()),
         ):
             model.refresh_offline()
         self.downloadsChanged.emit()
@@ -751,6 +877,83 @@ class AppController(QObject):
             del found["tracks"][row]
             self._save_local_playlists()
 
+    # --- страницы: альбом, исполнитель, плейлист, чарт ---------------------
+
+    @Slot(str, str, str, result=QObject)
+    def openCollection(self, kind: str, ref: str, title: str) -> Collection:
+        """kind: album | artist | playlist ("uid:kind") | chart | local | liked."""
+        self._collection_seq += 1
+        name = f"c{self._collection_seq}"
+        page = Collection(name, title, self)
+        self._collections[name] = page
+        while len(self._collections) > COLLECTIONS_LIMIT:
+            self._collections.pop(next(iter(self._collections)))
+        token = self._token
+        if kind == "local":
+            found = self._find_playlist(ref)
+            page.fill({"title": found["name"] if found else title,
+                       "subtitle": "Плейлист на телефоне",
+                       "tracks": found["tracks"] if found else []})
+            return page
+        if kind == "liked":
+            page.fill({"title": "Мне нравится", "subtitle": "Яндекс Музыка",
+                       "tracks": self._yandex_liked.items()})
+            return page
+        if kind in ("album", "artist", "playlist", "chart") and not token:
+            page.fail("нужен вход в Яндекс Музыку")
+            return page
+        if kind == "album":
+            fn, args = sources.yandex_album, (token, ref)
+        elif kind == "artist":
+            fn, args = sources.yandex_artist, (token, ref)
+        elif kind == "playlist":
+            uid, _, playlist_kind = ref.partition(":")
+            fn, args = sources.yandex_playlist_page, (token, uid, playlist_kind)
+        elif kind == "chart":
+            def fn(t):  # noqa: E306
+                return {"title": "Чарт", "subtitle": "Популярное на Яндекс Музыке",
+                        "tracks": sources.yandex_chart(t)}
+            args = (token,)
+        else:
+            page.fail(f"неизвестная страница {kind}")
+            return page
+        self._run(fn, args, page.fill, page.fail)
+        return page
+
+    # --- главная ------------------------------------------------------------
+
+    @Slot()
+    def refreshHome(self) -> None:
+        """Чарт и новые релизы: при открытии главной, не чаще раза в 30 минут."""
+        if not self._token or time.monotonic() - self._home_at < HOME_REFRESH_S:
+            return
+        self._home_at = time.monotonic()
+        token = self._token
+
+        def chart_done(items: list[Result]) -> None:
+            if token == self._token:
+                self._home_chart.set_items(items)
+                self._save_tracks(HOME_CHART_KEY, items)
+
+        def releases_done(items: list[dict]) -> None:
+            if token == self._token:
+                self._home_releases = items
+                self._settings.setValue(HOME_RELEASES_KEY, json.dumps(items, ensure_ascii=False))
+                self.homeChanged.emit()
+
+        def failed(_text: str) -> None:
+            self._home_at = -HOME_REFRESH_S  # в следующий раз попробовать снова
+
+        self._run(sources.yandex_chart, (token,), chart_done, failed)
+        self._run(sources.yandex_new_releases, (token,), releases_done, failed)
+
+    def _load_json(self, key: str) -> list[dict]:
+        try:
+            raw = json.loads(str(self._settings.value(key, "[]") or "[]"))
+            return [dict(i) for i in raw if isinstance(i, dict)]
+        except (TypeError, ValueError):
+            return []
+
     # --- текст песни -------------------------------------------------------
 
     @Slot(bool)
@@ -865,6 +1068,12 @@ class AppController(QObject):
         self._settings.remove(YANDEX_LIKED_KEY)
         self._settings.remove(YANDEX_PLAYLISTS_KEY)
         self.yandexLibraryChanged.emit()
+        self._home_chart.set_items([])
+        self._home_releases = []
+        self._home_at = -HOME_REFRESH_S
+        self._settings.remove(HOME_CHART_KEY)
+        self._settings.remove(HOME_RELEASES_KEY)
+        self.homeChanged.emit()
 
     # --- моя волна --------------------------------------------------------
 
@@ -1136,6 +1345,7 @@ class AppController(QObject):
         self.accountChanged.emit()
         self.setSource(YANDEX)
         self._refresh_library()
+        self.refreshHome()
 
     def _on_account_failed(self, text: str) -> None:
         if text == sources.OFFLINE:
@@ -1168,18 +1378,25 @@ class AppController(QObject):
         self._set_status("")
         self._remember_query(query)
         if self._source == YANDEX:
-            fn, args = sources.search_yandex, (self._token, query)
+            fn, args = sources.search_yandex_all, (self._token, query)
         elif self._source == SOUNDCLOUD:
             fn, args = sources.search_soundcloud, (query,)
         else:
             fn, args = sources.search_youtube, (query,)
         self._run(fn, args, self._on_results, self._on_search_failed)
 
-    def _on_results(self, results: list[Result]) -> None:
+    def _on_results(self, results) -> None:
         self._searching = False
         self.searchingChanged.emit()
+        extras: dict = {}
+        if isinstance(results, dict):  # Яндекс: поиск по всему
+            extras = {k: v for k, v in results.items() if k != "tracks"}
+            results = results["tracks"]
         self._results.set_items(results)
-        self._set_status("" if results else "Ничего не нашлось")
+        self._search_extras = extras
+        self.searchExtrasChanged.emit()
+        empty = not results and not any(extras.get(k) for k in ("artists", "albums", "playlists"))
+        self._set_status("Ничего не нашлось" if empty else "")
 
     def _on_search_failed(self, text: str) -> None:
         self._searching = False

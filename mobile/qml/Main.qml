@@ -25,6 +25,21 @@ ApplicationWindow {
 
     property int tab: 0
 
+    // Открыть страницу альбома/исполнителя/плейлиста/чарта в стеке вкладки.
+    function openPage(stack, kind, ref, title) {
+        if (!stack)
+            return
+        stack.push(collectionPage, { collection: app.openCollection(kind, ref, title || ""), kind: kind })
+    }
+    // Стек текущей вкладки (у «Медиатеки» он свой, внутри LibraryPage).
+    function currentStack() {
+        return tab === 0 ? homeStack : tab === 1 ? searchStack : libraryPage
+    }
+    Component {
+        id: collectionPage
+        CollectionPage {}
+    }
+
     // Окно python-for-android уже начинается под строкой состояния и
     // кончается над панелью навигации, а SafeArea.margins всё равно сообщает
     // их высоту: с ними отступ получался двойным (чёрные полосы сверху и
@@ -44,19 +59,29 @@ ApplicationWindow {
             anchors.bottom: mini.visible ? mini.top : nav.top
             anchors.bottomMargin: mini.visible ? 8 : 0
             currentIndex: window.tab
-            HomePage {
-                onSearchRequested: function (query) {
-                    window.tab = 1
-                    if (query.length > 0)
-                        searchPage.runQuery(query)
-                }
-                onPlayerRequested: player.open()
-                onAccountRequested: {
-                    window.tab = 2
-                    libraryPage.openAccount()
+            StackView {
+                id: homeStack
+                initialItem: homePage
+                HomePage {
+                    id: homePage
+                    onSearchRequested: function (query) {
+                        window.tab = 1
+                        searchStack.pop(null)
+                        if (query.length > 0)
+                            searchPage.runQuery(query)
+                    }
+                    onPlayerRequested: player.open()
+                    onAccountRequested: {
+                        window.tab = 2
+                        libraryPage.openAccount()
+                    }
                 }
             }
-            SearchPage { id: searchPage }
+            StackView {
+                id: searchStack
+                initialItem: searchPage
+                SearchPage { id: searchPage }
+            }
             LibraryPage { id: libraryPage; objectName: "libraryPage" }
         }
 
@@ -78,7 +103,12 @@ ApplicationWindow {
             anchors.right: parent.right
             anchors.bottom: parent.bottom
             current: window.tab
-            onSelected: function (index) { window.tab = index }
+            // Касание открытой вкладки — к её началу.
+            onSelected: function (index) {
+                if (index === window.tab && window.currentStack().depth > 1)
+                    window.currentStack().pop(null)
+                window.tab = index
+            }
         }
     }
 
@@ -126,6 +156,9 @@ ApplicationWindow {
         } else if (player.opened) {
             close.accepted = false
             player.close()
+        } else if (window.currentStack().depth > 1) {
+            close.accepted = false
+            window.currentStack().pop()
         } else if (window.tab !== 0) {
             close.accepted = false
             window.tab = 0

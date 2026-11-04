@@ -1,6 +1,7 @@
 // Главная: логотип и аккаунт, карточка «Сейчас играет» (без трека — «Моя волна»
-// или «Найти музыку»), настроения волны, «Недавно играло» лентой обложек и
-// «Недавние запросы» чипами.
+// или «Найти музыку»), настроения волны, «Недавно играло», «Твоя медиатека»
+// (Мне нравится, свои плейлисты и плейлисты Яндекса), чарт Яндекса, новые
+// релизы и «Недавние запросы» чипами. Страницы открываются в стеке вкладки.
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Controls.Material
@@ -11,6 +12,33 @@ Flickable {
     signal searchRequested(string query)
     signal playerRequested()
     signal accountRequested()
+
+    function open(kind, ref, title) { window.openPage(page.StackView.view, kind, ref, title) }
+    // Плитки «Твоей медиатеки»: Мне нравится, свои плейлисты, плейлисты Яндекса.
+    readonly property var libraryTiles: {
+        var tiles = []
+        if (app.loggedIn && app.yandexLiked.count > 0)
+            tiles.push({ title: "Мне нравится", subtitle: app.yandexLiked.count + " · Яндекс",
+                         icon: "heart-filled", kind: "liked", ref: "" })
+        var local = app.localPlaylists
+        for (var i = 0; i < local.length; i++)
+            tiles.push({ title: local[i].name, subtitle: "На телефоне",
+                         cover: local[i].cover ? decodeURIComponent(local[i].cover) : "",
+                         kind: "local", ref: local[i].id })
+        var remote = app.loggedIn ? app.yandexPlaylists : []
+        for (var j = 0; j < remote.length; j++)
+            tiles.push({ title: remote[j].title, subtitle: remote[j].owner || "Яндекс",
+                         cover: remote[j].cover, kind: "playlist", ref: remote[j].uid + ":" + remote[j].kind })
+        return tiles
+    }
+    function refreshData() {
+        if (app.loggedIn) {
+            app.refreshHome()
+            app.refreshYandexLibrary()
+        }
+    }
+    Component.onCompleted: refreshData()
+    onVisibleChanged: if (visible) refreshData()
 
     contentHeight: column.implicitHeight + 32
     clip: true
@@ -288,6 +316,54 @@ Flickable {
                     }
                 }
             }
+        }
+
+        CoverRibbon {
+            title: "Твоя медиатека"
+            model: page.libraryTiles
+            onPicked: function (item) { page.open(item.kind, item.ref, item.title) }
+        }
+
+        // Чарт Яндекса: пять строк, остальное — «Все».
+        ColumnLayout {
+            Layout.fillWidth: true
+            visible: app.loggedIn && app.homeChart.count > 0
+            spacing: 4
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.leftMargin: theme.gutter
+                Layout.rightMargin: theme.gutter - 8
+                Text {
+                    Layout.fillWidth: true
+                    text: "Чарт Яндекса"
+                    color: theme.text
+                    font.family: theme.display
+                    font.pixelSize: 18
+                    font.weight: Font.DemiBold
+                }
+                PillButton {
+                    text: "Все"
+                    variant: "text"
+                    compact: true
+                    onClicked: page.open("chart", "", "Чарт")
+                }
+            }
+            Repeater {
+                model: app.homeChart
+                delegate: TrackRow {
+                    listName: "homeChart"
+                    visible: index < 5
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: visible ? 72 : 0
+                    current: app.hasTrack && title === app.title && artist === app.artist
+                }
+            }
+        }
+
+        CoverRibbon {
+            title: "Новые релизы"
+            model: app.loggedIn ? app.homeReleases : []
+            onPicked: function (item) { page.open("album", item.id, item.title) }
         }
 
         // Недавние запросы: касание повторяет поиск.

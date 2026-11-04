@@ -367,6 +367,111 @@ def yandex_liked(token: str) -> list[Result]:
     return _results(_full_tracks(client, ids))
 
 
+def _album_info(album) -> dict | None:
+    if album is None or not album.id:
+        return None
+    artist = ", ".join(a.name for a in (album.artists or []) if a.name)
+    year = f" · {album.year}" if album.year else ""
+    return {
+        "id": str(album.id),
+        "title": album.title or "Альбом",
+        "subtitle": f"{artist}{year}",
+        "cover": _yandex_cover(album.cover_uri or album.og_image or ""),
+    }
+
+
+def _artist_info(artist) -> dict | None:
+    if artist is None or not artist.id:
+        return None
+    uri = (artist.cover.uri if artist.cover else "") or artist.og_image or ""
+    return {"id": str(artist.id), "name": artist.name or "Исполнитель",
+            "cover": _yandex_cover(uri)}
+
+
+def _clean(items) -> list[dict]:
+    return [i for i in items if i is not None]
+
+
+def search_yandex_all(token: str, query: str) -> dict:
+    """Поиск по всему: треки (Result), исполнители, альбомы, плейлисты и
+    лучший результат {"type": artist|album|playlist|track, "item": …}."""
+    client = _client(token)
+    found = _yandex(lambda: client.search(query, type_="all"))
+
+    def part(name):
+        block = getattr(found, name, None) if found else None
+        return block.results if block and block.results else []
+
+    tracks = _results(part("tracks"))[:SEARCH_LIMIT]
+    artists = _clean(map(_artist_info, part("artists")))
+    albums = _clean(map(_album_info, part("albums")))
+    playlists = _clean(_playlist_info(p, liked=True) for p in part("playlists"))
+    best = None
+    if found and found.best and found.best.result is not None:
+        kind, item = found.best.type, found.best.result
+        info = {
+            "artist": _artist_info, "album": _album_info,
+            "playlist": lambda p: _playlist_info(p, liked=True),
+        }.get(kind)
+        if info is not None:
+            best = {"type": kind, "item": info(item)}
+        elif kind == "track" and tracks:
+            best = {"type": "track", "item": {"index": 0}}
+    if best is not None and best["item"] is None:
+        best = None
+    return {"tracks": tracks, "artists": artists, "albums": albums,
+            "playlists": playlists, "best": best}
+
+
+def yandex_artist(token: str, artist_id: str) -> dict:
+    """Исполнитель: имя, фото, популярные треки и альбомы (новые — первыми)."""
+    client = _client(token)
+    brief = _yandex(lambda: client.artists_brief_info(artist_id))
+    direct = _yandex(lambda: client.artists_direct_albums(artist_id, page_size=50))
+    albums = (direct.albums if direct else None) or (brief.albums if brief else []) or []
+    albums = sorted(albums, key=lambda a: a.year or 0, reverse=True)
+    artist = _artist_info(brief.artist if brief else None) or {"name": "", "cover": ""}
+    return {
+        "title": artist["name"],
+        "subtitle": "Исполнитель",
+        "cover": artist["cover"],
+        "tracks": _results(brief.popular_tracks if brief else []),
+        "albums": _clean(map(_album_info, albums)),
+    }
+
+
+def yandex_album(token: str, album_id: str) -> dict:
+    client = _client(token)
+    album = _yandex(lambda: client.albums_with_tracks(album_id))
+    info = _album_info(album) or {"title": "", "subtitle": "", "cover": ""}
+    tracks = [t for volume in (album.volumes or []) for t in volume] if album else []
+    return {"title": info["title"], "subtitle": info["subtitle"], "cover": info["cover"],
+            "tracks": _results(tracks), "albums": []}
+
+
+def yandex_playlist_page(token: str, uid: str, kind: str) -> dict:
+    client = _client(token)
+    playlist = _yandex(lambda: client.users_playlists(kind, uid))
+    info = _playlist_info(playlist, liked=True) or {"title": "", "owner": "", "cover": ""}
+    return {"title": info["title"], "subtitle": info.get("owner") or "Плейлист",
+            "cover": info["cover"], "tracks": yandex_playlist(token, uid, kind), "albums": []}
+
+
+def yandex_chart(token: str) -> list[Result]:
+    """Чарт Яндекса: самые популярные треки сейчас (до 50)."""
+    chart = _yandex(_client(token).chart)
+    shorts = (chart.chart.tracks if chart and chart.chart else [])[:50]
+    return _results(s.track for s in shorts)
+
+
+def yandex_new_releases(token: str) -> list[dict]:
+    client = _client(token)
+    landing = _yandex(client.new_releases)
+    ids = (landing.new_releases if landing else [])[:20]
+    albums = _yandex(lambda: client.albums(ids)) if ids else []
+    return _clean(map(_album_info, albums))
+
+
 def yandex_set_like(token: str, track_id: str, liked: bool) -> None:
     """Поставить или снять лайк в «Мне нравится» аккаунта."""
     client = _client(token)
