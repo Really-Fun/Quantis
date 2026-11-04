@@ -52,6 +52,7 @@ QUERIES_KEY = "search/recent"
 YANDEX_LIKED_KEY = "yandex/liked"
 YANDEX_PLAYLISTS_KEY = "yandex/playlists"
 LIBRARY_REFRESH_S = 300
+PLAYLISTS_KEY = "library/playlists"  # свои плейлисты на телефоне
 HISTORY_LIMIT = 30
 QUERIES_LIMIT = 8
 REPEAT_OFF, REPEAT_ALL, REPEAT_ONE = 0, 1, 2
@@ -175,6 +176,7 @@ class AppController(QObject):
     remoteChanged = Signal()
     downloadsChanged = Signal()
     lyricsChanged = Signal()
+    playlistsChanged = Signal()
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -212,6 +214,11 @@ class AppController(QObject):
         self._dl_queue: list[Result] = []
         self._dl_active: Result | None = None
         self._dl_failed = 0
+        # Свои плейлисты: [{"id", "name", "tracks": [Result…]}], открытый — в
+        # модели "playlist".
+        self._playlists: list[dict] = self._load_local_playlists()
+        self._playlist_model = TrackModel(self)
+        self._playlist_id = ""
         # Текст песни текущего трека: грузится, только пока открыт экран текста.
         self._lyrics_open = False
         self._lyrics_for: Result | None = None
@@ -386,6 +393,29 @@ class AppController(QObject):
     def lyricsState(self) -> str:
         return self._lyrics_state
 
+    @Property("QVariantList", notify=playlistsChanged)
+    def localPlaylists(self) -> list[dict]:
+        """Для QML: id, название, число треков, обложка первого трека."""
+        return [
+            {
+                "id": p["id"],
+                "name": p["name"],
+                "count": len(p["tracks"]),
+                "cover": quote(p["tracks"][0].cover, safe="")
+                if p["tracks"] and p["tracks"][0].cover else "",
+            }
+            for p in self._playlists
+        ]
+
+    @Property(QObject, constant=True)
+    def playlist(self) -> TrackModel:
+        return self._playlist_model
+
+    @Property(str, notify=playlistsChanged)
+    def playlistName(self) -> str:
+        found = self._find_playlist(self._playlist_id)
+        return found["name"] if found else ""
+
     @Property(QObject, constant=True)
     def queue(self) -> TrackModel:
         return self._queue_model
@@ -479,6 +509,7 @@ class AppController(QObject):
             "yandexLiked": self._yandex_liked,
             "remote": self._remote,
             "downloaded": self._downloaded,
+            "playlist": self._playlist_model,
         }.get(name)
 
     def _item(self, name: str, row: int) -> Result | None:
@@ -593,7 +624,7 @@ class AppController(QObject):
         self._downloaded.set_items(self._offline.tracks())
         for model in (
             self._results, self._history, self._liked, self._queue_model,
-            self._yandex_liked, self._remote,
+            self._yandex_liked, self._remote, self._playlist_model,
         ):
             model.refresh_offline()
         self.downloadsChanged.emit()
@@ -642,6 +673,83 @@ class AppController(QObject):
         if self._offline.has(item):
             return 2
         return 1 if self._is_downloading(item) else 0
+
+    # --- свои плейлисты ----------------------------------------------------
+
+    def _load_local_playlists(self) -> list[dict]:
+        try:
+            raw = json.loads(str(self._settings.value(PLAYLISTS_KEY, "[]") or "[]"))
+            return [
+                {"id": str(p["id"]), "name": str(p["name"]),
+                 "tracks": [Result(**t) for t in p.get("tracks", [])]}
+                for p in raw
+            ]
+        except (TypeError, ValueError, KeyError):
+            return []
+
+    def _save_local_playlists(self) -> None:
+        self._settings.setValue(
+            PLAYLISTS_KEY,
+            json.dumps(
+                [{"id": p["id"], "name": p["name"],
+                  "tracks": [asdict(t) for t in p["tracks"]]} for p in self._playlists],
+                ensure_ascii=False,
+            ),
+        )
+        found = self._find_playlist(self._playlist_id)
+        self._playlist_model.set_items(found["tracks"] if found else [])
+        self.playlistsChanged.emit()
+
+    def _find_playlist(self, playlist_id: str) -> dict | None:
+        return next((p for p in self._playlists if p["id"] == playlist_id), None)
+
+    @Slot(str, result=str)
+    def createPlaylist(self, name: str) -> str:
+        name = name.strip() or "Новый плейлист"
+        playlist_id = f"{int(time.time() * 1000):x}"
+        self._playlists.insert(0, {"id": playlist_id, "name": name, "tracks": []})
+        self._save_local_playlists()
+        return playlist_id
+
+    @Slot(str, str)
+    def renamePlaylist(self, playlist_id: str, name: str) -> None:
+        found = self._find_playlist(playlist_id)
+        if found is not None and name.strip():
+            found["name"] = name.strip()
+            self._save_local_playlists()
+
+    @Slot(str)
+    def deletePlaylist(self, playlist_id: str) -> None:
+        self._playlists = [p for p in self._playlists if p["id"] != playlist_id]
+        self._save_local_playlists()
+
+    @Slot(str)
+    def openLocalPlaylist(self, playlist_id: str) -> None:
+        self._playlist_id = playlist_id
+        found = self._find_playlist(playlist_id)
+        self._playlist_model.set_items(found["tracks"] if found else [])
+        self.playlistsChanged.emit()
+
+    @Slot(str, int, str)
+    def addToPlaylistFrom(self, name: str, row: int, playlist_id: str) -> None:
+        item = self._item(name, row)
+        found = self._find_playlist(playlist_id)
+        if item is None or found is None:
+            return
+        key = (item.source, item.track_id)
+        if any((t.source, t.track_id) == key for t in found["tracks"]):
+            self._flash(f"Уже в «{found['name']}»")
+            return
+        found["tracks"].append(item)
+        self._save_local_playlists()
+        self._flash(f"Добавлено в «{found['name']}»")
+
+    @Slot(int)
+    def removeFromPlaylist(self, row: int) -> None:
+        found = self._find_playlist(self._playlist_id)
+        if found is not None and 0 <= row < len(found["tracks"]):
+            del found["tracks"][row]
+            self._save_local_playlists()
 
     # --- текст песни -------------------------------------------------------
 

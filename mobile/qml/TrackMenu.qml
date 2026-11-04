@@ -5,6 +5,7 @@ import QtQuick.Controls.Material
 
 Menu {
     id: menu
+    objectName: "trackMenu"
     property string listName
     property int trackIndex: -1
     // app.liked.count — зависимость: пересчитать после лайка где угодно.
@@ -40,6 +41,34 @@ Menu {
         icon.source: menu.liked ? "icons/heart-filled.svg" : "icons/heart.svg"
         icon.color: menu.liked ? theme.accentPink : theme.text
         onTriggered: app.toggleLikeFrom(menu.listName, menu.trackIndex)
+    }
+    Menu {
+        id: toPlaylist
+        title: "В плейлист"
+        icon.source: "icons/list-music.svg"
+        background: Rectangle { implicitWidth: 248; radius: 14; color: theme.surfaceHigh; border.color: theme.stroke }
+        Instantiator {
+            model: app.localPlaylists
+            delegate: MenuItem {
+                required property var modelData
+                text: modelData.name
+                onTriggered: app.addToPlaylistFrom(menu.listName, menu.trackIndex, modelData.id)
+            }
+            onObjectAdded: function (index, object) { toPlaylist.insertItem(index, object) }
+            onObjectRemoved: function (index, object) { toPlaylist.removeItem(object) }
+        }
+        MenuItem {
+            text: "Новый плейлист…"
+            icon.source: "icons/list-plus.svg"
+            onTriggered: playlistDialog.openCreate(menu.listName, menu.trackIndex)
+        }
+    }
+    MenuItem {
+        text: "Убрать из плейлиста"
+        icon.source: "icons/x.svg"
+        visible: menu.listName === "playlist"
+        height: visible ? implicitHeight : 0
+        onTriggered: app.removeFromPlaylist(menu.trackIndex)
     }
     MenuItem {
         text: menu.downloadState === 2 ? "Удалить с телефона"

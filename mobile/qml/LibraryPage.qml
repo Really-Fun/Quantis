@@ -79,6 +79,37 @@ StackView {
         }
     }
     Component {
+        id: localPlaylistPage
+        TrackListPage {
+            id: localPage
+            title: app.playlistName
+            listName: "playlist"
+            model: app.playlist
+            emptyText: "Добавь треки через меню «⋮» → «В плейлист»"
+            actionText: "Плейлист: переименовать или удалить"
+            actionIcon: "more-vertical"
+            onAction: editMenu.popup()
+            onBack: stack.pop()
+            property string playlistId
+            Menu {
+                id: editMenu
+                background: Rectangle { implicitWidth: 220; radius: 14; color: theme.surfaceHigh; border.color: theme.stroke }
+                MenuItem { text: "Переименовать"; onTriggered: playlistDialog.openRename(localPage.playlistId, app.playlistName) }
+                MenuItem { text: "Удалить плейлист"; onTriggered: playlistDialog.openDelete(localPage.playlistId, app.playlistName) }
+            }
+            Connections {
+                target: playlistDialog
+                function onDeleted() { if (stack.depth > 1) stack.pop() }
+            }
+        }
+    }
+    function openLocalPlaylist(id) {
+        if (stack.depth !== 1)
+            return
+        app.openLocalPlaylist(id)
+        stack.push(localPlaylistPage, { playlistId: id })
+    }
+    Component {
         id: historyPage
         TrackListPage {
             title: "История"
@@ -215,6 +246,24 @@ StackView {
                     : stack.tracksLabel(app.downloaded.count)
                       + (app.downloaded.count > 0 ? " · " + app.offlineSize : "")
                 onClicked: stack.push(downloadedPage)
+            }
+            SectionLabel { text: "Мои плейлисты" }
+            Repeater {
+                model: app.localPlaylists
+                LibraryRow {
+                    required property var modelData
+                    iconName: "list-music"
+                    caption: modelData.name
+                    hint: stack.tracksLabel(modelData.count)
+                    cover: modelData.cover
+                    onClicked: stack.openLocalPlaylist(modelData.id)
+                }
+            }
+            LibraryRow {
+                iconName: "list-plus"
+                caption: "Новый плейлист"
+                hint: "Собери свой из треков Яндекса и YouTube"
+                onClicked: playlistDialog.openCreate("", -1)
             }
             SectionLabel {
                 visible: app.loggedIn

@@ -91,6 +91,12 @@ ApplicationWindow {
         bottomPadding: window.safeBottom
     }
 
+    PlaylistDialog {
+        id: playlistDialog
+        objectName: "playlistDialog"
+        z: 2
+    }
+
     LyricsSheet {
         id: lyricsSheet
         objectName: "lyricsSheet"

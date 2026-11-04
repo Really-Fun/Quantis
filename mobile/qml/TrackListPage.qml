@@ -14,6 +14,7 @@ Item {
     property bool loading: false
     property string errorText: ""
     property string actionText: "" // доп. кнопка в шапке (пусто — нет)
+    property string actionIcon: "" // или значок вместо текста
     signal back()
     signal action()
 
@@ -32,9 +33,17 @@ Item {
                 font.family: theme.display
                 font.pixelSize: 20
                 font.weight: Font.DemiBold
+                elide: Text.ElideRight
+            }
+            IconButton {
+                id: actionButton
+                visible: page.actionIcon !== ""
+                iconName: page.actionIcon
+                label: page.actionText
+                onClicked: page.action()
             }
             PillButton {
-                visible: page.actionText !== ""
+                visible: page.actionText !== "" && page.actionIcon === ""
                 text: page.actionText
                 compact: true
                 onClicked: page.action()
