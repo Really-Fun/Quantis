@@ -200,7 +200,72 @@ def _soundcloud_cover(entry: dict) -> str:
     return url.replace("-original.", "-t500x500.") if url.startswith("https://") else ""
 
 
+def _soundcloud_playable(item: dict) -> bool:
+    """Есть ли у трека поток без DRM (cbc/ctr-encrypted-hls не сыграть)."""
+    transcodings = (item.get("media") or {}).get("transcodings") or []
+    if not transcodings:
+        return True  # не знаем — пусть решит воспроизведение
+    return any(
+        "encrypted" not in str((t.get("format") or {}).get("protocol") or "")
+        for t in transcodings
+    )
+
+
+def _soundcloud_api_result(item: dict) -> Result | None:
+    track_id = str(item.get("id") or "")
+    if item.get("kind") != "track" or not track_id.isdigit():
+        return None
+    if item.get("policy") == "BLOCK" or not _soundcloud_playable(item):
+        return None
+    user = item.get("user") or {}
+    art = str(item.get("artwork_url") or user.get("avatar_url") or "")
+    return Result(
+        source=SOUNDCLOUD,
+        track_id=track_id,
+        title=item.get("title") or track_id,
+        artist=user.get("username") or "",
+        duration=int(item.get("full_duration") or item.get("duration") or 0) // 1000,
+        cover=art.replace("-large.", "-t500x500.") if art.startswith("https://") else "",
+    )
+
+
 def search_soundcloud(query: str) -> list[Result]:
+    """Один запрос к api-v2 вместо scsearch.
+
+    scsearch yt-dlp на каждый найденный трек делает ещё запрос (проверка
+    «оригинала» для скачивания): 21 запрос, 5–19 с. client_id, его
+    обновление при 401/403 и сеть (сертификаты на телефоне) — те же, что у
+    yt-dlp: берём их у его экстрактора. Если API поменялся — старый путь.
+    """
+    try:
+        return _search_soundcloud_api(query)
+    except Exception as exc:
+        if _network_error(exc):
+            raise
+        return _search_soundcloud_ydl(query)
+
+
+def _search_soundcloud_api(query: str) -> list[Result]:
+    import yt_dlp
+
+    with yt_dlp.YoutubeDL({"quiet": True, "no_warnings": True}) as ydl:
+        ie = ydl.get_info_extractor("Soundcloud")
+        ie.initialize()  # client_id из кэша yt-dlp или со страницы сайта
+        data = ie._call_api(
+            ie._API_V2_BASE + "search/tracks",
+            query,
+            "Searching",
+            query={"q": query, "limit": SEARCH_LIMIT * 2},  # часть отсеет DRM
+            headers=ie._HEADERS,
+        )
+    collection = data.get("collection") if isinstance(data, dict) else None
+    if not isinstance(collection, list):
+        raise RuntimeError("SoundCloud: неожиданный ответ поиска")
+    results = [r for r in map(_soundcloud_api_result, collection) if r is not None]
+    return results[:SEARCH_LIMIT]
+
+
+def _search_soundcloud_ydl(query: str) -> list[Result]:
     import yt_dlp
 
     opts = {"quiet": True, "no_warnings": True, "extract_flat": True}
@@ -566,10 +631,8 @@ def _best_download_info(infos: list) -> object | None:
 def yandex_link(token: str, track_id: str) -> tuple[str, str]:
     """Прямая ссылка на полный трек и кодек (mp3, aac…)."""
     client = _client(token)
-    tracks = _yandex(lambda: client.tracks([track_id]))
-    if not tracks:
-        raise RuntimeError("Трек не найден в Яндекс Музыке")
-    infos = _yandex(lambda: tracks[0].get_download_info()) or []
+    # Сразу /download-info: без /tracks впереди — на один запрос меньше.
+    infos = _yandex(lambda: client.tracks_download_info(track_id)) or []
     chosen = _best_download_info(list(infos))
     if chosen is None:
         raise RuntimeError("Яндекс не отдал ссылку на трек")
@@ -595,11 +658,55 @@ def youtube_download_options(outtmpl: str) -> list[dict]:
 # --- общее ------------------------------------------------------------------
 
 
-def resolve(result: Result, token: str, proxy) -> str:
-    """Адрес для QMediaPlayer: https:// Яндекса или http://127.0.0.1 прокси."""
-    if result.source == YANDEX:
-        return resolve_yandex(token, result.track_id)
-    if result.source == SOUNDCLOUD:
-        return soundcloud_stream(result.track_id)
-    youtube_stream(result.track_id)  # ошибка YouTube — сейчас, а не в плеере
+# Прямые ссылки Яндекса и SoundCloud: разобранная заранее (предзагрузка
+# следующего трека, первого результата поиска) берётся отсюда мгновенно.
+# Срок Яндекса неизвестен — держим недолго; протухшую ссылку плеер не
+# сыграет, и backend один раз запросит свежую (fresh=True).
+_LINK_TTL = 10 * 60
+_links: dict[tuple[str, str], tuple[str, float]] = {}
+_link_locks: dict[tuple[str, str], threading.Lock] = {}
+_links_guard = threading.Lock()
+
+
+def _soundcloud_expires(url: str) -> float:
+    """Срок подписанной ссылки SoundCloud (параметр expires), с запасом."""
+    import re
+
+    found = re.search(r"(?i)expires[^0-9&]{0,6}(\d{9,})", url)
+    if found is None:
+        return time.time() + _LINK_TTL
+    return min(float(found.group(1)) - 300, time.time() + 3600)
+
+
+def _direct_link(result: Result, token: str, fresh: bool) -> str:
+    key = (result.source, result.track_id)
+    with _links_guard:
+        lock = _link_locks.setdefault(key, threading.Lock())
+    with lock:  # трек и его предзагрузка не просят одну ссылку дважды
+        cached = _links.get(key)
+        if cached is not None and not fresh and cached[1] > time.time():
+            return cached[0]
+        if result.source == YANDEX:
+            url = resolve_yandex(token, result.track_id)
+            expires = time.time() + _LINK_TTL
+        else:
+            url = soundcloud_stream(result.track_id)
+            expires = _soundcloud_expires(url)
+        with _links_guard:
+            _links[key] = (url, expires)
+        return url
+
+
+def forget_link(result: Result) -> None:
+    """Ссылка не сыгралась — следующий resolve возьмёт свежую."""
+    with _links_guard:
+        _links.pop((result.source, result.track_id), None)
+
+
+def resolve(result: Result, token: str, proxy, *, fresh: bool = False) -> str:
+    """Адрес для QMediaPlayer: https:// Яндекса/SoundCloud или http://127.0.0.1 прокси."""
+    if result.source in (YANDEX, SOUNDCLOUD):
+        return _direct_link(result, token, fresh)
+    # ошибка YouTube — сейчас, а не в плеере
+    youtube_stream(result.track_id, fresh=fresh)
     return proxy.url_for(result.track_id)
