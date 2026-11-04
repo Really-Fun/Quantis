@@ -7,6 +7,12 @@ Item {
     property bool active: false
     property real energy: active ? 1 : 0.35
     property real flash: 1
+    // Плавный вход сверху (px): аврора растворяется в тёмной строке
+    // состояния, а не обрывается о неё.
+    property real topFade: 0
+    // Внизу — до сплошного фона: на главной аврора кончается посреди
+    // страницы, и без этого был виден её край.
+    property bool fadeOut: false
     clip: true
     Behavior on energy { NumberAnimation { duration: 1200; easing.type: Easing.InOutQuad } }
     Behavior on flash { NumberAnimation { duration: 260 } }
@@ -63,7 +69,16 @@ Item {
         gradient: Gradient {
             GradientStop { position: 0; color: Qt.rgba(0.043, 0.051, 0.071, 0.05) }
             GradientStop { position: 0.55; color: Qt.rgba(0.043, 0.051, 0.071, 0.3) }
-            GradientStop { position: 1; color: Qt.rgba(0.043, 0.051, 0.071, 0.88) }
+            GradientStop { position: 1; color: Qt.rgba(0.043, 0.051, 0.071, aurora.fadeOut ? 1 : 0.88) }
+        }
+    }
+    Rectangle {
+        visible: aurora.topFade > 0
+        width: parent.width
+        height: aurora.topFade
+        gradient: Gradient {
+            GradientStop { position: 0; color: theme.bg }
+            GradientStop { position: 1; color: Qt.rgba(0.043, 0.051, 0.071, 0) }
         }
     }
 }

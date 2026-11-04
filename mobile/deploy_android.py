@@ -47,6 +47,8 @@ EXTRA = {
     "icon.filename": str(HERE / "android" / "icon" / "icon.png"),
     "icon.adaptive_foreground.filename": str(HERE / "android" / "icon" / "foreground.png"),
     "icon.adaptive_background.filename": str(HERE / "android" / "icon" / "background.png"),
+    # Создаёт папку для адаптивного значка, которой нет в бутстрапе qt.
+    "p4a.hook": str(HERE / "android" / "p4a_hook.py"),
     # Служебное для сборки не должно попадать в архив приложения.
     "source.exclude_dirs": "android,deployment,bin,.buildozer,__pycache__",
     "source.exclude_patterns": (

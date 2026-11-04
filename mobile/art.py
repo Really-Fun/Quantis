@@ -59,6 +59,11 @@ def _ssl_context() -> ssl.SSLContext:
     return ssl.create_default_context(cafile=certifi.where() or None)
 
 
+def cover_file(url: str) -> Path:
+    """Файл обложки в кэше на диске (может ещё не существовать)."""
+    return _cache_dir() / (hashlib.sha1(url.encode()).hexdigest() + ".img")
+
+
 def load_cover(url: str) -> QImage | None:
     """Обложка из памяти, с диска или из сети; None — не удалось."""
     if not url.startswith("https://"):
@@ -68,7 +73,7 @@ def load_cover(url: str) -> QImage | None:
         if cached is not None:
             _images.move_to_end(url)
             return cached
-    path = _cache_dir() / (hashlib.sha1(url.encode()).hexdigest() + ".img")
+    path = cover_file(url)
     data = path.read_bytes() if path.exists() else None
     if data is None:
         try:

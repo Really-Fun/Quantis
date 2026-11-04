@@ -41,6 +41,10 @@ Flickable {
     onVisibleChanged: if (visible) refreshData()
 
     contentHeight: column.implicitHeight + 32
+    // Только вертикаль: без contentWidth ширину считали по детям, и шире
+    // экрана (аврора, тени) страница ловила горизонтальный жест вместо прокрутки.
+    contentWidth: width
+    flickableDirection: Flickable.VerticalFlick
     clip: true
     boundsBehavior: Flickable.DragOverBounds
 
@@ -48,10 +52,12 @@ Flickable {
     // плеере, только тише; без трека её нет.
     Aurora {
         width: page.width
-        height: 440
+        height: 560
         y: -page.contentY * 0.4 // лёгкий параллакс при прокрутке
         visible: app.hasTrack
         opacity: 0.8
+        topFade: 96
+        fadeOut: true
         active: app.playing && !app.loading
     }
 
@@ -321,13 +327,14 @@ Flickable {
         CoverRibbon {
             title: "Твоя медиатека"
             model: page.libraryTiles
+            loading: app.loggedIn && app.yandexLibraryLoading
             onPicked: function (item) { page.open(item.kind, item.ref, item.title) }
         }
 
         // Чарт Яндекса: пять строк, остальное — «Все».
         ColumnLayout {
             Layout.fillWidth: true
-            visible: app.loggedIn && app.homeChart.count > 0
+            visible: app.loggedIn && (app.homeChart.count > 0 || app.homeLoading)
             spacing: 4
             RowLayout {
                 Layout.fillWidth: true
@@ -348,6 +355,24 @@ Flickable {
                     onClicked: page.open("chart", "", "Чарт")
                 }
             }
+            // Заглушки строк, пока чарт грузится впервые.
+            Repeater {
+                model: app.homeChart.count === 0 ? 5 : 0
+                delegate: RowLayout {
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: 72
+                    Layout.leftMargin: theme.gutter
+                    Layout.rightMargin: theme.gutter
+                    spacing: 12
+                    Rectangle { Layout.preferredWidth: 52; Layout.preferredHeight: 52; radius: 10; color: theme.surfaceHigh }
+                    ColumnLayout {
+                        spacing: 8
+                        Rectangle { Layout.preferredWidth: 160; Layout.preferredHeight: 12; radius: 6; color: theme.surface }
+                        Rectangle { Layout.preferredWidth: 100; Layout.preferredHeight: 10; radius: 5; color: theme.surface }
+                    }
+                    Item { Layout.fillWidth: true }
+                }
+            }
             Repeater {
                 model: app.homeChart
                 delegate: TrackRow {
@@ -363,6 +388,7 @@ Flickable {
         CoverRibbon {
             title: "Новые релизы"
             model: app.loggedIn ? app.homeReleases : []
+            loading: app.loggedIn && app.homeLoading
             onPicked: function (item) { page.open("album", item.id, item.title) }
         }
 

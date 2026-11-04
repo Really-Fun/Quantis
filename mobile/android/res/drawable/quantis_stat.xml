@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Значок уведомления: знак Quantis из android/icon/foreground.svg одним цветом. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="240" android:viewportHeight="240">
+    <group android:translateX="-104" android:translateY="-100">
+        <path android:pathData="M291.4 159.6 A92 92 0 1 0 270.1 288.4" android:strokeColor="#FFFFFFFF" android:strokeWidth="24" android:strokeLineCap="round" android:fillColor="#00000000"/>
+        <path android:pathData="M252 268 Q288 296 324 310" android:strokeColor="#FFFFFFFF" android:strokeWidth="24" android:strokeLineCap="round" android:fillColor="#00000000"/>
+        <path android:pathData="M180 262 C160 220 172 170 220 168 C254 167 266 196 248 210 C234 220 218 210 226 197" android:strokeColor="#FFFFFFFF" android:strokeWidth="18" android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000"/>
+        <path android:pathData="M262 214 v20 M282 204 v40" android:strokeColor="#FFFFFFFF" android:strokeWidth="14" android:strokeLineCap="round" android:fillColor="#00000000"/>
+    </group>
+</vector>

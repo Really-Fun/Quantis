@@ -12,11 +12,29 @@ ColumnLayout {
     property bool round: false
     property int tile: 140
     property bool showAll: false
+    // Данные ещё грузятся: лента держит место заглушками, а не появляется
+    // потом рывком и не сдвигает всё ниже.
+    property bool loading: false
     signal picked(var item, int index)
     signal allClicked()
 
+    // Показанная копия модели: меняется, только если данные правда другие.
+    // Иначе каждое обновление пересоздавало плитки и обложки моргали.
+    property var shown: []
+    property string shownKey: ""
+    function sync() {
+        var items = model || []
+        var key = JSON.stringify(items)
+        if (key !== shownKey) {
+            shownKey = key
+            shown = items
+        }
+    }
+    onModelChanged: sync()
+    Component.onCompleted: sync()
+
     Layout.fillWidth: true
-    visible: model && model.length > 0
+    visible: shown.length > 0 || loading
     spacing: 12
 
     RowLayout {
@@ -40,7 +58,39 @@ ColumnLayout {
             onClicked: ribbon.allClicked()
         }
     }
+    // Заглушки на время загрузки.
+    Row {
+        visible: ribbon.shown.length === 0
+        Layout.fillWidth: true
+        Layout.preferredHeight: ribbon.tile + 64
+        Layout.leftMargin: theme.gutter
+        spacing: 12
+        clip: true
+        Repeater {
+            model: 4
+            Column {
+                spacing: 10
+                Rectangle {
+                    width: ribbon.tile; height: ribbon.tile
+                    radius: ribbon.round ? width / 2 : 14
+                    color: theme.surfaceHigh
+                }
+                Rectangle { width: ribbon.tile * 0.7; height: 12; radius: 6; color: theme.surface }
+                Rectangle { width: ribbon.tile * 0.45; height: 10; radius: 5; color: theme.surface }
+            }
+        }
+        SequentialAnimation on opacity {
+            running: ribbon.visible && ribbon.shown.length === 0 && theme.motion
+            loops: Animation.Infinite
+            NumberAnimation { from: 1; to: 0.45; duration: 700; easing.type: Easing.InOutSine }
+            NumberAnimation { from: 0.45; to: 1; duration: 700; easing.type: Easing.InOutSine }
+        }
+    }
     ListView {
+        visible: ribbon.shown.length > 0
+        // Плавно проявляется, когда пришли данные.
+        opacity: visible ? 1 : 0
+        Behavior on opacity { NumberAnimation { duration: theme.medium } }
         Layout.fillWidth: true
         Layout.preferredHeight: ribbon.tile + 64
         orientation: ListView.Horizontal
@@ -49,7 +99,7 @@ ColumnLayout {
         rightMargin: theme.gutter
         clip: true
         boundsBehavior: Flickable.DragOverBounds
-        model: ribbon.model
+        model: ribbon.shown
         delegate: ItemDelegate {
             id: cell
             required property var modelData

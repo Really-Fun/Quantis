@@ -63,47 +63,58 @@ Drawer {
             Layout.preferredWidth: coverSize * 1.42
             Layout.preferredHeight: coverSize
 
-            Vinyl {
-                id: record
-                width: deck.coverSize * 0.95
-                height: width
-                y: (deck.coverSize - height) / 2
-                // Выезжает так, чтобы показалась часть «яблока» с обложкой.
-                x: sheet.live ? deck.coverSize * 0.45 : deck.coverSize * 0.03
-                Behavior on x { NumberAnimation { duration: 560; easing.type: Easing.OutCubic } }
-                cover: app.cover
-                spinning: sheet.live && sheet.opened
-                scratchable: true
-                exposedFromX: deck.coverSize - x
-            }
+            // Центруем видимое: обложку и выехавшую часть пластинки. Ширина
+            // идёт за анимацией record.x, поэтому на паузе обложка плавно
+            // возвращается в центр, а не остаётся слева.
+            Item {
+                id: stack
+                readonly property real shown: Math.max(deck.coverSize, record.x + record.width)
+                x: (deck.width - shown) / 2
+                width: shown
+                height: deck.coverSize
 
-            Rectangle { // мягкая тень под конвертом
-                x: 6; y: 10
-                width: deck.coverSize; height: width
-                radius: 22
-                color: "#000000"
-                opacity: 0.35
-            }
-            CoverArt {
-                id: cover
-                width: deck.coverSize
-                height: width
-                radius: 20
-                glyph: 0.3
-                seed: app.title
-                cover: app.cover
-                // Свайп по обложке: влево — следующий трек, вправо — предыдущий
-                // (кнопки ниже делают то же).
-                DragHandler {
-                    id: swipe
-                    target: null
-                    xAxis.enabled: true
-                    yAxis.enabled: false
-                    onActiveChanged: {
-                        if (active) return
-                        var dx = centroid.position.x - centroid.pressPosition.x
-                        if (dx < -64) app.next()
-                        else if (dx > 64) app.previous()
+                Vinyl {
+                    id: record
+                    width: deck.coverSize * 0.95
+                    height: width
+                    y: (deck.coverSize - height) / 2
+                    // Выезжает так, чтобы показалась часть «яблока» с обложкой.
+                    x: sheet.live ? deck.coverSize * 0.45 : deck.coverSize * 0.03
+                    Behavior on x { NumberAnimation { duration: 560; easing.type: Easing.OutCubic } }
+                    cover: app.cover
+                    spinning: sheet.live && sheet.opened
+                    scratchable: true
+                    exposedFromX: deck.coverSize - x
+                }
+
+                Rectangle { // мягкая тень под конвертом
+                    x: 6; y: 10
+                    width: deck.coverSize; height: width
+                    radius: 22
+                    color: "#000000"
+                    opacity: 0.35
+                }
+                CoverArt {
+                    id: cover
+                    width: deck.coverSize
+                    height: width
+                    radius: 20
+                    glyph: 0.3
+                    seed: app.title
+                    cover: app.cover
+                    // Свайп по обложке: влево — следующий трек, вправо — предыдущий
+                    // (кнопки ниже делают то же).
+                    DragHandler {
+                        id: swipe
+                        target: null
+                        xAxis.enabled: true
+                        yAxis.enabled: false
+                        onActiveChanged: {
+                            if (active) return
+                            var dx = centroid.position.x - centroid.pressPosition.x
+                            if (dx < -64) app.next()
+                            else if (dx > 64) app.previous()
+                        }
                     }
                 }
             }
