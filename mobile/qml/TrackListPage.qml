@@ -1,4 +1,5 @@
-// Страница со списком треков (Любимое, История): назад, заголовок, список.
+// Страница со списком треков (Любимое, История, «Мне нравится», плейлист):
+// назад, заголовок, список; для загружаемых — индикатор и текст ошибки.
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Controls.Material
@@ -10,6 +11,8 @@ Item {
     property string listName
     property var model
     property string emptyText
+    property bool loading: false
+    property string errorText: ""
     signal back()
 
     ColumnLayout {
@@ -49,12 +52,17 @@ Item {
             }
             ScrollIndicator.vertical: ScrollIndicator {}
 
+            BusyIndicator {
+                anchors.centerIn: parent
+                running: page.loading && list.count === 0
+                visible: running
+            }
             Text {
                 anchors.centerIn: parent
                 width: parent.width - 2 * theme.gutter
-                visible: list.count === 0
+                visible: list.count === 0 && !page.loading
                 horizontalAlignment: Text.AlignHCenter
-                text: page.emptyText
+                text: page.errorText || page.emptyText
                 color: theme.textDim
                 wrapMode: Text.WordWrap
                 font.family: theme.ui

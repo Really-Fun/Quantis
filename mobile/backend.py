@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import random
+import time
 import traceback
 import wave
 from dataclasses import asdict
@@ -42,6 +43,10 @@ SOURCE_KEY = "search/source"
 HISTORY_KEY = "library/history"
 LIKES_KEY = "library/likes"
 QUERIES_KEY = "search/recent"
+# Кэш медиатеки Яндекса: показываем сразу, обновляем в фоне.
+YANDEX_LIKED_KEY = "yandex/liked"
+YANDEX_PLAYLISTS_KEY = "yandex/playlists"
+LIBRARY_REFRESH_S = 300
 HISTORY_LIMIT = 30
 QUERIES_LIMIT = 8
 REPEAT_OFF, REPEAT_ALL, REPEAT_ONE = 0, 1, 2
@@ -148,6 +153,8 @@ class AppController(QObject):
     likesChanged = Signal()
     waveChanged = Signal()
     sleepChanged = Signal()
+    yandexLibraryChanged = Signal()
+    remoteChanged = Signal()
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -165,6 +172,17 @@ class AppController(QObject):
         self._queries: list[str] = self._load_queries()
         self._liked = TrackModel(self)
         self._liked.set_items(self._load_tracks(LIKES_KEY))
+        # Медиатека Яндекса: «Мне нравится» и свои плейлисты (из кэша, потом
+        # из сети) и открытый плейлист — remote.
+        self._yandex_liked = TrackModel(self)
+        self._yandex_liked.set_items(self._load_tracks(YANDEX_LIKED_KEY))
+        self._yandex_playlists = self._load_playlists()
+        self._library_jobs = 0
+        self._library_at = -LIBRARY_REFRESH_S
+        self._remote = TrackModel(self)
+        self._remote_loading = False
+        self._remote_error = ""
+        self._remote_gen = 0
         # Очередь для экрана «Очередь» — та же, что играет.
         self._queue_model = TrackModel(self)
         # «Моя волна»: сессия, имя волны и признак, что очередь — волна.
@@ -275,6 +293,30 @@ class AppController(QObject):
         return self._liked
 
     @Property(QObject, constant=True)
+    def yandexLiked(self) -> TrackModel:
+        return self._yandex_liked
+
+    @Property("QVariantList", notify=yandexLibraryChanged)
+    def yandexPlaylists(self) -> list[dict]:
+        return self._yandex_playlists
+
+    @Property(bool, notify=yandexLibraryChanged)
+    def yandexLibraryLoading(self) -> bool:
+        return self._library_jobs > 0
+
+    @Property(QObject, constant=True)
+    def remote(self) -> TrackModel:
+        return self._remote
+
+    @Property(bool, notify=remoteChanged)
+    def remoteLoading(self) -> bool:
+        return self._remote_loading
+
+    @Property(str, notify=remoteChanged)
+    def remoteError(self) -> str:
+        return self._remote_error
+
+    @Property(QObject, constant=True)
     def queue(self) -> TrackModel:
         return self._queue_model
 
@@ -343,6 +385,8 @@ class AppController(QObject):
             "history": self._history,
             "liked": self._liked,
             "queue": self._queue_model,
+            "yandexLiked": self._yandex_liked,
+            "remote": self._remote,
         }.get(name)
 
     def _item(self, name: str, row: int) -> Result | None:
@@ -401,6 +445,86 @@ class AppController(QObject):
     def _set_queue(self, items: list[Result]) -> None:
         self._queue = list(items)
         self._queue_model.set_items(self._queue)
+
+    # --- медиатека Яндекса ------------------------------------------------
+
+    @Slot()
+    def refreshYandexLibrary(self) -> None:
+        """Открыта медиатека: обновить, если с прошлого раза прошло 5 минут."""
+        if time.monotonic() - self._library_at > LIBRARY_REFRESH_S:
+            self._refresh_library()
+
+    def _refresh_library(self) -> None:
+        """«Мне нравится» и плейлисты из сети; кэш виден, пока идёт запрос."""
+        if not self._token or self._library_jobs:
+            return
+        self._library_at = time.monotonic()
+        token = self._token
+        self._library_jobs = 2
+        self.yandexLibraryChanged.emit()
+
+        def finish() -> None:
+            self._library_jobs = max(0, self._library_jobs - 1)
+            self.yandexLibraryChanged.emit()
+
+        def liked_done(items: list[Result]) -> None:
+            if token == self._token:
+                self._yandex_liked.set_items(items)
+                self._save_tracks(YANDEX_LIKED_KEY, items)
+            finish()
+
+        def playlists_done(items: list[dict]) -> None:
+            if token == self._token:
+                self._yandex_playlists = items
+                self._settings.setValue(
+                    YANDEX_PLAYLISTS_KEY, json.dumps(items, ensure_ascii=False)
+                )
+            finish()
+
+        def failed(text: str) -> None:
+            self._flash(f"Медиатека Яндекса не обновилась: {text}")
+            finish()
+
+        self._run(sources.yandex_liked, (token,), liked_done, failed)
+        self._run(sources.yandex_playlists, (token,), playlists_done, failed)
+
+    @Slot(str, str)
+    def openPlaylist(self, uid: str, kind: str) -> None:
+        """Загрузить плейлист в remote; ответ на прошлый запрос — отбросить."""
+        self._remote_gen += 1
+        gen = self._remote_gen
+        self._remote.set_items([])
+        self._remote_loading = True
+        self._remote_error = ""
+        self.remoteChanged.emit()
+
+        def done(items: list[Result]) -> None:
+            if gen == self._remote_gen:
+                self._remote.set_items(items)
+                self._remote_loading = False
+                self.remoteChanged.emit()
+
+        def failed(text: str) -> None:
+            if gen == self._remote_gen:
+                self._remote_loading = False
+                self._remote_error = f"Не удалось загрузить: {text}"
+                self.remoteChanged.emit()
+
+        self._run(sources.yandex_playlist, (self._token, uid, kind), done, failed)
+
+    def _load_playlists(self) -> list[dict]:
+        try:
+            raw = json.loads(str(self._settings.value(YANDEX_PLAYLISTS_KEY, "[]") or "[]"))
+            return [dict(item) for item in raw if isinstance(item, dict)]
+        except (TypeError, ValueError):
+            return []
+
+    def _clear_yandex_library(self) -> None:
+        self._yandex_liked.set_items([])
+        self._yandex_playlists = []
+        self._settings.remove(YANDEX_LIKED_KEY)
+        self._settings.remove(YANDEX_PLAYLISTS_KEY)
+        self.yandexLibraryChanged.emit()
 
     # --- моя волна --------------------------------------------------------
 
@@ -664,11 +788,14 @@ class AppController(QObject):
             )
 
     def _on_account(self, token: str, who: str) -> None:
+        if token != self._token:
+            self._clear_yandex_library()  # другой аккаунт — чужой кэш не показываем
         self._token = token
         self._settings.setValue(TOKEN_KEY, token)
         self._account = who
         self.accountChanged.emit()
         self.setSource(YANDEX)
+        self._refresh_library()
 
     def _on_account_failed(self, text: str) -> None:
         self._account = f"Токен не подошёл: {text}"
@@ -678,6 +805,7 @@ class AppController(QObject):
     def logout(self) -> None:
         self._token = ""
         self._settings.setValue(TOKEN_KEY, "")
+        self._clear_yandex_library()
         self._account = ""
         self.accountChanged.emit()
         self.setSource(YOUTUBE)

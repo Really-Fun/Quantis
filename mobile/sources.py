@@ -240,6 +240,69 @@ def search_yandex(token: str, query: str) -> list[Result]:
     return results
 
 
+LIBRARY_LIMIT = 1000  # треков из «Мне нравится» и одного плейлиста
+_TRACKS_BATCH = 250  # id в одном запросе /tracks
+
+
+def _full_tracks(client, ids: list[str]) -> list:
+    """Полные треки по id, пачками: у «Мне нравится» в ответе только id."""
+    tracks = []
+    for start in range(0, len(ids), _TRACKS_BATCH):
+        chunk = ids[start : start + _TRACKS_BATCH]
+        tracks += _yandex(lambda chunk=chunk: client.tracks(chunk)) or []
+    return tracks
+
+
+def _results(tracks) -> list[Result]:
+    return [r for r in map(yandex_result, tracks) if r is not None]
+
+
+def yandex_liked(token: str) -> list[Result]:
+    """«Мне нравится» аккаунта, новые — первыми."""
+    client = _client(token)
+    likes = _yandex(client.users_likes_tracks)
+    ids = [
+        f"{t.id}:{t.album_id}" if t.album_id else str(t.id)
+        for t in (likes.tracks if likes else [])[:LIBRARY_LIMIT]
+    ]
+    return _results(_full_tracks(client, ids))
+
+
+def yandex_playlists(token: str) -> list[dict]:
+    """Свои плейлисты аккаунта: uid, kind, название, число треков, обложка."""
+    client = _client(token)
+    playlists = _yandex(client.users_playlists_list) or []
+    found = []
+    for playlist in playlists:
+        if playlist.kind is None or playlist.owner is None:
+            continue
+        cover = playlist.cover
+        uri = ""
+        if cover is not None:
+            uri = cover.uri or (cover.items_uri[0] if cover.items_uri else "")
+        found.append(
+            {
+                "uid": str(playlist.owner.uid),
+                "kind": str(playlist.kind),
+                "title": playlist.title or "Без названия",
+                "count": int(playlist.track_count or 0),
+                "cover": _yandex_cover(uri or playlist.og_image or ""),
+            }
+        )
+    return found
+
+
+def yandex_playlist(token: str, uid: str, kind: str) -> list[Result]:
+    """Треки плейлиста по порядку; если треки пришли без данных — дозапрос."""
+    client = _client(token)
+    playlist = _yandex(lambda: client.users_playlists(kind, uid))
+    shorts = (playlist.tracks if playlist else [])[:LIBRARY_LIMIT]
+    if all(s.track is not None for s in shorts):
+        return _results(s.track for s in shorts)
+    ids = [f"{s.id}:{s.album_id}" if s.album_id else str(s.id) for s in shorts]
+    return _results(_full_tracks(client, ids))
+
+
 def yandex_result(track) -> Result | None:
     """Трек yandex-music → Result; недоступный (нет прав, удалён) — None."""
     if track is None or track.available is False or not track.id:

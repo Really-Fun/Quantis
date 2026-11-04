@@ -1,4 +1,5 @@
-// Медиатека: Любимое, История и аккаунт Яндекс Музыки; каждое — своя страница.
+// Медиатека: Любимое, История, медиатека Яндекса («Мне нравится» и свои
+// плейлисты, если выполнен вход) и аккаунт; каждое — своя страница.
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Controls.Material
@@ -7,6 +8,8 @@ import QtQuick.Layouts
 StackView {
     id: stack
     initialItem: root
+    // Вкладку открыли — медиатеку Яндекса обновить (не чаще раза в 5 минут).
+    onVisibleChanged: if (visible && app.loggedIn) app.refreshYandexLibrary()
 
     function openAccount() {
         if (stack.depth === 1)
@@ -15,6 +18,10 @@ StackView {
     function openLiked() {
         if (stack.depth === 1)
             stack.push(likedPage)
+    }
+    function openYandexLiked() {
+        if (stack.depth === 1)
+            stack.push(yandexLikedPage)
     }
 
     Component {
@@ -30,6 +37,34 @@ StackView {
             emptyText: "Нажми «♡» в плеере или в меню трека — он появится здесь"
             onBack: stack.pop()
         }
+    }
+    Component {
+        id: yandexLikedPage
+        TrackListPage {
+            title: "Мне нравится"
+            listName: "yandexLiked"
+            model: app.yandexLiked
+            loading: app.yandexLibraryLoading
+            emptyText: "В «Мне нравится» на Яндексе пока пусто"
+            onBack: stack.pop()
+        }
+    }
+    Component {
+        id: playlistPage
+        TrackListPage {
+            listName: "remote"
+            model: app.remote
+            loading: app.remoteLoading
+            errorText: app.remoteError
+            emptyText: "В плейлисте нет доступных треков"
+            onBack: stack.pop()
+        }
+    }
+    function openPlaylist(item) {
+        if (stack.depth !== 1)
+            return
+        app.openPlaylist(item.uid, item.kind)
+        stack.push(playlistPage, { title: item.title })
     }
     Component {
         id: historyPage
@@ -49,6 +84,7 @@ StackView {
         property string caption
         property string hint
         property color hintColor: theme.textDim
+        property string cover: "" // url-encoded https — обложка вместо значка
         Layout.fillWidth: true
         Layout.leftMargin: theme.gutter - 4
         Layout.rightMargin: theme.gutter - 4
@@ -61,7 +97,14 @@ StackView {
         }
         contentItem: RowLayout {
             spacing: 14
+            CoverArt {
+                visible: entry.cover !== ""
+                Layout.preferredWidth: 44; Layout.preferredHeight: 44
+                seed: entry.caption
+                cover: entry.cover
+            }
             Rectangle {
+                visible: entry.cover === ""
                 Layout.preferredWidth: 44; Layout.preferredHeight: 44
                 radius: 22
                 color: theme.surfaceHigh
@@ -107,10 +150,27 @@ StackView {
         return n + " " + word
     }
 
-    Item {
+    // Подзаголовок раздела.
+    component SectionLabel: Text {
+        Layout.leftMargin: theme.gutter
+        Layout.topMargin: 14
+        color: theme.textDim
+        font.family: theme.ui
+        font.pixelSize: 13
+        font.weight: Font.DemiBold
+        font.capitalization: Font.AllUppercase
+        font.letterSpacing: 0.8
+    }
+
+    Flickable {
         id: root
+        contentHeight: column.implicitHeight + 24
+        clip: true
+        boundsBehavior: Flickable.StopAtBounds
+        ScrollIndicator.vertical: ScrollIndicator {}
         ColumnLayout {
-            anchors.fill: parent
+            id: column
+            width: root.width
             spacing: 10
 
             Text {
@@ -135,6 +195,30 @@ StackView {
                 hint: stack.tracksLabel(app.history.count)
                 onClicked: stack.push(historyPage)
             }
+            SectionLabel {
+                visible: app.loggedIn
+                text: "Яндекс Музыка"
+            }
+            LibraryRow {
+                visible: app.loggedIn
+                iconName: "heart-filled"
+                caption: "Мне нравится"
+                hint: app.yandexLiked.count > 0 ? stack.tracksLabel(app.yandexLiked.count)
+                    : (app.yandexLibraryLoading ? "Загружаем…" : "Пусто")
+                onClicked: stack.openYandexLiked()
+            }
+            Repeater {
+                model: app.loggedIn ? app.yandexPlaylists : []
+                LibraryRow {
+                    required property var modelData
+                    iconName: "list-music"
+                    caption: modelData.title
+                    hint: stack.tracksLabel(modelData.count)
+                    cover: modelData.cover ? encodeURIComponent(modelData.cover) : ""
+                    onClicked: stack.openPlaylist(modelData)
+                }
+            }
+            SectionLabel { text: "Аккаунт" }
             LibraryRow {
                 iconName: "user"
                 caption: "Яндекс Музыка"
@@ -142,7 +226,6 @@ StackView {
                 hintColor: app.loggedIn ? theme.textDim : theme.yandex
                 onClicked: stack.push(accountPage)
             }
-            Item { Layout.fillHeight: true }
         }
     }
 }
