@@ -60,7 +60,13 @@ class _Record:
     alias_track_id: str = ""
 
 
-def _key(source: str | None, track_id: str) -> Key:
+def track_key(source: str | None, track_id: str) -> Key:
+    """Канонический ключ трека: источник в нижнем регистре, id SoundCloud без `sc`.
+
+    Единственное место этой нормализации: на него опираются и индекс, и
+    замок скачивания в AsyncDownloader, иначе они разойдутся в том, какие
+    id считать одним треком.
+    """
     src = str(source).lower() if source is not None else ""
     tid = str(track_id)
     if src == "soundcloud" and tid.startswith(_SOUNDCLOUD_PREFIX):
@@ -241,10 +247,13 @@ class LibraryIndex:
         """
         best: dict[Key, tuple[tuple[bool, bool], str]] = {}
         for name, rec in self._files.items():
-            candidates = [(_key(rec.source, rec.track_id), (rec.tagged, True))]
+            candidates = [(track_key(rec.source, rec.track_id), (rec.tagged, True))]
             if rec.ambiguous and rec.alias_source:
                 candidates.append(
-                    (_key(rec.alias_source, rec.alias_track_id), (rec.tagged, False))
+                    (
+                        track_key(rec.alias_source, rec.alias_track_id),
+                        (rec.tagged, False),
+                    )
                 )
             for key, rank in candidates:
                 current = best.get(key)
@@ -411,19 +420,19 @@ class LibraryIndex:
         self._notify()
 
     def entry_for(self, source: str, track_id: str) -> IndexEntry | None:
-        return self._lookup(_key(source, track_id))
+        return self._lookup(track_key(source, track_id))
 
     def path_for(self, source: str, track_id: str) -> Path | None:
-        entry = self._lookup(_key(source, track_id))
+        entry = self._lookup(track_key(source, track_id))
         return entry.path if entry else None
 
     def has(self, source: str | None, track_id: str) -> bool:
         if source is not None:
-            return self._lookup(_key(source, track_id)) is not None
+            return self._lookup(track_key(source, track_id)) is not None
         with self._lock:
             keys = list(self._keys)
         tid = str(track_id)
-        wanted = {tid, _key("soundcloud", tid)[1]}
+        wanted = {tid, track_key("soundcloud", tid)[1]}
         return any(self._lookup(key) is not None for key in keys if key[1] in wanted)
 
     def entries(self) -> list[IndexEntry]:

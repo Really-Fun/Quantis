@@ -315,6 +315,24 @@ async def test_soundcloud_ids_with_and_without_prefix_dedupe(index, music):
     assert calls == ["sc123"]
 
 
+@pytest.mark.parametrize(
+    ("source", "track_id"),
+    [
+        ("soundcloud", "sc123"),
+        ("SoundCloud", "sc123"),
+        ("SoundCloud", "123"),
+        ("YANDEX", "42"),
+        ("youtube", "scAbCdEfGhI"),
+    ],
+)
+def test_download_guard_and_index_share_one_key(source, track_id):
+    """Замок скачивания и индекс должны считать одни и те же id одним треком."""
+    from quantis.providers.library_index import track_key
+
+    s, t = track_key(source, track_id)
+    assert AsyncDownloader._guard_key(source, track_id) == f"{s}:{t}"
+
+
 @pytest.mark.asyncio
 async def test_rename_failure_still_succeeds(index, music, monkeypatch):
     real_replace = Path.replace

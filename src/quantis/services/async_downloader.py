@@ -858,11 +858,11 @@ class AsyncDownloader(AsyncDownloaderInterface):
 
     @staticmethod
     def _guard_key(source: str, track_id: str) -> str:
-        source = str(source)
-        track_id = str(track_id)
-        if source == "soundcloud" and track_id.startswith("sc"):
-            track_id = track_id[2:]
-        return f"{source}:{track_id}"
+        """Ключ замка: тот же, что у индекса, чтобы замок и индекс не разошлись."""
+        from quantis.providers.library_index import track_key
+
+        src, tid = track_key(source, track_id)
+        return f"{src}:{tid}"
 
     def is_downloading(self, source: str, track_id: str) -> bool:
         """Идёт ли download_full для этого трека (id SoundCloud — с `sc` или без)."""
