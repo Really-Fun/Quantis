@@ -75,6 +75,8 @@ class AsyncStreamer(AsyncStreamerInterface):
         self._http_proxy = LocalHttpStreamProxy(self._fetch_fresh_stream_url)
         self._buffer_loop: Any = None
         self._cache: OrderedDict[str, tuple[str, float]] = OrderedDict()
+        # Трек Яндекса/SoundCloud → id клипа на YouTube (поиск — ~1 с).
+        self._video_ids: OrderedDict[str, str | None] = OrderedDict()
 
     async def _fetch_fresh_stream_url(self, track: Track) -> str | None:
         """Прямой URL без кэша фасада (для progressive buffer / recovery)."""
@@ -165,6 +167,41 @@ class AsyncStreamer(AsyncStreamerInterface):
             video_id, height=height, exclude_itags=exclude_itags
         )
 
+    async def open_video(
+        self,
+        track: Track,
+        finder: object | None = None,
+        *,
+        height: int = WALLPAPER_DEFAULT_QUALITY,
+        exclude_itags: frozenset[str] | None = None,
+    ) -> tuple[str | None, str | None, int]:
+        """Видео для фона: (адрес для плеера, исходная ссылка, длительность).
+
+        googlevideo идёт через локальный прокси — он берёт видео кусками,
+        иначе YouTube урезает поток 480p+ ниже битрейта и фон встаёт.
+        """
+        video_id = await self._resolve_youtube_video_id(track, finder)
+        if not video_id:
+            return None, None, 0
+        url, duration = await self._youtube.get_video_info(
+            video_id, height=height, exclude_itags=exclude_itags
+        )
+        if not url:
+            return None, None, duration
+        if "googlevideo.com" not in url:
+            return url, url, duration
+
+        async def refresh() -> str | None:
+            self._youtube.invalidate(video_id)
+            fresh, _ = await self._youtube.get_video_info(
+                video_id, height=height, exclude_itags=exclude_itags
+            )
+            return fresh
+
+        self._buffer_loop = get_running_loop()
+        local = await self._http_proxy.mount_video(track, url, refresh)
+        return local, url, duration
+
     async def _resolve_youtube_video_id(
         self, track: Track, finder: object | None
     ) -> str | None:
@@ -173,9 +210,16 @@ class AsyncStreamer(AsyncStreamerInterface):
             return str(track.track_id)
         if finder is None:
             return None
+        key = f"{track.source}:{track.track_id}"
+        if key in self._video_ids:
+            self._video_ids.move_to_end(key)
+            return self._video_ids[key]
         query = f"{track.title} {track.author}"
+        # Только YouTube: общий поиск ждёт ещё Яндекс и SoundCloud (до 15 с).
+        youtube = getattr(finder, "youtube", None)
+        search = youtube if youtube is not None else finder
         try:
-            results = await finder.get_tracks(query, value=3)  # type: ignore[attr-defined]
+            results = await search.get_tracks(query, value=3)  # type: ignore[attr-defined]
         except Exception:
             logger.exception("Поиск YouTube-видео для обоев: %s", query)
             return None
@@ -183,7 +227,11 @@ class AsyncStreamer(AsyncStreamerInterface):
             (t for t in results if str(t.source).lower() == TrackSource.YOUTUBE),
             None,
         )
-        return str(youtube_hit.track_id) if youtube_hit else None
+        video_id = str(youtube_hit.track_id) if youtube_hit else None
+        self._video_ids[key] = video_id
+        while len(self._video_ids) > 256:
+            self._video_ids.popitem(last=False)
+        return video_id
 
     def invalidate(self, track: Track) -> None:
         key = f"{track.source}:{track.track_id}"

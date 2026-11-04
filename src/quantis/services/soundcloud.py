@@ -94,3 +94,45 @@ def track_from_ydl(info: dict[str, Any] | None) -> SoundCloudTrack | None:
         thumbnail_url=thumbnail,
         duration_ms=duration_ms,
     )
+
+
+def _api_playable(item: dict[str, Any]) -> bool:
+    """Есть ли поток без DRM (cbc/ctr-encrypted-hls не сыграть)."""
+    transcodings = (item.get("media") or {}).get("transcodings") or []
+    if not transcodings:
+        return True  # не знаем — пусть решит воспроизведение
+    return any(
+        "encrypted" not in str((t.get("format") or {}).get("protocol") or "")
+        for t in transcodings
+    )
+
+
+def track_from_api(item: dict[str, Any] | None) -> SoundCloudTrack | None:
+    """Трек из ответа api-v2 search/tracks; заблокированные и DRM — None."""
+    if not isinstance(item, dict):
+        return None
+    track_id = str(item.get("id") or "")
+    if item.get("kind") != "track" or not track_id.isdigit():
+        return None
+    if item.get("policy") == "BLOCK" or not _api_playable(item):
+        return None
+    user = item.get("user") or {}
+    art = str(item.get("artwork_url") or user.get("avatar_url") or "")
+    if art.startswith("https://"):
+        art = art.replace("-large.", "-t500x500.")
+    else:
+        art = ""
+    try:
+        duration_ms = max(
+            0, int(item.get("full_duration") or item.get("duration") or 0)
+        )
+    except (TypeError, ValueError):
+        duration_ms = 0
+    return SoundCloudTrack(
+        track_id=track_id,
+        title=str(item.get("title") or track_id),
+        author=str(user.get("username") or "Unknown Artist"),
+        downloaded=False,
+        thumbnail_url=art,
+        duration_ms=duration_ms,
+    )

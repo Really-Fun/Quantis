@@ -7,7 +7,7 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 from quantis.core.async_bridge import AsyncBridge
-from quantis.models import Track
+from quantis.models import Track, TrackSource
 from quantis.models.playlist import RecommendationPlaylist, WavePlaylist
 from quantis.models.repeat_mode import RepeatMode
 from quantis.player import Player
@@ -25,6 +25,8 @@ _HEALTHY_POSITION_MS = 15_000
 # Ссылку на следующий трек берём за столько секунд до конца текущего.
 _PREFETCH_LEAD_S = 35.0
 _PREFETCH_UNKNOWN_DELAY_S = 20.0
+# Чуть позже старта, чтобы не делить сеть с буферизацией текущего трека.
+_PREFETCH_YOUTUBE_DELAY_S = 3.0
 
 NextTrackProvider = Callable[[], Awaitable[Track | None]]
 
@@ -291,14 +293,18 @@ class PlaybackController:
         # трека протухала к его концу и отнимала лимит у следующего клика —
         # первый трек новой волны не запускался. Берём ссылку ближе к концу.
         seq = self._play_seq
-        delay = self._prefetch_delay_s(current)
+        delay = self._prefetch_delay_s(current, nxt)
         if delay > 0:
             await asyncio.sleep(delay)
             if seq != self._play_seq:
                 return
         await self.music.streamer.prefetch_stream(nxt)
 
-    def _prefetch_delay_s(self, current: Track) -> float:
+    def _prefetch_delay_s(self, current: Track, nxt: Track | None = None) -> float:
+        if nxt is not None and str(nxt.source).lower() == TrackSource.YOUTUBE:
+            # Ссылки YouTube живут часами и лимита нет — берём почти сразу:
+            # «следующий» посреди трека тогда стартует без ожидания yt-dlp.
+            return _PREFETCH_YOUTUBE_DELAY_S
         duration_ms = int(self.player.duration or 0) or int(
             getattr(current, "duration_ms", 0) or 0
         )

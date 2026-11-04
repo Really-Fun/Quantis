@@ -80,11 +80,13 @@ def test_search_skips_rows_without_video_id() -> None:
     finder._client.search.return_value = [
         {
             "title": "Missing id",
+            "resultType": "song",
             "videoId": None,
             "artists": [{"name": "X"}],
         },
         {
             "title": "Ok",
+            "resultType": "song",
             "videoId": "abcdefghijk",
             "artists": [{"name": "Artist"}],
             "duration_seconds": 90,

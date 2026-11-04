@@ -228,14 +228,12 @@ class AsyncYoutubeFinder(AsyncFinderInterface):
 
     def _sync_get_tracks(self, title: str, value: int = 5) -> list[Track]:
         try:
-            results = self.client.search(query=title, filter="songs", limit=value)
-            if not results:
-                results = self.client.search(query=title, limit=value * 3)
-                results = [
-                    r
-                    for r in (results or [])
-                    if r.get("resultType") in ("song", "video")
-                ][:value]
+            # search(filter="songs") у ytmusicapi отвечает пустым списком —
+            # это лишние ~0,4 с на каждый поиск. Фильтруем выдачу сами.
+            results = self.client.search(query=title, limit=value * 3)
+            results = [
+                r for r in (results or []) if r.get("resultType") in ("song", "video")
+            ][:value]
             if not results:
                 results = [self.client.get_song(videoId=title)["videoDetails"]]
         except Exception as e:

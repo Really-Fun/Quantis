@@ -34,6 +34,16 @@ _URL_TTL_SEC = 40.0
 _CHUNK_BYTES = 64 * 1024
 _MAX_RECONNECTS = 8
 _CONNECT_TIMEOUT = ClientTimeout(total=15, sock_connect=10)
+# googlevideo режет одно соединение с открытым Range (bytes=N-) до 0,1–0,6 МБ/с
+# — меньше битрейта видео 720p/1080p, и фон встаёт. Те же байты кусками с
+# явным концом идут на 5+ МБ/с (так качает и yt-dlp).
+_GOOGLEVIDEO_CHUNK_BYTES = 4 * 1024 * 1024
+
+UrlRefresher = Callable[[], Awaitable[str | None]]
+
+
+def _chunked_upstream(url: str) -> bool:
+    return "googlevideo.com" in url
 
 
 def _parse_range(header: str | None) -> tuple[int, int | None]:
@@ -73,6 +83,10 @@ class LocalHttpStreamProxy:
         self._client: ClientSession | None = None
         self._tracks: dict[str, Track] = {}
         self._urls: dict[str, tuple[str, float]] = {}
+        # Видео-фон: свой способ взять свежую ссылку, а живёт она часами —
+        # по таймеру её не обновляем, только после 403/410.
+        self._refreshers: dict[str, UrlRefresher] = {}
+        self._video_mounts = 0
 
     @property
     def port(self) -> int:
@@ -100,6 +114,24 @@ class LocalHttpStreamProxy:
         self._urls[key] = (url, time.monotonic())
         return self.local_url(track)
 
+    async def mount_video(self, track: Track, url: str, refresh: UrlRefresher) -> str:
+        """Видео-фон через прокси: googlevideo отдаёт его кусками, без урезания."""
+        await self.ensure_started()
+        # Новый адрес на каждую ссылку: иначе плеер фона примет его за уже
+        # открытый поток и не перезагрузит другой формат после зависаний.
+        self._video_mounts += 1
+        stale = [k for k in self._refreshers if k.endswith(f"/{_route_key(track)}")]
+        stale += list(self._refreshers)[:-8]  # фоны давно сыгранных треков
+        for old_key in stale:
+            self._refreshers.pop(old_key, None)
+            self._urls.pop(old_key, None)
+            self._tracks.pop(old_key, None)
+        key = f"video/{self._video_mounts}/{_route_key(track)}"
+        self._tracks[key] = track
+        self._refreshers[key] = refresh
+        self._urls[key] = (url, time.monotonic())
+        return f"http://127.0.0.1:{self._port}/{key}"
+
     def invalidate_track(self, track: Track) -> None:
         self._urls.pop(_route_key(track), None)
 
@@ -113,6 +145,7 @@ class LocalHttpStreamProxy:
         self._port = 0
         self._tracks.clear()
         self._urls.clear()
+        self._refreshers.clear()
 
     async def _ensure_client(self) -> ClientSession:
         if self._client is None or self._client.closed:
@@ -126,11 +159,14 @@ class LocalHttpStreamProxy:
         self, key: str, track: Track, *, force: bool = False
     ) -> str | None:
         now = time.monotonic()
+        refresh = self._refreshers.get(key)
         if not force:
             cached = self._urls.get(key)
-            if cached is not None and now - cached[1] < _URL_TTL_SEC:
+            if cached is not None and (
+                refresh is not None or now - cached[1] < _URL_TTL_SEC
+            ):
                 return cached[0]
-        url = await self._url_fetcher(track)
+        url = await (refresh() if refresh is not None else self._url_fetcher(track))
         if not url:
             return None
         self._urls[key] = (url, now)
@@ -207,6 +243,11 @@ class LocalHttpStreamProxy:
                 if not url:
                     break
                 range_end = "" if limit is None else str(limit - 1)
+                if _chunked_upstream(url):
+                    chunk_end = offset + _GOOGLEVIDEO_CHUNK_BYTES - 1
+                    if limit is not None:
+                        chunk_end = min(chunk_end, limit - 1)
+                    range_end = str(chunk_end)
                 headers = {"Range": f"bytes={offset}-{range_end}"}
                 async with client.get(
                     url, headers=headers, allow_redirects=True
