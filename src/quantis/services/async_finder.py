@@ -182,6 +182,49 @@ class AsyncYoutubeFinder(AsyncFinderInterface):
             self._executor, self._sync_get_track_from_url, url
         )
 
+    async def search_videos(self, query: str, value: int = 6) -> list[Track]:
+        """Клипы с YouTube (не YouTube Music) — для видео-фона.
+
+        Поиск YouTube Music отдаёт в основном «song» — звук со статичной
+        обложкой — и почти всегда без длины. ytsearch даёт ролики с длиной,
+        по которой фон выбирает ту же версию, что и трек.
+        """
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(
+            self._executor, self._sync_search_videos, query, value
+        )
+
+    def _sync_search_videos(self, query: str, value: int) -> list[Track]:
+        from yt_dlp import YoutubeDL
+
+        opts = {
+            "quiet": True,
+            "no_warnings": True,
+            "extract_flat": True,
+            "skip_download": True,
+        }
+        try:
+            with YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(f"ytsearch{value}:{query}", download=False)
+        except Exception:
+            logger.debug("ytsearch не ответил: %s", query, exc_info=True)
+            return self._sync_get_tracks(query, value)
+        tracks: list[Track] = []
+        for entry in (info or {}).get("entries") or []:
+            video_id = str((entry or {}).get("id") or "")
+            if not is_youtube_video_id(video_id):
+                continue
+            tracks.append(
+                YoutubeTrack(
+                    track_id=video_id,
+                    title=str(entry.get("title") or "").strip() or video_id,
+                    author=youtube_author_from_payload(entry),
+                    downloaded=False,
+                    duration_ms=_youtube_duration_ms(entry),
+                )
+            )
+        return tracks
+
     def _sync_get_track_from_url(self, url: str) -> Track | None:
         from quantis.services.url_resolver import parse_track_id, parse_youtube_video_id
 

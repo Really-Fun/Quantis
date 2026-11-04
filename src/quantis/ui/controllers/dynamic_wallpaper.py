@@ -108,10 +108,14 @@ class DynamicWallpaperController(QObject):
         event_bus.playback_seeked.connect(self._on_audio_seeked)
         backdrop.stream_stalled.connect(self._on_stream_stalled)
         backdrop.media_ready.connect(self._on_video_ready)
+        self._upcoming_key: str | None = None
         if playback is not None:
             hook = getattr(playback.player, "on_source_changed", None)
             if callable(hook):
                 hook(self._on_audio_source)
+            upcoming = getattr(playback, "add_upcoming_listener", None)
+            if callable(upcoming):
+                upcoming(self._on_upcoming_track)
         self._apply_enabled()
         self._apply_render_prefs()
         self._applied_quality = self._prefs.dynamic_wallpaper_quality
@@ -351,13 +355,33 @@ class DynamicWallpaperController(QObject):
             self._prefetch_key = track_key
             self._bridge.schedule(self._prefetch_video(track))
 
-    async def _prefetch_video(self, track: Track) -> None:
+    def _on_upcoming_track(self, track: Track) -> None:
+        """Следующий трек известен заранее — его клип ищем, пока играет этот.
+
+        У треков Яндекса и SoundCloud это поиск клипа и yt-dlp (~1,5–2 с):
+        к смене трека ответ уже в кэше, и фон встаёт сразу со звуком.
+        """
+        if not self._prefs.dynamic_wallpaper_enabled or self._eco:
+            return
+        key = _track_key(track)
+        if key in (self._upcoming_key, self._pending_track_key):
+            return
+        if self._local_video_path(track) is not None:
+            return
+        self._upcoming_key = key
+        self._bridge.schedule(self._prefetch_video(track, exclude_current=False))
+
+    async def _prefetch_video(
+        self, track: Track, *, exclude_current: bool = True
+    ) -> None:
         try:
             await self._music.streamer.get_video_info(
                 track,
                 finder=self._music.finder,
                 height=self._prefs.dynamic_wallpaper_quality,
-                exclude_itags=self._wallpaper_exclude_itags(),
+                exclude_itags=(
+                    self._wallpaper_exclude_itags() if exclude_current else frozenset()
+                ),
             )
         except Exception:
             logger.debug("Предзагрузка видео-фона: %s", track, exc_info=True)
