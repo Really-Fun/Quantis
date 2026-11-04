@@ -64,7 +64,7 @@ def _key(source: str | None, track_id: str) -> Key:
     src = str(source).lower() if source is not None else ""
     tid = str(track_id)
     if src == "soundcloud" and tid.startswith(_SOUNDCLOUD_PREFIX):
-        tid = tid[len(_SOUNDCLOUD_PREFIX):]
+        tid = tid[len(_SOUNDCLOUD_PREFIX) :]
     return src, tid
 
 
@@ -202,8 +202,13 @@ class LibraryIndex:
         identity = read_identity(path)
         if identity is not None:
             return _Record(
-                size, mtime_ns, identity.source, identity.track_id,
-                identity.title, identity.artist, True,
+                size,
+                mtime_ns,
+                identity.source,
+                identity.track_id,
+                identity.title,
+                identity.artist,
+                True,
             )
         return LibraryIndex._legacy_record(path.name, size, mtime_ns)
 
@@ -216,7 +221,12 @@ class LibraryIndex:
         main = readings[0]
         alias = readings[1] if len(readings) > 1 else None
         return _Record(
-            size, mtime_ns, main.source, main.track_id, main.title, main.author,
+            size,
+            mtime_ns,
+            main.source,
+            main.track_id,
+            main.title,
+            main.author,
             False,
             ambiguous=alias is not None,
             alias_source=alias.source if alias else "",
@@ -245,8 +255,13 @@ class LibraryIndex:
     def _entry(self, name: str, music_dir: Path) -> IndexEntry:
         rec = self._files[name]
         return IndexEntry(
-            rec.source, rec.track_id, rec.title, rec.author,
-            music_dir / name, rec.tagged, rec.ambiguous,
+            rec.source,
+            rec.track_id,
+            rec.title,
+            rec.author,
+            music_dir / name,
+            rec.tagged,
+            rec.ambiguous,
         )
 
     # --- обновление ---
@@ -270,7 +285,11 @@ class LibraryIndex:
                     except OSError:
                         continue
                     prev = old.get(item.name)
-                    if prev and prev.size == st.st_size and prev.mtime_ns == st.st_mtime_ns:
+                    if (
+                        prev
+                        and prev.size == st.st_size
+                        and prev.mtime_ns == st.st_mtime_ns
+                    ):
                         new[item.name] = prev
                         continue
                     rec = self._analyze(Path(item.path), st.st_size, st.st_mtime_ns)
@@ -405,9 +424,7 @@ class LibraryIndex:
             keys = list(self._keys)
         tid = str(track_id)
         wanted = {tid, _key("soundcloud", tid)[1]}
-        return any(
-            self._lookup(key) is not None for key in keys if key[1] in wanted
-        )
+        return any(self._lookup(key) is not None for key in keys if key[1] in wanted)
 
     def entries(self) -> list[IndexEntry]:
         music_dir = self.music_dir

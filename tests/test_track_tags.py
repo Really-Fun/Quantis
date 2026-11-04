@@ -51,8 +51,15 @@ def copy_fixture(tmp_path: Path, name: str) -> Path:
 
 def _meta(**kw) -> TrackMeta:
     base = dict(
-        source="youtube", track_id=VID, title="Песня", artist="Артист",
-        album="Альбом", year=2021, genre="Rock", track_number=3, source_url=URL,
+        source="youtube",
+        track_id=VID,
+        title="Песня",
+        artist="Артист",
+        album="Альбом",
+        year=2021,
+        genre="Rock",
+        track_number=3,
+        source_url=URL,
     )
     base.update(kw)
     return TrackMeta(**base)
@@ -191,5 +198,8 @@ def test_foreign_tags_preserved(tmp_path):
 
 def test_source_urls():
     assert source_url("yandex", "123") == "https://music.yandex.ru/track/123"
-    assert source_url("youtube", "abcdefghijk") == "https://music.youtube.com/watch?v=abcdefghijk"
+    assert (
+        source_url("youtube", "abcdefghijk")
+        == "https://music.youtube.com/watch?v=abcdefghijk"
+    )
     assert source_url("soundcloud", "42") == "https://api.soundcloud.com/tracks/42"

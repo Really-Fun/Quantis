@@ -111,8 +111,12 @@ def test_playlist_track_marked_downloaded_from_index(music: Path) -> None:
 
 def test_find_track_file_human_name(music: Path) -> None:
     path = make_tagged(
-        music, "Artist - Song.mp3", source="yandex", track_id="42",
-        title="Song", artist="Artist",
+        music,
+        "Artist - Song.mp3",
+        source="yandex",
+        track_id="42",
+        title="Song",
+        artist="Artist",
     )
     _refresh()
     track = YandexTrack(track_id=42, title="Song", author="Artist")
@@ -131,8 +135,12 @@ def test_find_track_file_soundcloud_human_name(music: Path) -> None:
 
 def test_delete_track_removes_human_named_file(music: Path) -> None:
     path = make_tagged(
-        music, "Artist - Song.mp3", source="yandex", track_id="42",
-        title="Song", artist="Artist",
+        music,
+        "Artist - Song.mp3",
+        source="yandex",
+        track_id="42",
+        title="Song",
+        artist="Artist",
     )
     legacy = make_audio(music, "42_Song_Artist.mp3")
     index = _refresh()
@@ -179,8 +187,12 @@ def test_downloaded_playlist_titles_from_tags(music: Path) -> None:
 def test_downloaded_playlist_dedupes_one_track_two_files(music: Path) -> None:
     make_audio(music, "42_Old title_Artist.mp3")
     make_tagged(
-        music, "Artist - Song.mp3", source="yandex", track_id="42",
-        title="Song", artist="Artist",
+        music,
+        "Artist - Song.mp3",
+        source="yandex",
+        track_id="42",
+        title="Song",
+        artist="Artist",
     )
     _refresh()
 
@@ -355,9 +367,12 @@ def test_delete_track_keeps_other_tracks_file_with_same_prefix(
 ) -> None:
     # Человеческое имя чужого трека начинается с «42_» (исполнитель «42_Band»).
     foreign = make_tagged(
-        music, "42_Band - Song.mp3", source=other_source,
+        music,
+        "42_Band - Song.mp3",
+        source=other_source,
         track_id=VID if other_source == "youtube" else "4242",
-        title="Song", artist="42_Band",
+        title="Song",
+        artist="42_Band",
     )
     legacy = make_audio(music, "42_Song_A.mp3")
     index = _refresh()
@@ -372,8 +387,12 @@ def test_delete_track_keeps_other_tracks_file_with_same_prefix(
 
 def test_delete_track_before_index_keeps_foreign_tagged_file(music: Path) -> None:
     foreign = make_tagged(
-        music, "42_Band - Song.mp3", source="yandex", track_id="4242",
-        title="Song", artist="42_Band",
+        music,
+        "42_Band - Song.mp3",
+        source="yandex",
+        track_id="4242",
+        title="Song",
+        artist="42_Band",
     )
     legacy = make_audio(music, "42_Song_A.mp3")
     track = YandexTrack(track_id=42, title="Song", author="A", downloaded=True)
@@ -386,8 +405,12 @@ def test_delete_track_before_index_keeps_foreign_tagged_file(music: Path) -> Non
 
 def test_find_track_file_fallback_skips_foreign_tagged_file(music: Path) -> None:
     make_tagged(
-        music, "42_Band - Song.mp3", source="yandex", track_id="4242",
-        title="Song", artist="42_Band",
+        music,
+        "42_Band - Song.mp3",
+        source="yandex",
+        track_id="4242",
+        title="Song",
+        artist="42_Band",
     )
     track = YandexTrack(track_id=42, title="Song", author="A")
     assert PathProvider().find_track_file(track) is None

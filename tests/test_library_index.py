@@ -326,8 +326,8 @@ async def test_put_during_refresh_is_kept(music, cache, monkeypatch):
     orig = _slow_reads(monkeypatch, started, release)
     index = new_index(music, cache)
     task = asyncio.create_task(index.refresh())
-    while not started.is_set():
-        await asyncio.sleep(0.01)
+    # started ставит рабочий поток: ждём его не в цикле событий
+    assert await asyncio.to_thread(started.wait, 5)
     new = make_audio(music, "99_New_A.mp3")
     monkeypatch.setattr(li, "read_identity", orig)
     assert index.put(new) is not None
@@ -349,8 +349,8 @@ async def test_discard_during_refresh_is_kept(music, cache, monkeypatch):
     started, release = threading.Event(), threading.Event()
     _slow_reads(monkeypatch, started, release)
     task = asyncio.create_task(index.refresh())
-    while not started.is_set():
-        await asyncio.sleep(0.01)
+    # started ставит рабочий поток: ждём его не в цикле событий
+    assert await asyncio.to_thread(started.wait, 5)
     index.discard(gone)  # запись убрана, файл на диске остался
     release.set()
     await task
@@ -383,8 +383,8 @@ async def test_stale_scan_after_reset_is_discarded(tmp_path, music, cache, monke
     orig = _slow_reads(monkeypatch, started, release)
     index = LibraryIndex(music_dir=music, cache_path=cache)
     task = asyncio.create_task(index.refresh())
-    while not started.is_set():
-        await asyncio.sleep(0.01)
+    # started ставит рабочий поток: ждём его не в цикле событий
+    assert await asyncio.to_thread(started.wait, 5)
     monkeypatch.setattr(li, "read_identity", orig)
     index.reset()
     index._music_dir = other
@@ -408,8 +408,8 @@ async def test_overlapping_refreshes_keep_put(music, cache, monkeypatch):
     orig = _slow_reads(monkeypatch, started, release)
     index = new_index(music, cache)
     first = asyncio.create_task(index.refresh())
-    while not started.is_set():
-        await asyncio.sleep(0.01)
+    # started ставит рабочий поток: ждём его не в цикле событий
+    assert await asyncio.to_thread(started.wait, 5)
     second = asyncio.create_task(index.refresh())
     await asyncio.sleep(0.05)
     monkeypatch.setattr(li, "read_identity", orig)
@@ -430,8 +430,8 @@ async def test_refresh_mid_scan_waits_for_fresh_scan(music, cache, monkeypatch):
     _slow_reads(monkeypatch, started, release)
     index = new_index(music, cache)
     first = asyncio.create_task(index.refresh())
-    while not started.is_set():
-        await asyncio.sleep(0.01)
+    # started ставит рабочий поток: ждём его не в цикле событий
+    assert await asyncio.to_thread(started.wait, 5)
     make_audio(music, "5_Late_A.mp3")  # появился после старта первого скана
     second = asyncio.create_task(index.refresh())
     third = asyncio.create_task(index.refresh())  # делит проход со вторым
@@ -467,8 +467,8 @@ async def test_cancelled_refresh_does_not_overlap_scans(music, cache, monkeypatc
     monkeypatch.setattr(li, "read_identity", slow)
     index = new_index(music, cache)
     first = asyncio.create_task(index.refresh())
-    while not started.is_set():
-        await asyncio.sleep(0.01)
+    # started ставит рабочий поток: ждём его не в цикле событий
+    assert await asyncio.to_thread(started.wait, 5)
     second = asyncio.create_task(index.refresh())
     await asyncio.sleep(0.05)
     first.cancel()
