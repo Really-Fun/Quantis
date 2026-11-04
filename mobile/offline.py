@@ -19,7 +19,7 @@ import art
 import lyrics
 import sources
 from PySide6.QtCore import QStandardPaths
-from sources import YANDEX, Result
+from sources import SOUNDCLOUD, YANDEX, Result
 
 log = logging.getLogger(__name__)
 _TIMEOUT = 30
@@ -114,6 +114,12 @@ class OfflineStore:
         base = f"{result.source}_{_safe(result.track_id)}"
         if result.source == YANDEX:
             name = self._download_yandex(result, token, base)
+        elif result.source == SOUNDCLOUD:
+            opts = sources.soundcloud_download_options(str(self.root / f"{base}.%(ext)s"))
+            try:  # две попытки: TLS к SoundCloud иногда рвётся
+                name = self._download_ytdlp([opts, opts], sources.soundcloud_url(result.track_id))
+            except RuntimeError as exc:
+                sources.raise_soundcloud_error(exc)
         else:
             name = self._download_youtube(result, base)
         art.load_cover(result.cover)  # чтобы обложка и текст были и без сети
@@ -143,19 +149,23 @@ class OfflineStore:
         return name
 
     def _download_youtube(self, result: Result, base: str) -> str:
+        return self._download_ytdlp(
+            sources.youtube_download_options(str(self.root / f"{base}.%(ext)s")),
+            f"https://www.youtube.com/watch?v={result.track_id}",
+        )
+
+    def _download_ytdlp(self, attempts: list[dict], url: str) -> str:
         import yt_dlp
 
         error: Exception | None = None
-        for opts in sources.youtube_download_options(str(self.root / f"{base}.%(ext)s")):
+        for opts in attempts:
             try:
                 with yt_dlp.YoutubeDL(opts) as ydl:
-                    info = ydl.extract_info(
-                        f"https://www.youtube.com/watch?v={result.track_id}", download=True
-                    )
+                    info = ydl.extract_info(url, download=True)
                     path = Path(ydl.prepare_filename(info))
             except Exception as exc:
                 error = exc
                 continue
             if path.is_file():
                 return path.name
-        raise RuntimeError(f"YouTube не отдал файл: {error}")
+        raise RuntimeError(f"Файл не скачался: {error}")

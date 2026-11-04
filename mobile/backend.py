@@ -38,7 +38,7 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import QColor
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
-from sources import YANDEX, YOUTUBE, Result
+from sources import SOUNDCLOUD, YANDEX, YOUTUBE, Result
 from stream_proxy import StreamProxy
 
 log = logging.getLogger(__name__)
@@ -1169,6 +1169,8 @@ class AppController(QObject):
         self._remember_query(query)
         if self._source == YANDEX:
             fn, args = sources.search_yandex, (self._token, query)
+        elif self._source == SOUNDCLOUD:
+            fn, args = sources.search_soundcloud, (query,)
         else:
             fn, args = sources.search_youtube, (query,)
         self._run(fn, args, self._on_results, self._on_search_failed)

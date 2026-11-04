@@ -41,13 +41,15 @@ Item {
             Accessible.name: "Поиск музыки"
         }
 
-        RowLayout {
+        Flow { // на узком экране чипы переносятся
+            Layout.fillWidth: true
             Layout.leftMargin: theme.gutter
             Layout.rightMargin: theme.gutter
             Layout.topMargin: 12
             spacing: 8
             Repeater {
-                model: [{ id: "yandex", label: "Яндекс Музыка" }, { id: "youtube", label: "YouTube" }]
+                model: [{ id: "yandex", label: "Яндекс Музыка" }, { id: "youtube", label: "YouTube" },
+                        { id: "soundcloud", label: "SoundCloud" }]
                 delegate: PillButton {
                     required property var modelData
                     text: modelData.label
@@ -61,7 +63,6 @@ Item {
                     }
                 }
             }
-            Item { Layout.fillWidth: true }
         }
 
         Text {
@@ -118,6 +119,7 @@ Item {
                     horizontalAlignment: Text.AlignHCenter
                     text: app.source === "yandex"
                           ? "Ищи по названию или артисту в Яндекс Музыке"
+                          : app.source === "soundcloud" ? "Ищи по названию или артисту на SoundCloud"
                           : "Ищи по названию или артисту на YouTube"
                     color: theme.textDim
                     wrapMode: Text.WordWrap

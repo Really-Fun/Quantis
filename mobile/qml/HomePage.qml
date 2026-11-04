@@ -106,7 +106,7 @@ Flickable {
                           ? (app.waveActive ? (app.waveName === "Моя волна" ? "МОЯ ВОЛНА"
                                              : "МОЯ ВОЛНА · " + app.waveName.toUpperCase())
                                           : "СЕЙЧАС ИГРАЕТ")
-                          : (app.loggedIn ? "МОЯ ВОЛНА" : "ЯНДЕКС МУЗЫКА · YOUTUBE")
+                          : (app.loggedIn ? "МОЯ ВОЛНА" : "ЯНДЕКС · YOUTUBE · SOUNDCLOUD")
                     color: Qt.rgba(1, 1, 1, 0.7)
                     font.family: theme.ui
                     font.pixelSize: 12

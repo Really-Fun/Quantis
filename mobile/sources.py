@@ -1,4 +1,4 @@
-"""Источники треков беты: YouTube (yt-dlp) и Яндекс Музыка (yandex-music).
+"""Источники треков беты: YouTube и SoundCloud (yt-dlp), Яндекс Музыка (yandex-music).
 
 Все функции блокирующие: их вызывают из пула потоков, а не из интерфейса.
 resolve() отдаёт адрес для QMediaPlayer: прямую ссылку Яндекса или адрес
@@ -17,7 +17,7 @@ from typing import TypeVar
 
 SEARCH_LIMIT = 20
 OFFLINE = "Нет сети"  # текст ошибки, по которому интерфейс узнаёт офлайн
-YANDEX, YOUTUBE = "yandex", "youtube"
+YANDEX, YOUTUBE, SOUNDCLOUD = "yandex", "youtube", "soundcloud"
 
 T = TypeVar("T")
 
@@ -178,6 +178,90 @@ def youtube_stream(video_id: str, *, fresh: bool = False) -> YoutubeStream:
                 "или найдите трек в Яндексе."
             )
         raise RuntimeError(f"YouTube не отдал звук: {error}")
+
+
+# --- SoundCloud -------------------------------------------------------------
+
+# Поиск и ссылки — через yt-dlp, он сам берёт client_id с сайта. Звук у
+# SoundCloud почти всегда HLS (m3u8, AAC): MediaPlayer Android и FFmpeg на
+# компьютере играют его сами, заголовки не нужны.
+_SC_FORMAT = "bestaudio[protocol=https]/bestaudio[protocol=http]/bestaudio"
+
+
+def soundcloud_url(track_id: str) -> str:
+    return f"https://api.soundcloud.com/tracks/soundcloud%3Atracks%3A{track_id}"
+
+
+def _soundcloud_cover(entry: dict) -> str:
+    for thumb in entry.get("thumbnails") or []:
+        if thumb.get("id") == "t500x500":
+            return str(thumb.get("url") or "")
+    url = str(entry.get("thumbnail") or "")
+    return url.replace("-original.", "-t500x500.") if url.startswith("https://") else ""
+
+
+def search_soundcloud(query: str) -> list[Result]:
+    import yt_dlp
+
+    opts = {"quiet": True, "no_warnings": True, "extract_flat": True}
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        info = ydl.extract_info(f"scsearch{SEARCH_LIMIT}:{query}", download=False)
+    results = []
+    for entry in (info or {}).get("entries") or []:
+        track_id = str(entry.get("id") or "")
+        if not track_id.isdigit():
+            continue
+        results.append(
+            Result(
+                source=SOUNDCLOUD,
+                track_id=track_id,
+                title=entry.get("title") or track_id,
+                artist=entry.get("uploader") or "",
+                duration=int(entry.get("duration") or 0),
+                cover=_soundcloud_cover(entry),
+            )
+        )
+    return results
+
+
+def soundcloud_stream(track_id: str) -> str:
+    """Адрес звука для плеера (подписанный, живёт недолго — берём перед игрой)."""
+    import yt_dlp
+
+    opts = {"quiet": True, "no_warnings": True, "format": _SC_FORMAT}
+    info = None
+    for attempt in range(2):  # из этой сети TLS к SoundCloud иногда рвётся
+        try:
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(soundcloud_url(track_id), download=False)
+            break
+        except Exception as exc:
+            raise_soundcloud_error(exc, retry=attempt == 0)
+    url = (info or {}).get("url")
+    if not url:
+        raise RuntimeError("SoundCloud не отдал звук")
+    return url
+
+
+def raise_soundcloud_error(exc: Exception, *, retry: bool = False) -> None:
+    """Понятный текст вместо отчёта yt-dlp; при обрыве TLS — вернуться и повторить."""
+    text = str(exc)
+    if "DRM" in text:
+        raise RuntimeError(
+            "SoundCloud защищает этот трек (DRM) — его не сыграть. "
+            "Поищи его в Яндексе или на YouTube."
+        ) from exc
+    if retry and ("SSL" in text or "timed out" in text):
+        return
+    raise RuntimeError(f"SoundCloud не отдал звук: {text.removeprefix('ERROR: ')}") from exc
+
+
+def soundcloud_download_options(outtmpl: str) -> dict:
+    # Для файла лучше цельный mp3, если он есть; HLS yt-dlp склеит сам.
+    return {
+        "quiet": True, "no_warnings": True, "noprogress": True, "outtmpl": outtmpl,
+        "format": "bestaudio[protocol=https]/bestaudio[protocol=http]/bestaudio",
+    }
 
 
 # --- Яндекс Музыка ----------------------------------------------------------
@@ -410,5 +494,7 @@ def resolve(result: Result, token: str, proxy) -> str:
     """Адрес для QMediaPlayer: https:// Яндекса или http://127.0.0.1 прокси."""
     if result.source == YANDEX:
         return resolve_yandex(token, result.track_id)
+    if result.source == SOUNDCLOUD:
+        return soundcloud_stream(result.track_id)
     youtube_stream(result.track_id)  # ошибка YouTube — сейчас, а не в плеере
     return proxy.url_for(result.track_id)

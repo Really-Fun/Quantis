@@ -31,6 +31,7 @@ Item {
     readonly property bool motion: app.animations && Qt.application.state === Qt.ApplicationActive
     readonly property color yandex: "#FFCC00"
     readonly property color youtube: "#FF3B30"
+    readonly property color soundcloud: "#FF7A1A"
     readonly property color danger: "#FF6B6B"
 
     // Размеры.
