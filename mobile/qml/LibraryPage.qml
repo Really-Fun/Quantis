@@ -235,6 +235,7 @@ StackView {
                     iconName: "list-music"
                     caption: modelData.title
                     hint: stack.tracksLabel(modelData.count)
+                          + (modelData.owner ? " · " + modelData.owner : "")
                     cover: modelData.cover ? encodeURIComponent(modelData.cover) : ""
                     onClicked: stack.openPlaylist(modelData)
                 }

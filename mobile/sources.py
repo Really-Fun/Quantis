@@ -290,27 +290,37 @@ def yandex_set_like(token: str, track_id: str, liked: bool) -> None:
     _yandex(lambda: call(track_id))
 
 
+def _playlist_info(playlist, *, liked: bool) -> dict | None:
+    if playlist is None or playlist.kind is None or playlist.owner is None:
+        return None
+    cover = playlist.cover
+    uri = ""
+    if cover is not None:
+        uri = cover.uri or (cover.items_uri[0] if cover.items_uri else "")
+    owner = playlist.owner
+    return {
+        "uid": str(owner.uid),
+        "kind": str(playlist.kind),
+        "title": playlist.title or "Без названия",
+        "count": int(playlist.track_count or 0),
+        "cover": _yandex_cover(uri or playlist.og_image or ""),
+        "liked": liked,  # чужой плейлист из лайков, а не свой
+        "owner": (owner.name or owner.login or "") if liked else "",
+    }
+
+
 def yandex_playlists(token: str) -> list[dict]:
-    """Свои плейлисты аккаунта: uid, kind, название, число треков, обложка."""
+    """Свои плейлисты аккаунта, потом лайкнутые чужие: uid, kind, название,
+    число треков, обложка, liked, owner."""
     client = _client(token)
-    playlists = _yandex(client.users_playlists_list) or []
-    found = []
-    for playlist in playlists:
-        if playlist.kind is None or playlist.owner is None:
-            continue
-        cover = playlist.cover
-        uri = ""
-        if cover is not None:
-            uri = cover.uri or (cover.items_uri[0] if cover.items_uri else "")
-        found.append(
-            {
-                "uid": str(playlist.owner.uid),
-                "kind": str(playlist.kind),
-                "title": playlist.title or "Без названия",
-                "count": int(playlist.track_count or 0),
-                "cover": _yandex_cover(uri or playlist.og_image or ""),
-            }
-        )
+    own = [_playlist_info(p, liked=False) for p in _yandex(client.users_playlists_list) or []]
+    likes = _yandex(client.users_likes_playlists) or []
+    liked = [_playlist_info(like.playlist, liked=True) for like in likes]
+    seen, found = set(), []
+    for info in own + liked:
+        if info is not None and (info["uid"], info["kind"]) not in seen:
+            seen.add((info["uid"], info["kind"]))
+            found.append(info)
     return found
 
 
