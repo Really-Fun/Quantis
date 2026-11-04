@@ -72,6 +72,8 @@ StackView {
             title: "Скачанное"
             listName: "downloaded"
             model: app.downloaded
+            actionText: app.downloadsPending > 1 ? "Остановить" : ""
+            onAction: app.cancelDownloads()
             emptyText: "Скачай трек в меню «⋮» или весь список кнопкой со стрелкой — он будет играть без сети"
             onBack: stack.pop()
         }

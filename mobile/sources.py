@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import TypeVar
 
 SEARCH_LIMIT = 20
+OFFLINE = "Нет сети"  # текст ошибки, по которому интерфейс узнаёт офлайн
 YANDEX, YOUTUBE = "yandex", "youtube"
 
 T = TypeVar("T")
@@ -215,11 +216,25 @@ def _client(token: str):
     return client
 
 
+def _network_error(exc: BaseException) -> bool:
+    from yandex_music.exceptions import NetworkError, TimedOutError
+
+    return isinstance(exc, (NetworkError, TimedOutError, OSError))
+
+
 def check_yandex_token(token: str) -> str:
-    """Логин аккаунта; бросает исключение, если токен не подходит."""
+    """Логин аккаунта; бросает исключение, если токен не подходит.
+
+    Нет сети — RuntimeError(OFFLINE): токен тут ни при чём.
+    """
     from yandex_music import Client
 
-    client = _yandex(lambda: Client(token).init())
+    try:
+        client = _yandex(lambda: Client(token).init())
+    except Exception as exc:
+        if _network_error(exc):
+            raise RuntimeError(OFFLINE) from exc
+        raise
     account = client.me.account if client.me else None
     login = (account.login or account.display_name) if account else ""
     plus = bool(client.me and client.me.plus and client.me.plus.has_plus)
@@ -266,6 +281,13 @@ def yandex_liked(token: str) -> list[Result]:
         for t in (likes.tracks if likes else [])[:LIBRARY_LIMIT]
     ]
     return _results(_full_tracks(client, ids))
+
+
+def yandex_set_like(token: str, track_id: str, liked: bool) -> None:
+    """Поставить или снять лайк в «Мне нравится» аккаунта."""
+    client = _client(token)
+    call = client.users_likes_tracks_add if liked else client.users_likes_tracks_remove
+    _yandex(lambda: call(track_id))
 
 
 def yandex_playlists(token: str) -> list[dict]:

@@ -404,17 +404,38 @@ class AppController(QObject):
 
     # --- любимое ----------------------------------------------------------
 
-    def _is_liked(self, result: Result) -> bool:
+    @staticmethod
+    def _contains(model: TrackModel, result: Result) -> bool:
         key = (result.source, result.track_id)
-        return any((r.source, r.track_id) == key for r in self._liked.items())
+        return any((r.source, r.track_id) == key for r in model.items())
+
+    def _is_liked(self, result: Result) -> bool:
+        """Лайк на телефоне или (у треков Яндекса) в «Мне нравится» аккаунта."""
+        return self._contains(self._liked, result) or (
+            result.source == YANDEX and self._contains(self._yandex_liked, result)
+        )
 
     def _toggle_like(self, result: Result) -> None:
+        like = not self._is_liked(result)
         key = (result.source, result.track_id)
         items = [r for r in self._liked.items() if (r.source, r.track_id) != key]
-        if len(items) == len(self._liked.items()):
+        if like:
             items.insert(0, result)
         self._liked.set_items(items)
         self._save_tracks(LIKES_KEY, items)
+        if result.source == YANDEX and self._token:
+            # «♡» у трека Яндекса — и лайк в аккаунте: сразу в списке, запрос в фоне.
+            remote = [r for r in self._yandex_liked.items() if (r.source, r.track_id) != key]
+            if like:
+                remote.insert(0, result)
+            self._yandex_liked.set_items(remote)
+            self._save_tracks(YANDEX_LIKED_KEY, remote)
+            self._run(
+                sources.yandex_set_like,
+                (self._token, result.track_id, like),
+                lambda _: None,
+                lambda text: self._flash(f"Яндекс не сохранил лайк: {text}"),
+            )
         self.likesChanged.emit()
 
     @Slot()
@@ -571,6 +592,14 @@ class AppController(QObject):
             return
         added = self._enqueue_downloads(model.items())
         self._flash(f"В очереди на скачивание: {added}" if added else "Всё уже скачано")
+
+    @Slot()
+    def cancelDownloads(self) -> None:
+        """Убрать ожидающие загрузки; текущий трек докачается."""
+        if self._dl_queue:
+            self._dl_queue.clear()
+            self.downloadsChanged.emit()
+            self._flash("Остальные загрузки отменены")
 
     @Slot(str, int)
     def removeDownloadFrom(self, name: str, row: int) -> None:
@@ -942,7 +971,13 @@ class AppController(QObject):
         self._refresh_library()
 
     def _on_account_failed(self, text: str) -> None:
-        self._account = f"Токен не подошёл: {text}"
+        if text == sources.OFFLINE:
+            # Без сети токен не проверить, но и плохим он от этого не стал:
+            # вход остаётся, скачанное играет, проверим снова через 30 с.
+            self._account = "Нет сети — вход проверим позже"
+            QTimer.singleShot(30_000, self.checkAccount)
+        else:
+            self._account = f"Токен не подошёл: {text}"
         self.accountChanged.emit()
 
     @Slot()

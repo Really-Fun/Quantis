@@ -13,7 +13,9 @@ Item {
     property string emptyText
     property bool loading: false
     property string errorText: ""
+    property string actionText: "" // доп. кнопка в шапке (пусто — нет)
     signal back()
+    signal action()
 
     ColumnLayout {
         anchors.fill: parent
@@ -30,6 +32,12 @@ Item {
                 font.family: theme.display
                 font.pixelSize: 20
                 font.weight: Font.DemiBold
+            }
+            PillButton {
+                visible: page.actionText !== ""
+                text: page.actionText
+                compact: true
+                onClicked: page.action()
             }
             IconButton {
                 visible: list.count > 0 && page.listName !== "downloaded"
