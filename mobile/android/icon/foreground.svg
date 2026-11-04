@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="432" height="432" viewBox="0 0 432 432">
+  <!-- Quantis: неоновая Q с волной. Холст 108dp, знак внутри безопасной зоны 66dp. -->
+  <defs>
+    <linearGradient id="neon" x1="120" y1="110" x2="330" y2="330" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4FF3FF"/>
+      <stop offset="0.5" stop-color="#9D7BFF"/>
+      <stop offset="1" stop-color="#FF2A7F"/>
+    </linearGradient>
+    <filter id="glow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="9"/>
+    </filter>
+    <g id="mark" fill="none" stroke="url(#neon)" stroke-linecap="round" stroke-linejoin="round">
+      <!-- кольцо Q, открытое справа сверху -->
+      <path d="M291.4 159.6 A92 92 0 1 0 270.1 288.4" stroke-width="22"/>
+      <!-- хвост Q -->
+      <path d="M252 268 Q288 296 324 310" stroke-width="22"/>
+      <!-- волна с завитком -->
+      <path d="M180 262 C160 220 172 170 220 168 C254 167 266 196 248 210 C234 220 218 210 226 197" stroke-width="16"/>
+      <!-- эквалайзер -->
+      <path d="M262 214 v20 M282 204 v40" stroke-width="13"/>
+    </g>
+  </defs>
+  <g transform="translate(216 216) scale(0.86) translate(-216 -216)">
+    <use href="#mark" filter="url(#glow)" opacity="0.85"/>
+    <use href="#mark"/>
+  </g>
+</svg>
