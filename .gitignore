@@ -130,3 +130,6 @@ mobile/urllib3/
 mobile/idna/
 mobile/typing_extensions.py
 mobile/socks.py
+
+# graphify knowledge graph output
+graphify-out/
