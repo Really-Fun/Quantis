@@ -37,5 +37,5 @@ class UpdateBanner(QFrame):
         row.addWidget(self._later_btn)
 
     def show_version(self, version: str) -> None:
-        self._label.setText(f"Доступна Quantis {version}")
+        self._label.setText(f"Доступна новая версия: Quantis {version}")
         self.setVisible(True)

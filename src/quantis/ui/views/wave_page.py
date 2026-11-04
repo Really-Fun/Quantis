@@ -670,7 +670,7 @@ class WavePage(QWidget):
     toggle_pause_requested = Signal()
 
     NARROW = 1040
-    """Уже этого панель уходит под карту."""
+    """Окно уже этого — панель уходит под карту."""
     STAGE_HEIGHT = 560
 
     def __init__(
@@ -943,7 +943,7 @@ class WavePage(QWidget):
 
             mood = WaveMood(
                 id="diversity:reshuffle",
-                name="Встряхнуть Мою волну",
+                name="Встряхнуть «Мою волну»",
                 seeds=(f"diversity:reshuffle_{int(time.time() * 1000)}",),
                 style="CONTROL_ACCENT",
             )

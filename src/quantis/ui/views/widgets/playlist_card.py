@@ -27,6 +27,7 @@ from quantis.ui.views.widgets.cover_art import (
     paint_rounded_cover,
     playlist_cover_path,
 )
+from quantis.utils.get_ru_words import get_ru_words_for_number
 
 
 class GradientCover(QWidget):
@@ -387,7 +388,7 @@ class WaveQuickTile(QuickPickTile):
         elif error:
             text = error
         elif available and track_count:
-            text = f"{track_count} в потоке"
+            text = f"{get_ru_words_for_number(track_count)} в потоке"
         elif available:
             text = "Пока пусто"
         else:

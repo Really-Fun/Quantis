@@ -20,7 +20,7 @@ def test_wave_card_states_and_actions(qapp) -> None:
     assert card.status_text == "Загружаем…"
     assert not card.play_button.isEnabled()
     card.set_state(track_count=5)
-    assert card.status_text == "5 в потоке"
+    assert card.status_text == "5 треков в потоке"
     assert card.play_button.isEnabled()
     card.set_state(track_count=0, error="Не удалось загрузить волну")
     assert card.status_text == "Не удалось загрузить волну"

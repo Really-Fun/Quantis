@@ -146,7 +146,7 @@ class SettingsPage(QWidget):
             "Видео YouTube вместо статичного фона. Качество и FPS "
             "можно снизить, если греется видеокарта.",
         )
-        self._dynamic_wallpaper_cb = QCheckBox("Видео-фон при воспроизведении")
+        self._dynamic_wallpaper_cb = QCheckBox("Видеофон при воспроизведении")
         self._dynamic_wallpaper_cb.setObjectName("settingsCheck")
         self._dynamic_wallpaper_cb.setCursor(Qt.CursorShape.PointingHandCursor)
         self._dynamic_wallpaper_cb.toggled.connect(self._on_dynamic_wallpaper_toggled)
@@ -186,7 +186,7 @@ class SettingsPage(QWidget):
         video_opts.addWidget(self._wallpaper_fps_combo)
 
         av_delay_hint = QLabel(
-            "Задержка звука — видео спешит: больше, опаздывает: меньше",
+            "Задержка звука: видео спешит — больше, опаздывает — меньше",
             objectName="settingsRowDesc",
         )
         av_delay_hint.setWordWrap(True)
