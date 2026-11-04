@@ -31,6 +31,12 @@ Item {
                 font.pixelSize: 20
                 font.weight: Font.DemiBold
             }
+            IconButton {
+                visible: list.count > 0 && page.listName !== "downloaded"
+                iconName: "download"
+                label: "Скачать все"
+                onClicked: app.downloadAll(page.listName)
+            }
             PillButton {
                 visible: list.count > 0
                 text: "Слушать"

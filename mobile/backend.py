@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import random
 import time
 import traceback
@@ -16,6 +17,7 @@ from dataclasses import asdict
 from urllib.parse import quote
 
 import art
+import offline
 import sources
 from android_media import NEXT, PAUSE, PLAY, PREV, SEEK_BASE, MediaControls
 from PySide6.QtCore import (
@@ -37,6 +39,8 @@ from PySide6.QtGui import QColor
 from PySide6.QtMultimedia import QAudioOutput, QMediaPlayer
 from sources import YANDEX, YOUTUBE, Result
 from stream_proxy import StreamProxy
+
+log = logging.getLogger(__name__)
 
 TOKEN_KEY = "yandex/token"
 SOURCE_KEY = "search/source"
@@ -89,10 +93,20 @@ class TrackModel(QAbstractListModel):
     DurationRole = TitleRole + 2
     SourceRole = TitleRole + 3
     CoverRole = TitleRole + 4
+    OfflineRole = TitleRole + 5  # трек скачан на телефон
+
+    # Общая проверка «скачан ли» для всех списков (ставит AppController).
+    is_offline = staticmethod(lambda _result: False)
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
         self._items: list[Result] = []
+
+    def refresh_offline(self) -> None:
+        if self._items:
+            self.dataChanged.emit(
+                self.index(0), self.index(len(self._items) - 1), [self.OfflineRole]
+            )
 
     def items(self) -> list[Result]:
         return list(self._items)
@@ -119,6 +133,7 @@ class TrackModel(QAbstractListModel):
             self.DurationRole: QByteArray(b"duration"),
             self.SourceRole: QByteArray(b"source"),
             self.CoverRole: QByteArray(b"cover"),
+            self.OfflineRole: QByteArray(b"offline"),
         }
 
     def data(self, index: QModelIndex, role: int = Qt.ItemDataRole.DisplayRole):
@@ -135,6 +150,8 @@ class TrackModel(QAbstractListModel):
             return item.source
         if role == self.CoverRole:
             return quote(item.cover, safe="") if item.cover else ""
+        if role == self.OfflineRole:
+            return TrackModel.is_offline(item)
         return None
 
 
@@ -155,6 +172,7 @@ class AppController(QObject):
     sleepChanged = Signal()
     yandexLibraryChanged = Signal()
     remoteChanged = Signal()
+    downloadsChanged = Signal()
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -183,6 +201,15 @@ class AppController(QObject):
         self._remote_loading = False
         self._remote_error = ""
         self._remote_gen = 0
+        # Скачанное: файлы и каталог — offline.OfflineStore; качаем по одному
+        # (Яндекс не любит параллельные запросы с одного токена).
+        self._offline = offline.OfflineStore()
+        TrackModel.is_offline = staticmethod(self._offline.has)
+        self._downloaded = TrackModel(self)
+        self._downloaded.set_items(self._offline.tracks())
+        self._dl_queue: list[Result] = []
+        self._dl_active: Result | None = None
+        self._dl_failed = 0
         # Очередь для экрана «Очередь» — та же, что играет.
         self._queue_model = TrackModel(self)
         # «Моя волна»: сессия, имя волны и признак, что очередь — волна.
@@ -317,6 +344,25 @@ class AppController(QObject):
         return self._remote_error
 
     @Property(QObject, constant=True)
+    def downloaded(self) -> TrackModel:
+        return self._downloaded
+
+    @Property(int, notify=downloadsChanged)
+    def downloadsPending(self) -> int:
+        return len(self._dl_queue) + (self._dl_active is not None)
+
+    @Property(str, notify=downloadsChanged)
+    def downloadingTitle(self) -> str:
+        return self._dl_active.title if self._dl_active else ""
+
+    @Property(str, notify=downloadsChanged)
+    def offlineSize(self) -> str:
+        size = self._offline.total_bytes()
+        if size >= 1024**3:
+            return f"{size / 1024**3:.1f} ГБ".replace(".", ",")
+        return f"{round(size / 1024**2)} МБ"
+
+    @Property(QObject, constant=True)
     def queue(self) -> TrackModel:
         return self._queue_model
 
@@ -387,6 +433,7 @@ class AppController(QObject):
             "queue": self._queue_model,
             "yandexLiked": self._yandex_liked,
             "remote": self._remote,
+            "downloaded": self._downloaded,
         }.get(name)
 
     def _item(self, name: str, row: int) -> Result | None:
@@ -445,6 +492,103 @@ class AppController(QObject):
     def _set_queue(self, items: list[Result]) -> None:
         self._queue = list(items)
         self._queue_model.set_items(self._queue)
+
+    # --- скачанное --------------------------------------------------------
+
+    def _dl_key(self, result: Result) -> tuple[str, str]:
+        return (result.source, result.track_id)
+
+    def _is_downloading(self, result: Result) -> bool:
+        key = self._dl_key(result)
+        active = self._dl_active is not None and self._dl_key(self._dl_active) == key
+        return active or any(self._dl_key(r) == key for r in self._dl_queue)
+
+    def _enqueue_downloads(self, items: list[Result]) -> int:
+        added = 0
+        for item in items:
+            if item.source == YANDEX and not self._token:
+                continue
+            if self._offline.has(item) or self._is_downloading(item):
+                continue
+            self._dl_queue.append(item)
+            added += 1
+        if added:
+            self.downloadsChanged.emit()
+            self._next_download()
+        return added
+
+    def _next_download(self) -> None:
+        if self._dl_active is not None:
+            return
+        if not self._dl_queue:
+            if self._dl_failed:
+                self._flash(f"Не скачалось треков: {self._dl_failed}")
+                self._dl_failed = 0
+            self.downloadsChanged.emit()
+            return
+        item = self._dl_queue.pop(0)
+        self._dl_active = item
+        self.downloadsChanged.emit()
+
+        def done(file_name: str) -> None:
+            self._offline.add(item, file_name)
+            self._dl_active = None
+            self._refresh_offline()
+            self._next_download()
+
+        def failed(text: str) -> None:
+            log.warning("Не скачался %s: %s", item.title, text)
+            self._dl_failed += 1
+            self._dl_active = None
+            self._next_download()
+
+        self._run(self._offline.download, (item, self._token), done, failed)
+
+    def _refresh_offline(self) -> None:
+        self._downloaded.set_items(self._offline.tracks())
+        for model in (
+            self._results, self._history, self._liked, self._queue_model,
+            self._yandex_liked, self._remote,
+        ):
+            model.refresh_offline()
+        self.downloadsChanged.emit()
+
+    @Slot(str, int)
+    def downloadFrom(self, name: str, row: int) -> None:
+        item = self._item(name, row)
+        if item is None:
+            return
+        if item.source == YANDEX and not self._token:
+            self._flash("Чтобы скачать трек Яндекса, войди в аккаунт")
+            return
+        if self._enqueue_downloads([item]):
+            self._flash("Скачиваем на телефон")
+
+    @Slot(str)
+    def downloadAll(self, name: str) -> None:
+        model = self._model(name)
+        if model is None:
+            return
+        added = self._enqueue_downloads(model.items())
+        self._flash(f"В очереди на скачивание: {added}" if added else "Всё уже скачано")
+
+    @Slot(str, int)
+    def removeDownloadFrom(self, name: str, row: int) -> None:
+        item = self._item(name, row)
+        if item is not None and self._offline.has(item):
+            self._offline.remove(item)
+            self._refresh_offline()
+            self._flash("Удалено с телефона")
+
+    @Slot(str, int, result=int)
+    def downloadStateFrom(self, name: str, row: int) -> int:
+        """0 — не скачан, 1 — в очереди или качается, 2 — скачан."""
+        item = self._item(name, row)
+        if item is None:
+            return 0
+        if self._offline.has(item):
+            return 2
+        return 1 if self._is_downloading(item) else 0
 
     # --- медиатека Яндекса ------------------------------------------------
 
@@ -860,6 +1004,12 @@ class AppController(QObject):
         self._wave_top_up()
         result = self._queue[row]
         self._load_palette(result)
+        local = self._offline.path(result)
+        if local is not None:  # скачан — играем файл, сеть не нужна
+            QTimer.singleShot(
+                0, lambda r=row: self._on_resolved(r, QUrl.fromLocalFile(str(local)).toString())
+            )
+            return
         self._run(
             sources.resolve,
             (result, self._token, self._proxy),
@@ -904,7 +1054,11 @@ class AppController(QObject):
 
     def _prefetch(self, row: int | None) -> None:
         """Ссылку YouTube разбирать секунды — для следующего трека заранее."""
-        if row is not None and self._queue[row].source == YOUTUBE:
+        if (
+            row is not None
+            and self._queue[row].source == YOUTUBE
+            and not self._offline.has(self._queue[row])
+        ):
             self._run(
                 sources.youtube_stream,
                 (self._queue[row].track_id,),

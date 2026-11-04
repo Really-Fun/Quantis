@@ -14,6 +14,7 @@ ItemDelegate {
     required property int duration
     required property string source
     required property string cover
+    required property bool offline // скачан на телефон
     property bool current: false
     property string listName: "results" // какой список (для меню и касания)
     onClicked: app.playFrom(listName, index)
@@ -49,6 +50,13 @@ ItemDelegate {
                 spacing: 6
                 Layout.fillWidth: true
                 SourceBadge { source: row.source }
+                Image {
+                    visible: row.offline
+                    source: "icons/downloaded.svg"
+                    sourceSize: Qt.size(14, 14)
+                    Layout.preferredWidth: 14; Layout.preferredHeight: 14
+                    Accessible.name: "Скачан"
+                }
                 Text {
                     Layout.fillWidth: true
                     text: row.artist + (row.duration > 0 ? "  ·  " + theme.formatTime(row.duration * 1000) : "")

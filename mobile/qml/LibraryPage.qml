@@ -67,6 +67,16 @@ StackView {
         stack.push(playlistPage, { title: item.title })
     }
     Component {
+        id: downloadedPage
+        TrackListPage {
+            title: "Скачанное"
+            listName: "downloaded"
+            model: app.downloaded
+            emptyText: "Скачай трек в меню «⋮» или весь список кнопкой со стрелкой — он будет играть без сети"
+            onBack: stack.pop()
+        }
+    }
+    Component {
         id: historyPage
         TrackListPage {
             title: "История"
@@ -194,6 +204,15 @@ StackView {
                 caption: "История"
                 hint: stack.tracksLabel(app.history.count)
                 onClicked: stack.push(historyPage)
+            }
+            LibraryRow {
+                iconName: "download"
+                caption: "Скачанное"
+                hint: app.downloadsPending > 0
+                    ? "Скачиваем: " + app.downloadingTitle + " · осталось " + app.downloadsPending
+                    : stack.tracksLabel(app.downloaded.count)
+                      + (app.downloaded.count > 0 ? " · " + app.offlineSize : "")
+                onClicked: stack.push(downloadedPage)
             }
             SectionLabel {
                 visible: app.loggedIn

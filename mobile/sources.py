@@ -342,8 +342,8 @@ def _best_download_info(infos: list) -> object | None:
     return max(infos, key=rank) if infos else None
 
 
-def resolve_yandex(token: str, track_id: str) -> str:
-    """Прямая ссылка на звук: QMediaPlayer играет её потоком, без скачивания."""
+def yandex_link(token: str, track_id: str) -> tuple[str, str]:
+    """Прямая ссылка на полный трек и кодек (mp3, aac…)."""
     client = _client(token)
     tracks = _yandex(lambda: client.tracks([track_id]))
     if not tracks:
@@ -354,7 +354,21 @@ def resolve_yandex(token: str, track_id: str) -> str:
         raise RuntimeError("Яндекс не отдал ссылку на трек")
     if getattr(chosen, "preview", False):
         raise RuntimeError("Полный трек доступен только с Плюсом — есть лишь превью")
-    return _yandex(chosen.get_direct_link)
+    codec = str(getattr(chosen, "codec", "") or "mp3").lower()
+    return _yandex(chosen.get_direct_link), codec
+
+
+def resolve_yandex(token: str, track_id: str) -> str:
+    """Прямая ссылка на звук: QMediaPlayer играет её потоком, без скачивания."""
+    return yandex_link(token, track_id)[0]
+
+
+def youtube_download_options(outtmpl: str) -> list[dict]:
+    """Настройки yt-dlp для скачивания звука в файл (те же клиенты, что и поток)."""
+    return [
+        {**opts, "outtmpl": outtmpl, "noprogress": True}
+        for _name, opts in _youtube_attempts()
+    ]
 
 
 # --- общее ------------------------------------------------------------------
