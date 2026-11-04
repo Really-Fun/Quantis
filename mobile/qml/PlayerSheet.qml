@@ -257,6 +257,11 @@ Drawer {
             }
             Item { Layout.fillWidth: true }
             IconButton {
+                iconName: "lyrics"
+                label: "Текст песни"
+                onClicked: lyricsSheet.open()
+            }
+            IconButton {
                 iconName: "list-music"
                 label: "Очередь"
                 onClicked: queueSheet.open()

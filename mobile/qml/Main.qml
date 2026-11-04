@@ -91,6 +91,15 @@ ApplicationWindow {
         bottomPadding: window.safeBottom
     }
 
+    LyricsSheet {
+        id: lyricsSheet
+        objectName: "lyricsSheet"
+        z: 1
+        width: window.width
+        height: window.height * 0.86
+        bottomPadding: window.safeBottom
+    }
+
     PlayerSheet {
         id: player
         objectName: "playerSheet"
@@ -102,7 +111,10 @@ ApplicationWindow {
 
     // «Назад» на Android: сначала свернуть плеер, потом на главную.
     onClosing: function (close) {
-        if (queueSheet.opened) {
+        if (lyricsSheet.opened) {
+            close.accepted = false
+            lyricsSheet.close()
+        } else if (queueSheet.opened) {
             close.accepted = false
             queueSheet.close()
         } else if (player.opened) {

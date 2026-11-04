@@ -17,6 +17,7 @@ from dataclasses import asdict
 from urllib.parse import quote
 
 import art
+import lyrics
 import offline
 import sources
 from android_media import NEXT, PAUSE, PLAY, PREV, SEEK_BASE, MediaControls
@@ -173,6 +174,7 @@ class AppController(QObject):
     yandexLibraryChanged = Signal()
     remoteChanged = Signal()
     downloadsChanged = Signal()
+    lyricsChanged = Signal()
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -210,6 +212,12 @@ class AppController(QObject):
         self._dl_queue: list[Result] = []
         self._dl_active: Result | None = None
         self._dl_failed = 0
+        # Текст песни текущего трека: грузится, только пока открыт экран текста.
+        self._lyrics_open = False
+        self._lyrics_for: Result | None = None
+        self._lyrics = lyrics.Lyrics()
+        self._lyrics_state = "idle"  # idle | loading | ready | none | error
+        self.trackChanged.connect(self._lyrics_track_changed)
         # Очередь для экрана «Очередь» — та же, что играет.
         self._queue_model = TrackModel(self)
         # «Моя волна»: сессия, имя волны и признак, что очередь — волна.
@@ -361,6 +369,22 @@ class AppController(QObject):
         if size >= 1024**3:
             return f"{size / 1024**3:.1f} ГБ".replace(".", ",")
         return f"{round(size / 1024**2)} МБ"
+
+    @Property("QVariantList", notify=lyricsChanged)
+    def lyricsLines(self) -> list[dict]:
+        return self._lyrics.lines
+
+    @Property(bool, notify=lyricsChanged)
+    def lyricsSynced(self) -> bool:
+        return self._lyrics.synced
+
+    @Property(str, notify=lyricsChanged)
+    def lyricsSource(self) -> str:
+        return self._lyrics.source
+
+    @Property(str, notify=lyricsChanged)
+    def lyricsState(self) -> str:
+        return self._lyrics_state
 
     @Property(QObject, constant=True)
     def queue(self) -> TrackModel:
@@ -618,6 +642,41 @@ class AppController(QObject):
         if self._offline.has(item):
             return 2
         return 1 if self._is_downloading(item) else 0
+
+    # --- текст песни -------------------------------------------------------
+
+    @Slot(bool)
+    def setLyricsOpen(self, opened: bool) -> None:
+        self._lyrics_open = opened
+        if opened:
+            self._load_lyrics()
+
+    def _lyrics_track_changed(self) -> None:
+        if self._lyrics_open:
+            self._load_lyrics()
+
+    def _load_lyrics(self) -> None:
+        track = self._track()
+        if track is None or track is self._lyrics_for:
+            return
+        self._lyrics_for = track
+        self._lyrics = lyrics.Lyrics()
+        self._lyrics_state = "loading"
+        self.lyricsChanged.emit()
+
+        def done(found: lyrics.Lyrics) -> None:
+            if self._lyrics_for is track:
+                self._lyrics = found
+                self._lyrics_state = "ready" if found.lines else "none"
+                self.lyricsChanged.emit()
+
+        def failed(_text: str) -> None:
+            if self._lyrics_for is track:
+                self._lyrics_for = None  # открыть ещё раз — попробовать снова
+                self._lyrics_state = "error"
+                self.lyricsChanged.emit()
+
+        self._run(lyrics.fetch, (track, self._token), done, failed)
 
     # --- медиатека Яндекса ------------------------------------------------
 

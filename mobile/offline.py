@@ -16,6 +16,7 @@ from dataclasses import asdict
 from pathlib import Path
 
 import art
+import lyrics
 import sources
 from PySide6.QtCore import QStandardPaths
 from sources import YANDEX, Result
@@ -115,7 +116,11 @@ class OfflineStore:
             name = self._download_yandex(result, token, base)
         else:
             name = self._download_youtube(result, base)
-        art.load_cover(result.cover)  # чтобы обложка была и без сети
+        art.load_cover(result.cover)  # чтобы обложка и текст были и без сети
+        try:
+            lyrics.fetch(result, token)
+        except Exception as exc:
+            log.info("Текст для %s не загружен: %s", result.title, exc)
         return name
 
     def _download_yandex(self, result: Result, token: str, base: str) -> str:
