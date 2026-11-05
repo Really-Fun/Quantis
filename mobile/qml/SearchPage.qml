@@ -62,9 +62,14 @@ Item {
             inputMethodHints: Qt.ImhNoPredictiveText
             EnterKey.type: Qt.EnterKeySearch
             // Enter с русской клавиатуры на Android доходил не всегда, и поиск
-            // молчал: ищем и по мере ввода, через 0,7 с после последней буквы.
+            // молчал: ищем и по мере ввода, через 0,9 с после последней буквы.
             // displayText — с текстом, который клавиатура ещё не зафиксировала.
-            onDisplayTextChanged: typing.restart()
+            // Печатают дальше — ответ на прежний запрос уже не нужен: применять
+            // его (перестройка выдачи) значит подвесить ввод под пальцами.
+            onDisplayTextChanged: {
+                typing.restart()
+                app.searchStale()
+            }
             onAccepted: {
                 typing.stop()
                 Qt.inputMethod.commit()
@@ -73,7 +78,7 @@ Item {
             Accessible.name: "Поиск музыки"
             Timer {
                 id: typing
-                interval: 700
+                interval: 900
                 onTriggered: if (query.displayText.trim().length >= 2) app.searchAsYouType(query.displayText)
             }
         }
@@ -124,7 +129,8 @@ Item {
             Flickable {
                 id: richView
                 anchors.fill: parent
-                visible: page.rich && !app.searching
+                // старая выдача остаётся на месте, пока ищется новая — без мигания
+                visible: page.rich
                 clip: true
                 contentHeight: richColumn.implicitHeight + 24
                 // Только вертикаль: без contentWidth ширину считали по детям, и шире
@@ -284,10 +290,20 @@ Item {
                 ScrollIndicator.vertical: ScrollIndicator {}
             }
 
+            // Большая крутилка — только когда показать нечего; при выдаче на
+            // экране — тонкая полоска сверху.
             BusyIndicator {
                 anchors.centerIn: parent
-                running: app.searching
+                running: app.searching && list.count === 0 && !page.rich
                 visible: running
+            }
+            ProgressBar {
+                anchors.top: parent.top
+                anchors.left: parent.left
+                anchors.right: parent.right
+                indeterminate: true
+                visible: app.searching && (list.count > 0 || page.rich)
+                Material.accent: theme.accent
             }
 
             ColumnLayout {

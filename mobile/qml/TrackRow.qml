@@ -71,13 +71,22 @@ ItemDelegate {
             iconName: "more-vertical"
             label: "Действия с треком"
             tint: theme.textDim
-            onClicked: menu.popup(this, 0, height)
+            onClicked: {
+                menuLoader.active = true
+                menuLoader.item.popup(this, 0, height)
+            }
         }
     }
 
-    TrackMenu {
-        id: menu
-        listName: row.listName
-        trackIndex: row.index
+    // Меню создаётся по первому нажатию «⋮», а не в каждой строке сразу:
+    // в нём подменю со всеми плейлистами и проверка лайка через Python —
+    // на 20 строках выдачи это подвешивало интерфейс почти на секунду.
+    Loader {
+        id: menuLoader
+        active: false
+        sourceComponent: TrackMenu {
+            listName: row.listName
+            trackIndex: row.index
+        }
     }
 }

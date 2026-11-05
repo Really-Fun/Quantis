@@ -1493,6 +1493,19 @@ class AppController(QObject):
         """Поиск по Enter или смене источника: запрос — в недавние."""
         self._search(query, remember=True)
 
+    @Slot()
+    def searchStale(self) -> None:
+        """Текст в поле изменился: ответ на прежний запрос не применяем.
+
+        Перестройка выдачи занимает на телефоне 0,2–0,3 с главного потока —
+        если она приходится на набор, буквы залипают. Старая выдача остаётся
+        на экране, новая придёт по паузе в наборе."""
+        self._search_gen += 1
+        self._shown_query = ""
+        if self._searching:
+            self._searching = False
+            self.searchingChanged.emit()
+
     @Slot(str)
     def searchAsYouType(self, query: str) -> None:
         """Поиск по мере ввода: в недавние попадёт, только если из выдачи что-то включат."""
