@@ -40,7 +40,11 @@ from quantis.services.wallpaper_policy import (
 from quantis.ui.preferences import UiPreferences
 from quantis.ui.resources import ui_theme_labels
 from quantis.ui.shortcuts import KEYBIND_HINTS
-from quantis.ui.views.widgets.glass_panel import GlassPanel
+from quantis.ui.views.widgets.page_layout import (
+    CONTENT_MAX_W,
+    PageTitle,
+    apply_page_margins,
+)
 from quantis.ui.wallpapers import (
     remap_renamed_wallpaper,
     scan_wallpapers,
@@ -81,16 +85,21 @@ class SettingsPage(QWidget):
 
         content = QWidget()
         layout = QVBoxLayout(content)
-        layout.setContentsMargins(16, 8, 16, 20)
-        layout.setSpacing(12)
+        apply_page_margins(layout, spacing=0)
 
-        panel = GlassPanel()
+        # Страница — колонка групп: заголовок раздела и одна карточка, в
+        # которой настройки разделены линиями (раньше: панель → карточка на
+        # каждую настройку → поле, три рамки друг в друге).
+        panel = QWidget()
         panel.setObjectName("settingsPanel")
+        panel.setMaximumWidth(CONTENT_MAX_W)
         panel_layout = QVBoxLayout(panel)
-        panel_layout.setContentsMargins(22, 20, 22, 22)
-        panel_layout.setSpacing(14)
+        panel_layout.setContentsMargins(0, 0, 0, 0)
+        panel_layout.setSpacing(10)
+        panel_layout.addWidget(PageTitle("Настройки"))
+        panel_layout.addSpacing(14)
 
-        panel_layout.addWidget(QLabel("Интерфейс", objectName="settingsSectionLabel"))
+        group = self._begin_group(panel_layout, "Интерфейс")
 
         theme_row, theme_body = self._row("Тема", "Внешний вид приложения")
         self._theme_combo = QComboBox()
@@ -100,7 +109,7 @@ class SettingsPage(QWidget):
             self._theme_combo.addItem(label, theme_id)
         self._theme_combo.currentIndexChanged.connect(self._on_theme_changed)
         theme_body.addWidget(self._theme_combo)
-        panel_layout.addWidget(theme_row)
+        self._add_row(group, theme_row)
 
         static_wall_row, static_wall_body = self._row(
             "Обои",
@@ -128,7 +137,7 @@ class SettingsPage(QWidget):
         self._wallpaper_status.setWordWrap(True)
         picker_layout.addWidget(self._wallpaper_status)
         static_wall_body.addWidget(self._wallpaper_picker)
-        panel_layout.addWidget(static_wall_row)
+        self._add_row(group, static_wall_row)
 
         wallpaper_row, wallpaper_body = self._row(
             "Динамические обои",
@@ -192,7 +201,7 @@ class SettingsPage(QWidget):
         )
         video_opts.addWidget(self._wallpaper_av_delay_spin)
         wallpaper_body.addWidget(self._wallpaper_video_opts)
-        panel_layout.addWidget(wallpaper_row)
+        self._add_row(group, wallpaper_row)
 
         eco_row, eco_body = self._row(
             "Фоновый режим",
@@ -204,11 +213,9 @@ class SettingsPage(QWidget):
         self._eco_cb.setCursor(Qt.CursorShape.PointingHandCursor)
         self._eco_cb.toggled.connect(self._on_eco_toggled)
         eco_body.addWidget(self._eco_cb)
-        panel_layout.addWidget(eco_row)
+        self._add_row(group, eco_row)
 
-        panel_layout.addWidget(
-            QLabel("Горячие клавиши", objectName="settingsSectionLabel")
-        )
+        group = self._begin_group(panel_layout, "Горячие клавиши")
         binds_row, binds_body = self._row(
             "Binds",
             "Работают в любом месте окна. S в поле поиска печатает букву.",
@@ -217,9 +224,9 @@ class SettingsPage(QWidget):
             line = QLabel(f"{key}  —  {action}")
             line.setObjectName("settingsRowDesc")
             binds_body.addWidget(line)
-        panel_layout.addWidget(binds_row)
+        self._add_row(group, binds_row)
 
-        panel_layout.addWidget(QLabel("Хранилище", objectName="settingsSectionLabel"))
+        group = self._begin_group(panel_layout, "Хранилище")
 
         music_row, music_body = self._row(
             "Папка для скачанной музыки",
@@ -262,7 +269,7 @@ class SettingsPage(QWidget):
         self._retag_status.setWordWrap(True)
         self._retag_status.setVisible(False)
         music_body.addWidget(self._retag_status)
-        panel_layout.addWidget(music_row)
+        self._add_row(group, music_row)
 
         data_row, data_body = self._row(
             "Каталог данных",
@@ -285,7 +292,7 @@ class SettingsPage(QWidget):
         data_buttons.addWidget(open_data)
         data_buttons.addStretch()
         data_body.addLayout(data_buttons)
-        panel_layout.addWidget(data_row)
+        self._add_row(group, data_row)
 
         engine_row, engine_body = self._row(
             "Медиадвижок",
@@ -295,11 +302,9 @@ class SettingsPage(QWidget):
         self._engine_label = QLabel(backend_display_name(resolve_media_backend()))
         self._engine_label.setObjectName("settingsRowDesc")
         engine_body.addWidget(self._engine_label)
-        panel_layout.addWidget(engine_row)
+        self._add_row(group, engine_row)
 
-        panel_layout.addWidget(
-            QLabel("О приложении", objectName="settingsSectionLabel")
-        )
+        group = self._begin_group(panel_layout, "О приложении")
 
         about_row, about_body = self._row(
             "Версия",
@@ -339,10 +344,10 @@ class SettingsPage(QWidget):
         update_buttons.addWidget(self._update_open_btn)
         update_buttons.addStretch()
         about_body.addLayout(update_buttons)
-        panel_layout.addWidget(about_row)
+        self._add_row(group, about_row)
 
         panel_layout.addStretch()
-        layout.addWidget(panel)
+        layout.addWidget(panel)  # макс. ширина — прижат к левому краю
         layout.addStretch()
 
         scroll.setWidget(content)
@@ -367,12 +372,35 @@ class SettingsPage(QWidget):
         super().showEvent(event)
         self._refresh_wallpapers()
 
+    @staticmethod
+    def _begin_group(parent: QVBoxLayout, title: str) -> QVBoxLayout:
+        """Раздел: подпись и карточка, куда _add_row кладёт настройки."""
+        if parent.count() > 2:
+            parent.addSpacing(18)
+        parent.addWidget(QLabel(title, objectName="settingsSectionLabel"))
+        card = QFrame()
+        card.setObjectName("settingsGroup")
+        col = QVBoxLayout(card)
+        col.setContentsMargins(0, 4, 0, 4)
+        col.setSpacing(0)
+        parent.addWidget(card)
+        return col
+
+    @staticmethod
+    def _add_row(group: QVBoxLayout, row: QWidget) -> None:
+        if group.count():
+            line = QFrame()
+            line.setObjectName("settingsDivider")
+            line.setFixedHeight(1)
+            group.addWidget(line)
+        group.addWidget(row)
+
     def _row(self, title: str, desc: str) -> tuple[QFrame, QVBoxLayout]:
         frame = QFrame()
         frame.setObjectName("settingsRow")
         col = QVBoxLayout(frame)
-        col.setContentsMargins(14, 12, 14, 12)
-        col.setSpacing(8)
+        col.setContentsMargins(20, 16, 20, 16)
+        col.setSpacing(6)
         col.addWidget(QLabel(title, objectName="settingsRowTitle"))
         description = QLabel(desc, objectName="settingsRowDesc")
         # Без переноса длинное описание задаёт минимальную ширину всей панели.

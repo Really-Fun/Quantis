@@ -459,6 +459,7 @@ def test_disabled_icons_keep_hue_but_fade(qapp, storage) -> None:
     normal = _alpha_peak(icon, QIcon.Mode.Normal)
     disabled = _alpha_peak(icon, QIcon.Mode.Disabled)
     assert disabled < normal * 0.5
+
     # Тот же цвет, что у активного, только прозрачнее — не серый значок Qt.
     def tone(mode):
         image = icon.pixmap(32, 32, mode).toImage()

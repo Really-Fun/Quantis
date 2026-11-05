@@ -609,6 +609,7 @@ class QuantisMainWindow(QMainWindow):
             from quantis.ui.views.library_page import LibraryPage
 
             self._library_page = LibraryPage(self._home_vm, self._bridge)
+            self._library_page.search_requested.connect(self._focus_search)
             self._replace_stack_page(self.PAGE_LIBRARY, self._library_page)
         return self._library_page
 

@@ -33,6 +33,7 @@ from quantis.ui.views.widgets.now_playing_stage import (
     UpNextItem,
     UpNextPanel,
 )
+from quantis.ui.views.widgets.page_layout import PAGE_MARGINS
 from quantis.ui.views.widgets.playlist_card import PlaylistShelf, QuickPickShelf
 from quantis.ui.views.widgets.track_card import TrackCardDelegate
 from quantis.ui.views.widgets.wave_card import WaveCard
@@ -41,7 +42,8 @@ _MAX_VISIBLE_TRACKS = 6
 """Строк в «Недавнем» и «Рекомендациях»: остальное — по «Все» и «Слушать»."""
 _TWO_COLUMNS_MIN = 880
 """Уже этого «Недавнее» и «Рекомендации» встают друг под другом."""
-_SIDE_MARGIN = 28
+_SIDE_MARGIN = (PAGE_MARGINS[0] + PAGE_MARGINS[2]) // 2
+"""Среднее поле слева/справа — для расчёта ширины."""
 _STAGE_GAP = 24
 _STAGE_TEXT_MIN = 240
 """Колонка названия трека — уже этого сцена не сжимается."""
@@ -87,7 +89,9 @@ class HomePage(QWidget):
         content = QWidget()
         content.setObjectName("homeScrollContent")
         self._layout = QVBoxLayout(content)
-        self._layout.setContentsMargins(_SIDE_MARGIN, 20, _SIDE_MARGIN, 40)
+        self._layout.setContentsMargins(
+            PAGE_MARGINS[0], PAGE_MARGINS[1], PAGE_MARGINS[2], 40
+        )
         self._layout.setSpacing(26)
 
         # Сцена «Сейчас играет» и справа «Дальше». Пока очередь пуста, на месте

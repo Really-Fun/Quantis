@@ -33,12 +33,13 @@ def test_theme_font_falls_back_to_bundled(qapp) -> None:
     assert installed in {"Bahnschrift", "Manrope"}
 
 
-def test_aurora_and_glass_use_manrope_and_unbounded(qapp) -> None:
+def test_aurora_and_glass_use_manrope_everywhere(qapp) -> None:
     register_bundled_fonts()
     for theme_id in ("neon", "glass"):
         theme = registry.get(theme_id)
         assert QFontInfo(theme_font(theme, "ui", 10)).family() == "Manrope"
-        assert QFontInfo(theme_font(theme, "display", 20)).family() == "Unbounded"
+        # заголовки тоже Manrope: Unbounded остался только в логотипе
+        assert QFontInfo(theme_font(theme, "display", 20)).family() == "Manrope"
     # остальные темы шрифты не меняли
     classic = registry.get("classic")
     assert classic.fonts.display == classic.fonts.ui

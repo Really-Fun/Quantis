@@ -1,10 +1,8 @@
 QLabel#settingsSectionLabel {
-    color: rgb(${hl_rgb});
-    font-size: 11px;
+    color: ${title};
+    font-size: 15px;
     font-weight: 700;
-    letter-spacing: 1.8px;
-    text-transform: uppercase;
-    padding: 12px 0 4px 0;
+    padding: 0 0 2px 0;
     background: transparent;
     font-family: ${font_label};
 }
@@ -63,17 +61,25 @@ QWidget#settingsPage {
     background: transparent;
 }
 
-QFrame#settingsPanel {
+QWidget#settingsPanel {
+    background: transparent;
+}
+
+QFrame#settingsGroup {
     background: ${surface};
-    border: 1px solid rgba(${hl_rgb}, 0.12);
-    border-radius: 24px;
+    border: 1px solid rgba(${ink_rgb}, 0.06);
+    border-radius: 16px;
+}
+
+QFrame#settingsDivider {
+    background: rgba(${ink_rgb}, 0.07);
+    border: none;
+    margin: 0 20px;
 }
 
 QFrame#settingsRow {
-    background: rgba(${ink_rgb}, 0.035);
-    border: 1px solid rgba(${ink_rgb}, 0.07);
-    border-radius: 16px;
-    padding: 14px 16px;
+    background: transparent;
+    border: none;
 }
 
 QCheckBox#settingsCheck::indicator {

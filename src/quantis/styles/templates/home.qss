@@ -31,8 +31,8 @@ QWidget#homeSectionBody {
 }
 
 QLabel#homeSectionTitle {
-    font-size: 22px;
-    font-weight: 700;
+    font-size: 20px;
+    font-weight: 800;
     color: ${title};
     letter-spacing: -0.45px;
     background: transparent;
@@ -173,8 +173,8 @@ QLabel#stageKicker {
 QLabel#stageTitle {
     color: ${title};
     font-family: ${font_display};
-    font-size: 40px;
-    font-weight: 700;
+    font-size: 38px;
+    font-weight: 800;
     background: transparent;
 }
 
@@ -392,4 +392,47 @@ QToolButton#homeWavePlay:hover {
 QToolButton#homeWavePlay:disabled {
     background: rgba(${tint_rgb}, 0.4);
     color: rgba(255, 255, 255, 0.7);
+}
+
+/* Заголовок страницы (ui/views/widgets/page_layout.py) */
+QWidget#pageTitleBlock {
+    background: transparent;
+}
+
+QLabel#pageTitle {
+    color: ${title};
+    font-family: ${font_display};
+    font-size: 28px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    background: transparent;
+}
+
+QLabel#pageSubtitle {
+    color: ${text_meta};
+    font-size: 13px;
+    background: transparent;
+}
+
+/* Пустое состояние страницы: заголовок, пояснение, кнопка */
+QLabel#emptyStateTitle {
+    color: ${title};
+    font-size: 17px;
+    font-weight: 700;
+    background: transparent;
+}
+
+QLabel#emptyStateText {
+    color: ${text_dim};
+    font-size: 13px;
+    background: transparent;
+}
+
+QWidget#emptyState {
+    background: transparent;
+}
+
+QLabel#emptyStateIcon {
+    background: rgba(${ink_rgb}, 0.06);
+    border-radius: 32px;
 }

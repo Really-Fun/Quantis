@@ -203,7 +203,7 @@ QToolButton#navIconButton[plugin="true"] {
     border: 1px solid rgba(102, 112, 133, 0.28);
 }
 
-QFrame#settingsPanel {
+QFrame#settingsGroup {
     border: 1px solid rgba(27, 32, 48, 0.08);
 }
 

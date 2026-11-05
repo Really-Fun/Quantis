@@ -22,7 +22,11 @@ from quantis.core.async_bridge import AsyncBridge
 from quantis.ui.async_ui import schedule
 from quantis.ui.playlist_actions import show_add_to_playlist_menu
 from quantis.ui.viewmodels.search_vm import SearchViewModel
-from quantis.ui.views.widgets.glass_panel import GlassPanel
+from quantis.ui.views.widgets.page_layout import (
+    EmptyState,
+    PageTitle,
+    apply_page_margins,
+)
 from quantis.ui.views.widgets.track_card import TrackCardDelegate
 
 
@@ -40,13 +44,15 @@ class SearchPage(QWidget):
         self.setObjectName("searchPage")
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(24, 16, 24, 16)
-        layout.setSpacing(0)
+        apply_page_margins(layout, spacing=0)
 
-        panel = GlassPanel()
+        # Без стеклянной панели вокруг: страница и есть контейнер.
+        panel = QWidget()
         panel_layout = QVBoxLayout(panel)
-        panel_layout.setContentsMargins(20, 18, 20, 16)
-        panel_layout.setSpacing(12)
+        panel_layout.setContentsMargins(0, 0, 0, 0)
+        panel_layout.setSpacing(14)
+        self._title = PageTitle("Поиск", "Яндекс Музыка, YouTube и SoundCloud сразу")
+        panel_layout.addWidget(self._title)
 
         # ── Строка поиска + кнопка расширенного режима ────────────────────
         search_row = QHBoxLayout()
@@ -71,7 +77,6 @@ class SearchPage(QWidget):
             Qt.ToolButtonStyle.ToolButtonTextBesideIcon
         )
         self._advanced_toggle.toggled.connect(self._on_advanced_toggled)
-
 
         # ── Фильтры-источники ─────────────────────────────────────────────
         filters = QHBoxLayout()
@@ -138,10 +143,12 @@ class SearchPage(QWidget):
         panel_layout.addWidget(self._list, stretch=1)
 
         # Пустая выдача — не пустая панель: подсказка, что сюда вводить.
-        self._empty = QLabel()
-        self._empty.setObjectName("homeEmptyHint")
-        self._empty.setWordWrap(True)
-        self._empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._empty = EmptyState(
+            "search.svg",
+            "Что послушаем?",
+            "Напиши название или артиста в поле сверху — или вставь ссылку "
+            "на YouTube, Яндекс Музыку или SoundCloud.",
+        )
         panel_layout.addWidget(self._empty, stretch=1)
         self._loading = False
         self._searched = False  # был ли поиск по текущему тексту
@@ -296,11 +303,13 @@ class SearchPage(QWidget):
         has_rows = self._vm.model.rowCount() > 0
         show = not has_rows and not self._loading
         if show:
-            self._empty.setText(
-                "Ничего не нашлось. Попробуй другой запрос или источник."
-                if self._searched and self._query.text().strip()
-                else "Найди трек по названию или артисту — или вставь ссылку "
-                "на YouTube, Яндекс Музыку или SoundCloud."
+            nothing = self._searched and bool(self._query.text().strip())
+            self._empty.set_title("Ничего не нашлось" if nothing else "Что послушаем?")
+            self._empty.set_text(
+                "Попробуй другой запрос или источник."
+                if nothing
+                else "Напиши название или артиста в поле сверху — или вставь "
+                "ссылку на YouTube, Яндекс Музыку или SoundCloud."
             )
         self._empty.setVisible(show)
         self._list.setVisible(not show)

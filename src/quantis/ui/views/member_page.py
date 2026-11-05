@@ -41,7 +41,11 @@ from quantis.services.membership import (
     MembershipSnapshot,
     fetch_membership_snapshot,
 )
-from quantis.ui.views.widgets.glass_panel import GlassPanel
+from quantis.ui.views.widgets.page_layout import (
+    CONTENT_MAX_W,
+    PageTitle,
+    apply_page_margins,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -224,34 +228,28 @@ class MemberPage(QWidget):
 
         content = QWidget()
         layout = QVBoxLayout(content)
-        layout.setContentsMargins(16, 8, 16, 20)
-        layout.setSpacing(12)
+        apply_page_margins(layout, spacing=0)
 
-        panel = GlassPanel()
+        # Карточки сервисов прямо на странице, без общей панели вокруг.
+        panel = QWidget()
         panel.setObjectName("settingsPanel")
+        panel.setMaximumWidth(CONTENT_MAX_W)
         col = QVBoxLayout(panel)
-        col.setContentsMargins(28, 26, 28, 28)
+        col.setContentsMargins(0, 0, 0, 0)
         col.setSpacing(16)
 
-        head = QHBoxLayout()
-        titles = QVBoxLayout()
-        titles.setSpacing(4)
-        titles.addWidget(_label("Аккаунты", "memberTitle"))
-        titles.addWidget(
-            _label(
-                "От них зависят поиск, «Моя волна» и полные треки. "
-                "Данные для входа остаются на этом компьютере.",
-                "memberSubtitle",
-                wrap=True,
-            )
+        head = PageTitle(
+            "Аккаунты",
+            "От них зависят поиск, «Моя волна» и полные треки. "
+            "Данные для входа остаются на этом компьютере.",
         )
-        head.addLayout(titles, stretch=1)
         self._refresh_btn = _button(
             "Проверить", "settingsButton", self.refresh_membership
         )
         self._refresh_btn.setToolTip("Заново спросить у сервисов статус аккаунтов")
-        head.addWidget(self._refresh_btn, alignment=Qt.AlignmentFlag.AlignTop)
-        col.addLayout(head)
+        head.add_action(self._refresh_btn)
+        col.addWidget(head)
+        col.addSpacing(8)
 
         self._yandex = _ServiceCard("yandex", "Яндекс Музыка")
         self._build_yandex_access(self._yandex.body)
@@ -262,7 +260,7 @@ class MemberPage(QWidget):
         col.addWidget(self._youtube)
 
         col.addStretch()
-        layout.addWidget(panel)
+        layout.addWidget(panel)  # макс. ширина — прижат к левому краю
         layout.addStretch()
 
         scroll.setWidget(content)
