@@ -157,14 +157,6 @@ QLabel#homePillBadge[variant="continue"] {
     color: #C2415A;
 }
 
-QToolButton#homeSectionAction {
-    border: 1px solid rgba(27, 32, 48, 0.10);
-}
-
-QToolButton#homeSectionAction:hover {
-    border-color: rgba(${tint_rgb}, 0.40);
-}
-
 #searchStatus {
     min-height: 16px;
 }

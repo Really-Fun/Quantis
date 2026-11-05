@@ -120,3 +120,28 @@ def test_side_panel_tabs(qapp, tmp_path) -> None:
     assert seeks == [0]
     view.set_lyrics(Lyrics())
     assert view.state == "missing"
+
+
+def test_yandex_uses_async_lyrics_download(monkeypatch) -> None:
+    """У асинхронного клиента текст качается fetch_lyrics_async: синхронный
+    fetch_lyrics падал на assert, и Яндекс молча подменялся LRCLIB."""
+
+    class _TrackLyrics:
+        def fetch_lyrics(self):
+            raise AssertionError("синхронный вызов на асинхронном клиенте")
+
+        async def fetch_lyrics_async(self):
+            return "[00:01.00]строка из Яндекса"
+
+    class _Client:
+        async def tracks_lyrics(self, track_id, format_):
+            return _TrackLyrics()
+
+    from quantis.config import clients, credentials
+
+    monkeypatch.setattr(credentials, "yandex_token", lambda: "token")
+    monkeypatch.setattr(clients.Clients, "get_yandex_client", lambda self: _Client())
+    found = asyncio.run(
+        LyricsService()._from_yandex(YandexTrack(track_id=1, title="t", author="a"))
+    )
+    assert found is not None and found.source == "Яндекс Музыка" and found.synced

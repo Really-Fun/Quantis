@@ -26,6 +26,7 @@ from PySide6.QtGui import (
     QConicalGradient,
     QFont,
     QFontMetrics,
+    QImage,
     QLinearGradient,
     QMouseEvent,
     QPainter,
@@ -49,10 +50,11 @@ from PySide6.QtWidgets import (
 from quantis.models import Track
 from quantis.ui.accent import AccentStyles
 from quantis.ui.cover_accent import CoverPalette
+from quantis.ui.image_fx import blur_image
 from quantis.ui.live_palette import LivePalette
 from quantis.ui.preferences import UiPreferences
 from quantis.ui.themes.spec import ThemeSpec, qcolor
-from quantis.ui.views.widgets.cover_art import load_track_cover
+from quantis.ui.views.widgets.cover_art import load_track_cover, screen_dpr
 from quantis.ui.views.widgets.elided_label import ElidedLabel
 from quantis.ui.views.widgets.glass import paint_glass
 from quantis.ui.views.widgets.source_badge import source_badge_color
@@ -417,6 +419,40 @@ class NowPlayingStage(QWidget):
         d = self._grooves.width() / self._grooves.devicePixelRatio()
         return cover, d, QPointF(cover.right() + self._out - d / 2, cover.center().y())
 
+    _shadow_cache: dict[tuple[int, bool, float], QPixmap] = {}
+
+    @classmethod
+    def _cover_shadow(cls, size: int, light: bool) -> QPixmap:
+        dpr = screen_dpr()
+        key = (size, light, dpr)
+        cached = cls._shadow_cache.get(key)
+        if cached is not None:
+            return cached
+        pad = max(12, round(size * 0.14))
+        side = size + 2 * pad
+        image = QImage(
+            round(side * dpr),
+            round(side * dpr),
+            QImage.Format.Format_ARGB32_Premultiplied,
+        )
+        image.setDevicePixelRatio(dpr)
+        image.fill(Qt.GlobalColor.transparent)
+        painter = QPainter(image)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(QColor(0, 0, 0, 60 if light else 150))
+        inset = size * 0.04
+        painter.drawRoundedRect(
+            QRectF(pad + inset, pad + inset, size - 2 * inset, size - 2 * inset), 24, 24
+        )
+        painter.end()
+        shadow = QPixmap.fromImage(blur_image(image, 0.18))
+        shadow.setDevicePixelRatio(dpr)
+        if len(cls._shadow_cache) > 8:
+            cls._shadow_cache.clear()
+        cls._shadow_cache[key] = shadow
+        return shadow
+
     @staticmethod
     def _make_grooves(d: int) -> QPixmap:
         dpr = 2
@@ -506,14 +542,14 @@ class NowPlayingStage(QWidget):
             sheen.setColorAt(pos, QColor(255, 255, 255, a))
         painter.setBrush(sheen)
         painter.drawEllipse(center, d / 2 - 2, d / 2 - 2)
-        # обложка с тенью — рисованной, без QGraphicsDropShadowEffect;
-        # на светлой теме тень мягче, иначе под обложкой серая плита
-        soft = 0.45 if _theme().is_light else 1.0
-        for i, a in enumerate((70, 40, 20)):
-            painter.setBrush(QColor(0, 0, 0, int(a * soft)))
-            painter.drawRoundedRect(
-                cover.adjusted(-2 - i * 3, 4 + i * 2, 2 + i * 3, 10 + i * 5), 24, 24
-            )
+        # обложка с мягкой тенью: размытая картинка, считается раз на размер
+        # (три сплошных прямоугольника читались на светлой теме как плита)
+        shadow = self._cover_shadow(round(cover.width()), _theme().is_light)
+        pad = (shadow.deviceIndependentSize().width() - cover.width()) / 2
+        painter.drawPixmap(
+            QPointF(cover.left() - pad, cover.top() - pad + cover.width() * 0.05),
+            shadow,
+        )
         path = QPainterPath()
         path.addRoundedRect(cover, 22, 22)
         if self._cover is not None and not self._cover.isNull():

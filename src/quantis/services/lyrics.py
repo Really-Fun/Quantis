@@ -161,7 +161,7 @@ class LyricsService:
                 raise
             if track_lyrics is None:
                 continue
-            text = await track_lyrics.fetch_lyrics() or ""
+            text = await track_lyrics.fetch_lyrics_async() or ""
             lines = parse_lrc(text) if fmt == "LRC" else _plain(text)
             if lines:
                 return Lyrics(lines, fmt == "LRC", "Яндекс Музыка")

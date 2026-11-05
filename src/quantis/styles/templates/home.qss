@@ -122,19 +122,19 @@ QLabel#quickPickTitle {
     background: transparent;
 }
 
+/* Действия у заголовка раздела («Все», «Слушать») — ссылки, не кнопки */
 QToolButton#homeSectionAction {
-    background: rgba(${ink_rgb}, 0.05);
-    border: 1px solid rgba(${ink_rgb}, 0.14);
-    border-radius: 12px;
-    padding: 7px 14px;
-    color: ${text_soft};
-    font-size: 12px;
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    padding: 6px 8px;
+    color: ${text_meta};
+    font-size: 13px;
     font-weight: 600;
 }
 
 QToolButton#homeSectionAction:hover {
-    background: rgba(${hl_rgb}, 0.14);
-    border-color: rgba(${hl_rgb}, 0.55);
+    background: rgba(${ink_rgb}, 0.06);
     color: ${title};
 }
 
