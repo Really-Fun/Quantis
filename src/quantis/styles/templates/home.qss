@@ -164,9 +164,9 @@ QTableView#homeTrackList QScrollBar:horizontal {
 
 /* Сцена «Сейчас играет» */
 QLabel#stageKicker {
-    color: ${text_soft};
+    color: rgb(${hl_rgb});
     font-size: 13px;
-    font-weight: 500;
+    font-weight: 700;
     background: transparent;
 }
 
@@ -189,10 +189,9 @@ QLabel#stageArtist {
     background: transparent;
 }
 
-QLabel#stageChipLabel {
-    color: ${text_dim};
-    font-size: 12px;
-    font-weight: 500;
+QLabel#stageMeta {
+    color: ${text_meta};
+    font-size: 13px;
     background: transparent;
 }
 

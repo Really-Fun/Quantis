@@ -7,7 +7,6 @@ from PySide6.QtGui import (
     QFontMetrics,
     QPainter,
     QPainterPath,
-    QPen,
     QPixmap,
 )
 from PySide6.QtWidgets import (
@@ -22,6 +21,8 @@ from PySide6.QtWidgets import (
 
 from quantis.models.playlist import Playlist
 from quantis.ui.fonts import app_font
+from quantis.ui.preferences import UiPreferences
+from quantis.ui.themes.spec import qcolor
 from quantis.ui.views.widgets.cover_art import (
     load_cover_pixmap,
     paint_rounded_cover,
@@ -323,11 +324,11 @@ class QuickPickTile(QFrame):
         rect = self.rect().adjusted(1, 1, -1, -1)
         path = QPainterPath()
         path.addRoundedRect(rect, 14, 14)
-        painter.fillPath(path, QColor(255, 255, 255, 18 if self._hovered else 10))
-        pen = QPen(QColor(46, 230, 255, 88 if self._hovered else 40))
-        pen.setWidthF(1.1)
-        painter.setPen(pen)
-        painter.drawPath(path)
+        # Без обводки: плитку отделяет лёгкая подложка цветом «чернил» темы
+        # (белая на тёмных, тёмная на светлой), под мышью — чуть плотнее.
+        ink = qcolor(UiPreferences().theme.colors.ink_rgb)
+        ink.setAlpha(22 if self._hovered else 11)
+        painter.fillPath(path, ink)
         painter.end()
 
     def enterEvent(self, event) -> None:

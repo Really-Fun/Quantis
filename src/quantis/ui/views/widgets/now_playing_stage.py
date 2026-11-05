@@ -47,6 +47,7 @@ from PySide6.QtWidgets import (
 )
 
 from quantis.models import Track
+from quantis.ui.accent import AccentStyles
 from quantis.ui.cover_accent import CoverPalette
 from quantis.ui.live_palette import LivePalette
 from quantis.ui.preferences import UiPreferences
@@ -160,58 +161,13 @@ class Spectrum(QWidget):
             )
 
 
-class SourceChip(QWidget):
-    """Чип источника трека. Пока у ``Track`` один источник — один чип;
-    «где ещё есть этот трек» появится вместе с кросс-поиском."""
-
-    H = 32
-
-    def __init__(self, parent: QWidget | None = None) -> None:
-        super().__init__(parent)
-        self.setFixedHeight(self.H)
-        self._source = ""
-
-    def set_source(self, source: str) -> None:
-        self._source = source
-        font = self._font()
-        width = QFontMetrics(font).horizontalAdvance(source_name(source))
-        self.setFixedWidth(26 + width + 16)
-        self.update()
-
-    def _font(self) -> QFont:
-        font = QFont(QApplication.font())
-        font.setPixelSize(13)
-        font.setWeight(QFont.Weight.DemiBold)
-        return font
-
-    def paintEvent(self, event: QPaintEvent) -> None:
-        if not self._source:
-            return
-        theme = _theme()
-        color = source_badge_color(self._source)
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
-        painter.setBrush(_alpha(color, 56))
-        painter.setPen(QPen(_alpha(color, 190), 1))
-        painter.drawRoundedRect(rect, rect.height() / 2, rect.height() / 2)
-        center = QPointF(rect.x() + 16, rect.center().y())
-        glow = QRadialGradient(center, 8)
-        glow.setColorAt(0, _alpha(color, 150))
-        glow.setColorAt(1, _alpha(color, 0))
-        painter.setPen(Qt.PenStyle.NoPen)
-        painter.setBrush(glow)
-        painter.drawEllipse(center, 8, 8)
-        painter.setBrush(color)
-        painter.drawEllipse(center, 3.5, 3.5)
-        painter.setFont(self._font())
-        painter.setPen(qcolor(theme.colors.text))
-        painter.drawText(
-            QRectF(rect.x() + 26, 0, rect.width() - 26, self.H),
-            Qt.AlignmentFlag.AlignVCenter,
-            source_name(self._source),
-        )
-        painter.end()
+def stage_meta(track: Track) -> str:
+    """«Яндекс Музыка · 3:05» — источник и длительность под исполнителем."""
+    parts = [source_name(str(track.source))]
+    seconds = int(getattr(track, "duration_ms", 0) or 0) // 1000
+    if seconds > 0:
+        parts.append(f"{seconds // 60}:{seconds % 60:02d}")
+    return " · ".join(p for p in parts if p)
 
 
 class NowPlayingStage(QWidget):
@@ -256,6 +212,10 @@ class NowPlayingStage(QWidget):
         col.setSpacing(0)
         self._kicker = QLabel()
         self._kicker.setObjectName("stageKicker")
+        # «Сейчас играет» — цветом обложки, как в плеере
+        AccentStyles.instance().bind(
+            self._kicker, "QLabel#stageKicker { color: ${rgb}; }"
+        )
         # длинный текст режется, а не раздвигает сцену шире окна
         self._kicker.setSizePolicy(
             QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred
@@ -270,18 +230,17 @@ class NowPlayingStage(QWidget):
         self._artist = ElidedLabel(max_lines=2)
         self._artist.setObjectName("stageArtist")
         col.addWidget(self._artist)
+        # источник и длительность — тихой строкой, а не цветной плашкой
+        self._meta = QLabel()
+        self._meta.setObjectName("stageMeta")
+        col.addSpacing(4)
+        col.addWidget(self._meta)
         col.addStretch(1)
         self._spectrum = Spectrum()
         col.addWidget(self._spectrum)
-        self._gaps.append(self._gap(col, 12))
-        self._chip_label = QLabel("Источник")
-        self._chip_label.setObjectName("stageChipLabel")
-        col.addWidget(self._chip_label)
-        col.addSpacing(8)
+        self._gaps.append(self._gap(col, 16))
         actions = QHBoxLayout()
         actions.setSpacing(10)
-        self._chip = SourceChip()
-        actions.addWidget(self._chip)
         self._resume_btn = self._pill("▶  Продолжить", self.resume_requested.emit)
         self._wave_btn = self._pill("Моя волна", self.wave_requested.emit)
         self._search_btn = self._pill("Найти трек", self.search_requested.emit)
@@ -329,10 +288,8 @@ class NowPlayingStage(QWidget):
         self._row.setContentsMargins(self._text_left(), 6, 0, 0)
         compact = cover < self.COMPACT_BELOW
         self._compact = compact
-        # на низкой сцене колонке текста не хватает высоты: спектр ниже,
-        # подпись «Источник» лишняя — чип и так говорит сам за себя
+        # на низкой сцене колонке текста не хватает высоты: спектр ниже
         self._spectrum.setFixedHeight(round(58 * max(0.62, self._k())))
-        self._chip_label.setVisible(self._has_track() and not compact)
         for spacer, size in self._gaps:
             spacer.changeSize(0, size // 2 if compact else size)
         self._row.invalidate()
@@ -399,11 +356,10 @@ class NowPlayingStage(QWidget):
             self._title.setText(track.title)
             self._artist.set_max_lines(1)  # под ним спектр — высота на счету
             self._artist.setText(track.author)
-            self._chip.set_source(str(track.source))
+            self._meta.setText(stage_meta(track))
         has_track = self._has_track()
         self._spectrum.setVisible(has_track)
-        self._chip_label.setVisible(has_track and not self._compact)
-        self._chip.setVisible(has_track)
+        self._meta.setVisible(has_track)
         self._resume_btn.setVisible(mode == "resume")
         self._wave_btn.setVisible(mode == "empty")
         self._search_btn.setVisible(mode == "empty")
