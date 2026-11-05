@@ -102,8 +102,8 @@ class UiPreferences(QObject):
         except (TypeError, ValueError):
             return default
 
-    SIDE_PANELS = ("", "queue")
-    """Правая выдвижная панель: закрыта или «Очередь»."""
+    SIDE_PANELS = ("", "queue", "lyrics")
+    """Правая выдвижная панель: закрыта, «Очередь» или «Текст»."""
 
     @property
     def side_panel(self) -> str:

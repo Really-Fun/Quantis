@@ -32,6 +32,7 @@ from PySide6.QtWidgets import (
 
 from quantis.core.bootstrap import ApplicationBundle
 from quantis.core.eco_mode import EcoMode
+from quantis.services.lyrics import LyricsService
 from quantis.ui import resources
 from quantis.ui.accent import AccentStyles
 from quantis.ui.controllers.dynamic_wallpaper import DynamicWallpaperController
@@ -262,6 +263,12 @@ class QuantisMainWindow(QMainWindow):
         )
         self._side_panel.track_activated.connect(self._play_up_next)
         self._side_panel.queue_page_requested.connect(self._open_playing_queue)
+        self._side_panel.tab_requested.connect(self._ui_prefs.set_side_panel)
+        self._side_panel.seek_requested.connect(self._player_vm.seek)
+        self._player_vm.position_changed.connect(self._side_panel.lyrics.set_position)
+        self._lyrics_service = LyricsService()
+        self._lyrics_track = None
+        """Трек, чей текст сейчас в панели (или грузится)."""
 
         self._np_fullscreen = NowPlayingFullscreen(bundle.music.provider, parent=shell)
         self._np_fullscreen.closed.connect(self._np_fullscreen.hide)
@@ -299,7 +306,12 @@ class QuantisMainWindow(QMainWindow):
                 self._home_vm.refresh_liked(self._bridge)
             ),
         )
-        self._player_bar.queue_toggle_requested.connect(self._toggle_side_panel)
+        self._player_bar.queue_toggle_requested.connect(
+            lambda: self._toggle_side_panel("queue")
+        )
+        self._player_bar.lyrics_toggle_requested.connect(
+            lambda: self._toggle_side_panel("lyrics")
+        )
         self._player_bar.hide_ui_requested.connect(self._toggle_chrome_hidden)
         columns.addWidget(self._player_bar)
 
@@ -417,8 +429,9 @@ class QuantisMainWindow(QMainWindow):
             if callable(setter):
                 setter(active)
 
-    def _toggle_side_panel(self) -> None:
-        self._ui_prefs.set_side_panel("" if self._ui_prefs.side_panel else "queue")
+    def _toggle_side_panel(self, tab: str) -> None:
+        """Кнопка в плеере: та же вкладка открыта — закрыть, иначе открыть её."""
+        self._ui_prefs.set_side_panel("" if self._ui_prefs.side_panel == tab else tab)
 
     def _toggle_nav(self) -> None:
         expanded = not self._nav.is_expanded
@@ -572,10 +585,38 @@ class QuantisMainWindow(QMainWindow):
         return self._resize_grips.owns(obj if isinstance(obj, QWidget) else None)
 
     def _sync_side_panel(self, *_: object, animate: bool = True) -> None:
-        open_ = bool(self._ui_prefs.side_panel) and not self._chrome_hidden
+        tab = self._ui_prefs.side_panel
+        open_ = bool(tab) and not self._chrome_hidden
+        if tab:
+            self._side_panel.set_tab(tab)
         self._side_panel.set_open(open_, animate=animate)
-        self._player_bar.set_queue_open(open_)
-        self._home_page.set_queue_elsewhere(open_)
+        self._player_bar.set_side_panel(tab if open_ else "")
+        self._home_page.set_queue_elsewhere(open_ and tab == "queue")
+        if open_ and tab == "lyrics":
+            self._load_lyrics(self._bundle.playback.current_track)
+
+    def _load_lyrics(self, track) -> None:
+        """Текст грузим, только когда вкладка «Текст» открыта (и один раз на трек)."""
+        view = self._side_panel.lyrics
+        if track is None:
+            self._lyrics_track = None
+            view.set_empty()
+            return
+        if track == self._lyrics_track:
+            return
+        self._lyrics_track = track
+        view.set_loading()
+
+        async def run() -> None:
+            lyrics = await self._lyrics_service.fetch(track)
+
+            def apply() -> None:
+                if track == self._lyrics_track:  # пока искали, трек сменили
+                    view.set_lyrics(lyrics)
+
+            self._bridge.invoke_main(apply)
+
+        self._bridge.schedule(run())
 
     def _on_page_changed(self, page_id: int) -> None:
         if page_id < 0 or page_id >= self._stack.count():
@@ -833,6 +874,8 @@ class QuantisMainWindow(QMainWindow):
         self._home_page.set_now_playing(track)
         self._refresh_up_next()
         self._side_panel.set_track(track)
+        if self._side_panel.is_open() and self._side_panel.tab() == "lyrics":
+            self._load_lyrics(track)
         self._np_fullscreen.set_track(track)
         self._update_palette_from_track(track)
 

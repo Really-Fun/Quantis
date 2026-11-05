@@ -102,6 +102,7 @@ class PlayerBar(QFrame):
     """Сколько ширины панели оставляем середине прежде, чем отдать колонкам."""
 
     queue_toggle_requested = Signal()
+    lyrics_toggle_requested = Signal()
     hide_ui_requested = Signal()
 
     def __init__(
@@ -275,6 +276,9 @@ class PlayerBar(QFrame):
         self._queue_btn = self._make_button("queue.svg", "Очередь")
         self._queue_btn.setCheckable(True)
         self._queue_btn.clicked.connect(self._on_queue_clicked)
+        self._lyrics_btn = self._make_button("lyrics.svg", "Текст песни")
+        self._lyrics_btn.setCheckable(True)
+        self._lyrics_btn.clicked.connect(self._on_lyrics_clicked)
         self._download_btn = self._make_button("download.svg", "Скачать")
         self._download_btn.setEnabled(False)
         self._download_btn.clicked.connect(self._on_download_clicked)
@@ -300,6 +304,7 @@ class PlayerBar(QFrame):
         )
         self._right_layout.addLayout(self._plugin_slot)
         for widget in (
+            self._lyrics_btn,
             self._queue_btn,
             self._download_btn,
             self._playlist_btn,
@@ -347,9 +352,19 @@ class PlayerBar(QFrame):
         self._queue_btn.setChecked(not self._queue_btn.isChecked())
         self.queue_toggle_requested.emit()
 
-    def set_queue_open(self, open_: bool) -> None:
-        self._queue_btn.setChecked(open_)
+    def _on_lyrics_clicked(self) -> None:
+        self._lyrics_btn.setChecked(not self._lyrics_btn.isChecked())
+        self.lyrics_toggle_requested.emit()
+
+    def set_side_panel(self, panel: str) -> None:
+        """Какая вкладка правой панели открыта: подсветка кнопок."""
+        self._queue_btn.setChecked(panel == "queue")
+        self._lyrics_btn.setChecked(panel == "lyrics")
         self._repolish(self._queue_btn)
+        self._repolish(self._lyrics_btn)
+
+    def set_queue_open(self, open_: bool) -> None:
+        self.set_side_panel("queue" if open_ else "")
 
     @staticmethod
     def _set_hint(button: QToolButton, text: str) -> None:

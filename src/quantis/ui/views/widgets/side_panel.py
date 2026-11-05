@@ -1,4 +1,4 @@
-"""Правая выдвижная панель: текущий трек и очередь.
+"""Правая выдвижная панель: очередь и текст песни (вкладки).
 
 Открывается кнопкой «Очередь» в плеере, сдвигает страницу (а не лежит
 поверх неё) и заменяет прежнюю колонку «Сейчас»: та дублировала плеер.
@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QSizePolicy,
+    QStackedWidget,
     QToolButton,
     QVBoxLayout,
     QWidget,
@@ -36,6 +37,7 @@ from quantis.ui.themes.spec import qcolor
 from quantis.ui.views.widgets.cover_art import load_cover_pixmap
 from quantis.ui.views.widgets.elided_label import ElidedLabel
 from quantis.ui.views.widgets.glass import install_glass
+from quantis.ui.views.widgets.lyrics_view import LyricsView
 from quantis.ui.views.widgets.now_playing_stage import UpNextItem, UpNextPanel
 
 PANEL_W = 340
@@ -98,6 +100,9 @@ class SidePanel(QFrame):
     track_activated = Signal(int)
     """Индекс трека в текущем плейлисте."""
     queue_page_requested = Signal()
+    tab_requested = Signal(str)
+    """Клик по вкладке: "queue" или "lyrics"."""
+    seek_requested = Signal(int)
 
     QUEUE_COUNT = 12
 
@@ -121,10 +126,21 @@ class SidePanel(QFrame):
         col.setSpacing(10)
 
         head = QHBoxLayout()
-        head.setContentsMargins(6, 0, 0, 0)
-        title = QLabel("Очередь")
-        title.setObjectName("sidePanelTitle")
-        head.addWidget(title, 1)
+        head.setContentsMargins(0, 0, 0, 0)
+        head.setSpacing(4)
+        self._tabs: dict[str, QToolButton] = {}
+        for key, text in (("queue", "Очередь"), ("lyrics", "Текст")):
+            tab = QToolButton(self._card)
+            tab.setObjectName("sidePanelTab")
+            tab.setText(text)
+            tab.setCheckable(True)
+            tab.setAutoExclusive(False)
+            tab.setCursor(Qt.CursorShape.PointingHandCursor)
+            tab.setAccessibleName(text)
+            tab.clicked.connect(lambda _=False, k=key: self.tab_requested.emit(k))
+            head.addWidget(tab)
+            self._tabs[key] = tab
+        head.addStretch(1)
         self._open_page_btn = self._tool("Открыть как страницу", "chevron-right.svg")
         self._open_page_btn.clicked.connect(self.queue_page_requested.emit)
         head.addWidget(self._open_page_btn)
@@ -133,10 +149,21 @@ class SidePanel(QFrame):
         head.addWidget(self._close_btn)
         col.addLayout(head)
 
+        self._pages = QStackedWidget()
+        col.addWidget(self._pages, 1)
+        queue_page = QWidget()
+        queue_col = QVBoxLayout(queue_page)
+        queue_col.setContentsMargins(0, 0, 0, 0)
+        queue_col.setSpacing(10)
+        self._pages.addWidget(queue_page)
+        self._lyrics = LyricsView()
+        self._lyrics.seek_requested.connect(self.seek_requested.emit)
+        self._pages.addWidget(self._lyrics)
+
         self._now_label = QLabel("Сейчас")
         self._now_label.setObjectName("sidePanelEyebrow")
         self._now_label.setContentsMargins(6, 6, 0, 0)
-        col.addWidget(self._now_label)
+        queue_col.addWidget(self._now_label)
 
         now = QFrame()
         now.setObjectName("sidePanelNow")
@@ -154,11 +181,12 @@ class SidePanel(QFrame):
         texts.addWidget(self._title)
         texts.addWidget(self._artist)
         row.addLayout(texts, 1)
-        col.addWidget(now)
+        queue_col.addWidget(now)
 
         self._queue = _QueueList()
         self._queue.track_activated.connect(self.track_activated.emit)
-        col.addWidget(self._queue, 1)
+        queue_col.addWidget(self._queue, 1)
+        self.set_tab("queue")
 
         self._anim = QPropertyAnimation(self, b"panelWidth", self)
         self._anim.setDuration(240)
@@ -249,3 +277,17 @@ class SidePanel(QFrame):
     @property
     def queue(self) -> UpNextPanel:
         return self._queue
+
+    @property
+    def lyrics(self) -> LyricsView:
+        return self._lyrics
+
+    def tab(self) -> str:
+        return "lyrics" if self._pages.currentWidget() is self._lyrics else "queue"
+
+    def set_tab(self, key: str) -> None:
+        self._pages.setCurrentIndex(1 if key == "lyrics" else 0)
+        for name, button in self._tabs.items():
+            button.setChecked(name == key)
+        # «открыть очередь страницей» — только на вкладке очереди
+        self._open_page_btn.setVisible(key != "lyrics")

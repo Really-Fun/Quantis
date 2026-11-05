@@ -158,3 +158,23 @@ QToolButton#advancedToggle:checked {
     border-color: rgba(${tint_rgb}, 0.55);
     color: rgb(${ink_rgb});
 }
+
+QToolButton#sidePanelTab {
+    background: transparent;
+    border: none;
+    border-radius: 16px;
+    color: ${text_dim};
+    font-size: 13px;
+    font-weight: 600;
+    padding: 6px 14px;
+}
+
+QToolButton#sidePanelTab:hover {
+    color: ${text};
+    background: rgba(${ink_rgb}, 0.06);
+}
+
+QToolButton#sidePanelTab:checked {
+    color: ${text};
+    background: rgba(${tint_rgb}, 0.2);
+}
