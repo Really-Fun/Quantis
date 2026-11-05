@@ -1571,9 +1571,11 @@ class AppController(QObject):
         if isinstance(results, dict):  # Яндекс: поиск по всему
             extras = {k: v for k, v in results.items() if k != "tracks"}
             results = results["tracks"]
-        self._results.set_items(results)
+        # Сначала блоки Яндекса: от них зависит, какой список на экране
+        # (обычный или «по всему») — строки создаёт только видимый.
         self._search_extras = extras
         self.searchExtrasChanged.emit()
+        self._results.set_items(results)
         empty = not results and not any(extras.get(k) for k in ("artists", "albums", "playlists"))
         self._set_status("Ничего не нашлось" if empty else "")
 

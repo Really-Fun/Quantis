@@ -26,54 +26,67 @@ ItemDelegate {
     rightPadding: 4
     Accessible.name: title + ", " + artist
 
-    contentItem: RowLayout {
-        spacing: 12
-        CoverArt {
-            Layout.preferredWidth: 48
-            Layout.preferredHeight: 48
-            seed: row.title
-            cover: row.cover
-        }
-        ColumnLayout {
-            Layout.fillWidth: true
-            spacing: 2
-            Text {
-                Layout.fillWidth: true
-                text: row.title
-                color: row.current ? theme.accent : theme.text
-                font.family: theme.ui
-                font.pixelSize: 16
-                font.weight: Font.DemiBold
-                elide: Text.ElideRight
+    // В выдаче поиска содержимое строки собирается в фоне, по кадрам: иначе
+    // 5–10 строк разом (Material-кнопки, обложки, значки) вешали интерфейс на
+    // 0,1–0,3 с. В длинных списках (история, плейлисты) — сразу, без мигания
+    // при прокрутке.
+    property bool lazyContent: false
+    contentItem: Loader {
+        asynchronous: row.lazyContent
+        sourceComponent: rowContent
+    }
+
+    Component {
+        id: rowContent
+        RowLayout {
+            spacing: 12
+            CoverArt {
+                Layout.preferredWidth: 48
+                Layout.preferredHeight: 48
+                seed: row.title
+                cover: row.cover
             }
-            RowLayout {
-                spacing: 6
+            ColumnLayout {
                 Layout.fillWidth: true
-                SourceBadge { source: row.source }
-                Image {
-                    visible: row.offline
-                    source: "icons/downloaded.svg"
-                    sourceSize: Qt.size(14, 14)
-                    Layout.preferredWidth: 14; Layout.preferredHeight: 14
-                    Accessible.name: "Скачан"
-                }
+                spacing: 2
                 Text {
                     Layout.fillWidth: true
-                    text: row.artist + (row.duration > 0 ? "  ·  " + theme.formatTime(row.duration * 1000) : "")
-                    color: theme.textDim
+                    text: row.title
+                    color: row.current ? theme.accent : theme.text
                     font.family: theme.ui
-                    font.pixelSize: 13
+                    font.pixelSize: 16
+                    font.weight: Font.DemiBold
                     elide: Text.ElideRight
                 }
+                RowLayout {
+                    spacing: 6
+                    Layout.fillWidth: true
+                    SourceBadge { source: row.source }
+                    Image {
+                        visible: row.offline
+                        source: "icons/downloaded.svg"
+                        sourceSize: Qt.size(14, 14)
+                        Layout.preferredWidth: 14; Layout.preferredHeight: 14
+                        Accessible.name: "Скачан"
+                    }
+                    Text {
+                        Layout.fillWidth: true
+                        text: row.artist + (row.duration > 0 ? "  ·  " + theme.formatTime(row.duration * 1000) : "")
+                        color: theme.textDim
+                        font.family: theme.ui
+                        font.pixelSize: 13
+                        elide: Text.ElideRight
+                    }
+                }
             }
-        }
-        IconButton {
-            iconName: "more-vertical"
-            label: "Действия с треком"
-            tint: theme.textDim
-            onClicked: {
-                menuLoader.active = true
-                menuLoader.item.popup(this, 0, height)
+            IconButton {
+                iconName: "more-vertical"
+                label: "Действия с треком"
+                tint: theme.textDim
+                onClicked: {
+                    menuLoader.active = true
+                    menuLoader.item.popup(this, 0, height)
+                }
             }
         }
     }
