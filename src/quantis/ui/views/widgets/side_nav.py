@@ -482,6 +482,7 @@ class SideNavRail(QFrame):
         items = self._playlist_items()
         if not items:
             return
+
         def tall(button: QWidget) -> int:
             # у свёрнутых кнопок высота задана жёстко, sizeHint её не знает
             return max(button.sizeHint().height(), button.minimumHeight())

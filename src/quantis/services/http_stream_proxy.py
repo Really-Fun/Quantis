@@ -12,6 +12,7 @@ import logging
 import re
 import time
 from collections.abc import Awaitable, Callable
+from urllib.parse import urlsplit
 
 from aiohttp import ClientSession, ClientTimeout, web
 from aiohttp.client_exceptions import ClientConnectionError, ClientPayloadError
@@ -43,7 +44,9 @@ UrlRefresher = Callable[[], Awaitable[str | None]]
 
 
 def _chunked_upstream(url: str) -> bool:
-    return "googlevideo.com" in url
+    # по домену, а не подстроке: «googlevideo.com» может стоять в пути/запросе
+    host = (urlsplit(url).hostname or "").lower()
+    return host == "googlevideo.com" or host.endswith(".googlevideo.com")
 
 
 def _parse_range(header: str | None) -> tuple[int, int | None]:

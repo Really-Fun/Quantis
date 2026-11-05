@@ -67,7 +67,9 @@ class AsyncSoundCloudFinder:
         collection = data.get("collection") if isinstance(data, dict) else None
         if not isinstance(collection, list):
             raise RuntimeError("SoundCloud: неожиданный ответ поиска")
-        tracks = [t for t in map(track_from_api, collection) if t is not None]
+        tracks: list[Track] = [
+            t for t in map(track_from_api, collection) if t is not None
+        ]
         return tracks[:limit]
 
     def _search_ydl(self, title: str, limit: int) -> list[Track]:

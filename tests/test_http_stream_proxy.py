@@ -149,3 +149,11 @@ async def test_video_goes_upstream_in_bounded_chunks(monkeypatch) -> None:
     assert data == _PAYLOAD
     assert seen and all(re.fullmatch(r"bytes=\d+-\d+", h) for h in seen)
     assert len(seen) == 4
+
+
+def test_chunked_upstream_checks_the_host() -> None:
+    from quantis.services.http_stream_proxy import _chunked_upstream
+
+    assert _chunked_upstream("https://rr3---sn-abc.googlevideo.com/videoplayback?x=1")
+    assert not _chunked_upstream("https://evil.example/?u=googlevideo.com")
+    assert not _chunked_upstream("https://googlevideo.com.evil.example/v")
