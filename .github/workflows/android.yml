@@ -69,7 +69,8 @@ jobs:
         run: |
           mkdir -p "$CACHE/wheels"
           if [ ! -x "$CACHE/tool-venv/bin/python" ]; then
-            uv venv --python 3.14 "$CACHE/tool-venv"
+            # --seed: с pip — инструмент сам зовёт pip freeze / pip install
+            uv venv --seed --python 3.14 "$CACHE/tool-venv"
             VIRTUAL_ENV="$CACHE/tool-venv" uv pip install "pyside6==$PYSIDE_VERSION"
             REQS="$("$CACHE/tool-venv/bin/python" -c 'import PySide6, pathlib; print(pathlib.Path(PySide6.__file__).parent / "scripts" / "requirements-android.txt")')"
             VIRTUAL_ENV="$CACHE/tool-venv" uv pip install -r "$REQS"
