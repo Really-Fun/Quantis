@@ -55,6 +55,33 @@ def should_proxy_stream(
     return not is_hls_url(url)
 
 
+# Клип не длиннее/короче трека на столько — та же версия, фон идёт до конца.
+_CLIP_DURATION_SLOP_MS = 4000
+
+
+def pick_wallpaper_clip(candidates: list[Track], duration_ms: int) -> Track | None:
+    """Клип для фона: первый по релевантности той же длины, что и трек.
+
+    Первый результат поиска часто — другая версия (с интро, slowed, live) на
+    10–60 с длиннее, и к концу трека видео уезжает. Совпадения нет — первый.
+    """
+    if not candidates:
+        return None
+    if duration_ms <= 0:
+        return candidates[0]
+
+    def gap(track: Track) -> int:
+        clip = int(getattr(track, "duration_ms", 0) or 0)
+        return abs(clip - duration_ms) if clip > 0 else 10**9
+
+    for track in candidates:
+        if gap(track) <= _CLIP_DURATION_SLOP_MS:
+            return track
+    # Той же длины нет — ближайшая по длине обычно live/AMV/нарезка, а
+    # первый результат хотя бы официальный клип.
+    return candidates[0]
+
+
 class AsyncStreamer(AsyncStreamerInterface):
     """Фасад над Yandex и YouTube стримерами с кэшированием URL."""
 
@@ -75,6 +102,8 @@ class AsyncStreamer(AsyncStreamerInterface):
         self._http_proxy = LocalHttpStreamProxy(self._fetch_fresh_stream_url)
         self._buffer_loop: Any = None
         self._cache: OrderedDict[str, tuple[str, float]] = OrderedDict()
+        # Трек Яндекса/SoundCloud → id клипа на YouTube (поиск — ~1 с).
+        self._video_ids: OrderedDict[str, str | None] = OrderedDict()
 
     async def _fetch_fresh_stream_url(self, track: Track) -> str | None:
         """Прямой URL без кэша фасада (для progressive buffer / recovery)."""
@@ -165,6 +194,41 @@ class AsyncStreamer(AsyncStreamerInterface):
             video_id, height=height, exclude_itags=exclude_itags
         )
 
+    async def open_video(
+        self,
+        track: Track,
+        finder: object | None = None,
+        *,
+        height: int = WALLPAPER_DEFAULT_QUALITY,
+        exclude_itags: frozenset[str] | None = None,
+    ) -> tuple[str | None, str | None, int]:
+        """Видео для фона: (адрес для плеера, исходная ссылка, длительность).
+
+        googlevideo идёт через локальный прокси — он берёт видео кусками,
+        иначе YouTube урезает поток 480p+ ниже битрейта и фон встаёт.
+        """
+        video_id = await self._resolve_youtube_video_id(track, finder)
+        if not video_id:
+            return None, None, 0
+        url, duration = await self._youtube.get_video_info(
+            video_id, height=height, exclude_itags=exclude_itags
+        )
+        if not url:
+            return None, None, duration
+        if "googlevideo.com" not in url:
+            return url, url, duration
+
+        async def refresh() -> str | None:
+            self._youtube.invalidate(video_id)
+            fresh, _ = await self._youtube.get_video_info(
+                video_id, height=height, exclude_itags=exclude_itags
+            )
+            return fresh
+
+        self._buffer_loop = get_running_loop()
+        local = await self._http_proxy.mount_video(track, url, refresh)
+        return local, url, duration
+
     async def _resolve_youtube_video_id(
         self, track: Track, finder: object | None
     ) -> str | None:
@@ -173,17 +237,41 @@ class AsyncStreamer(AsyncStreamerInterface):
             return str(track.track_id)
         if finder is None:
             return None
-        query = f"{track.title} {track.author}"
-        try:
-            results = await finder.get_tracks(query, value=3)  # type: ignore[attr-defined]
-        except Exception:
-            logger.exception("Поиск YouTube-видео для обоев: %s", query)
-            return None
-        youtube_hit = next(
-            (t for t in results if str(t.source).lower() == TrackSource.YOUTUBE),
-            None,
+        key = f"{track.source}:{track.track_id}"
+        if key in self._video_ids:
+            self._video_ids.move_to_end(key)
+            return self._video_ids[key]
+        # Только YouTube: общий поиск ждёт ещё Яндекс и SoundCloud (до 15 с).
+        youtube = getattr(finder, "youtube", None)
+        search = getattr(youtube, "search_videos", None)
+        if search is None:
+            search = (youtube if youtube is not None else finder).get_tracks
+        title = str(track.title or "").strip()
+        queries = [f"{title} {track.author}".strip()]
+        if title and title not in queries:
+            # У SoundCloud автор — это загрузивший («Jeihun Abdulla»), а
+            # исполнитель уже в названии; с ним YouTube часто не находит ничего.
+            queries.append(title)
+        results: list[Track] = []
+        for query in queries:
+            try:
+                results = await search(query, value=6)  # type: ignore[misc]
+            except Exception:
+                logger.exception("Поиск YouTube-видео для обоев: %s", query)
+                return None
+            results = [
+                t for t in results if str(t.source).lower() == TrackSource.YOUTUBE
+            ]
+            if results:
+                break
+        youtube_hit = pick_wallpaper_clip(
+            results, int(getattr(track, "duration_ms", 0) or 0)
         )
-        return str(youtube_hit.track_id) if youtube_hit else None
+        video_id = str(youtube_hit.track_id) if youtube_hit else None
+        self._video_ids[key] = video_id
+        while len(self._video_ids) > 256:
+            self._video_ids.popitem(last=False)
+        return video_id
 
     def invalidate(self, track: Track) -> None:
         key = f"{track.source}:{track.track_id}"

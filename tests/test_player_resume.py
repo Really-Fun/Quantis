@@ -398,3 +398,19 @@ def test_duration_keeps_catalog_for_stream_buffer_file(tmp_path) -> None:
     player.play(str(tmp_path / "quantis_stream" / "yandex_1.mp3"))
     engine._duration = 6_000
     assert player.duration == 180_000
+
+
+def test_quick_skip_does_not_freeze_new_track_at_zero() -> None:
+    """Прошлый трек сыграл ~2 с: новый не должен «стоять» на 0, проходя 0–4 с."""
+    engine = StubEngine()
+    player = Player(engine=engine)
+    player.play("https://rr.example/third.m4a")
+    engine._position = 2_245
+    assert player.time == 2_245
+
+    player.play("https://rr.example/fourth.m4a")
+    engine._position = 2_245  # хвост прошлого трека, движок ещё не сбросился
+    assert player.time == 0
+    for position in (0, 300, 1_500, 2_500, 4_000):
+        engine._position = position
+        assert player.time == position

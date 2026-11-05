@@ -7,7 +7,7 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 from quantis.core.async_bridge import AsyncBridge
-from quantis.models import Track
+from quantis.models import Track, TrackSource
 from quantis.models.playlist import RecommendationPlaylist, WavePlaylist
 from quantis.models.repeat_mode import RepeatMode
 from quantis.player import Player
@@ -25,8 +25,17 @@ _HEALTHY_POSITION_MS = 15_000
 # Ссылку на следующий трек берём за столько секунд до конца текущего.
 _PREFETCH_LEAD_S = 35.0
 _PREFETCH_UNKNOWN_DELAY_S = 20.0
+# Чуть позже старта, чтобы не делить сеть с буферизацией текущего трека.
+_PREFETCH_YOUTUBE_DELAY_S = 3.0
+# Ссылки YouTube берём на столько треков вперёд: быстрое пролистывание.
+_PREFETCH_YOUTUBE_AHEAD = 2
 
 NextTrackProvider = Callable[[], Awaitable[Track | None]]
+UpcomingListener = Callable[[Track], None]
+
+
+def _is_youtube(track: Track) -> bool:
+    return str(track.source).lower() == TrackSource.YOUTUBE
 
 
 class PlaybackController:
@@ -59,6 +68,25 @@ class PlaybackController:
         self._audio_live = False
         self._repeat_mode = UiPreferences().repeat_mode
         self._next_track_provider: NextTrackProvider | None = None
+        self._upcoming_listeners: list[UpcomingListener] = []
+
+    def add_upcoming_listener(self, listener: UpcomingListener) -> None:
+        """Узнать следующий трек заранее (видео-фон готовит свой клип)."""
+        self._upcoming_listeners.append(listener)
+
+    def _announce_upcoming(self, track: Track) -> None:
+        for listener in list(self._upcoming_listeners):
+
+            def call(listener: UpcomingListener = listener) -> None:
+                try:
+                    listener(track)
+                except Exception:
+                    logger.debug("Слушатель следующего трека упал", exc_info=True)
+
+            if self._bridge is not None:
+                self._bridge.invoke_main(call)
+            else:
+                call()
 
     def set_next_track_provider(self, provider: NextTrackProvider | None) -> None:
         """Внешняя очередь (например, комнаты Together) идёт раньше плейлиста.
@@ -283,15 +311,32 @@ class PlaybackController:
             index = tracks.index(current)
         except ValueError:
             return
-        if index + 1 >= len(tracks):
+        upcoming = list(tracks[index + 1 : index + 1 + _PREFETCH_YOUTUBE_AHEAD])
+        if not upcoming:
             return
-        nxt = tracks[index + 1]
+        nxt = upcoming[0]
+        seq = self._play_seq
+        waited = 0.0
+        early = [track for track in upcoming if _is_youtube(track)]
+        if early or self._upcoming_listeners:
+            # YouTube (ссылки живут часами, лимита нет) и клип фона — почти
+            # сразу: «следующий» посреди трека стартует без ожидания.
+            await asyncio.sleep(_PREFETCH_YOUTUBE_DELAY_S)
+            waited = _PREFETCH_YOUTUBE_DELAY_S
+            if seq != self._play_seq:
+                return
+            self._announce_upcoming(nxt)
+            for track in early:
+                await self.music.streamer.prefetch_stream(track)
+                if seq != self._play_seq:
+                    return
+        if _is_youtube(nxt):
+            return
         # Ссылка живёт в кэше ~50 с, а download-info у Яндекса — дефицитный
         # лимит (429 «Concurrency limit exceeded»). Предзагрузка на старте
         # трека протухала к его концу и отнимала лимит у следующего клика —
         # первый трек новой волны не запускался. Берём ссылку ближе к концу.
-        seq = self._play_seq
-        delay = self._prefetch_delay_s(current)
+        delay = max(0.0, self._prefetch_delay_s(current) - waited)
         if delay > 0:
             await asyncio.sleep(delay)
             if seq != self._play_seq:

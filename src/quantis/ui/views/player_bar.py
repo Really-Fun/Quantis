@@ -37,6 +37,7 @@ from quantis.ui.cover_prefetch import schedule_cover_prefetch
 from quantis.ui.live_palette import LivePalette
 from quantis.ui.playlist_actions import show_add_to_playlist_menu
 from quantis.ui.preferences import UiPreferences
+from quantis.ui.themes.spec import qcolor
 from quantis.ui.ui_extensions import PlayerActionExtension, UiExtensionHost
 from quantis.ui.viewmodels.player_vm import PlayerViewModel
 from quantis.ui.views.widgets.cover_art import load_cover_pixmap
@@ -100,7 +101,8 @@ class PlayerBar(QFrame):
     CENTER_RESERVE = 700
     """Сколько ширины панели оставляем середине прежде, чем отдать колонкам."""
 
-    now_playing_toggle_requested = Signal()
+    queue_toggle_requested = Signal()
+    lyrics_toggle_requested = Signal()
     hide_ui_requested = Signal()
 
     def __init__(
@@ -155,7 +157,7 @@ class PlayerBar(QFrame):
         install_glass(card, "QFrame#PlayMenu", overlay=self._paint_capsule)
 
         body = QGridLayout(card)
-        body.setContentsMargins(14, 8, 20, 8)
+        body.setContentsMargins(12, 4, 18, 6)
         body.setHorizontalSpacing(12)
         body.setColumnStretch(1, 1)
         body.addWidget(
@@ -164,7 +166,12 @@ class PlayerBar(QFrame):
             0,
             Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter,
         )
-        body.addWidget(self._build_center(), 0, 1, Qt.AlignmentFlag.AlignVCenter)
+        body.addWidget(
+            self._build_center(),
+            0,
+            1,
+            Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter,
+        )
         body.addWidget(
             self._build_actions(),
             0,
@@ -188,6 +195,9 @@ class PlayerBar(QFrame):
         meta.addWidget(self._title)
         meta.addWidget(self._author)
 
+        self._like_btn = self._make_button("heart.svg", "В любимые")
+        self._like_btn.clicked.connect(self.toggle_like)
+
         self._left = QWidget()
         self._left.setObjectName("playerLeft")
         layout = QHBoxLayout(self._left)
@@ -195,6 +205,7 @@ class PlayerBar(QFrame):
         layout.setSpacing(COVER_GAP)
         layout.addWidget(self._cover)
         layout.addLayout(meta, stretch=1)
+        layout.addWidget(self._like_btn)
         return self._left
 
     def _build_center(self) -> QWidget:
@@ -213,10 +224,10 @@ class PlayerBar(QFrame):
         self._next_btn.clicked.connect(self._vm.play_next)
 
         transport_host = QWidget()
-        transport_host.setFixedHeight(48)
+        transport_host.setFixedHeight(44)
         transport = QHBoxLayout(transport_host)
         transport.setContentsMargins(0, 0, 0, 0)
-        transport.setSpacing(10)
+        transport.setSpacing(12)
         transport.setAlignment(
             Qt.AlignmentFlag.AlignHCenter | Qt.AlignmentFlag.AlignVCenter
         )
@@ -234,25 +245,26 @@ class PlayerBar(QFrame):
         )
         self._position = WaveformSeekSlider()
         self._position.setRange(0, 0)
-        self._position.setFixedHeight(30)
+        self._position.setFixedHeight(20)
         self._position.sliderPressed.connect(self._on_seek_start)
         self._position.sliderReleased.connect(self._on_seek_end)
         self._duration_label = self._make_time_label()
 
         seek_row = QHBoxLayout()
-        seek_row.setSpacing(8)
+        seek_row.setSpacing(10)
         seek_row.addWidget(self._elapsed)
         seek_row.addWidget(self._position, stretch=1)
         seek_row.addWidget(self._duration_label)
 
         center = QWidget()
         center.setObjectName("playerCenter")
-        layout = QHBoxLayout(center)
+        center.setMinimumWidth(420)
+        center.setMaximumWidth(640)
+        layout = QVBoxLayout(center)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(14)
-        layout.setAlignment(Qt.AlignmentFlag.AlignVCenter)
-        layout.addWidget(transport_host, 0, Qt.AlignmentFlag.AlignVCenter)
-        layout.addLayout(seek_row, 1)
+        layout.setSpacing(0)
+        layout.addWidget(transport_host)
+        layout.addLayout(seek_row)
         return center
 
     def _build_actions(self) -> QWidget:
@@ -261,19 +273,21 @@ class PlayerBar(QFrame):
             "hide-ui-neon.svg", "Скрыть интерфейс (S)"
         )
         self._hide_ui_btn.clicked.connect(self.hide_ui_requested.emit)
-        self._now_btn = self._make_button("radio.svg", "Панель «Сейчас»")
-        self._now_btn.clicked.connect(self.now_playing_toggle_requested.emit)
+        self._queue_btn = self._make_button("queue.svg", "Очередь")
+        self._queue_btn.setCheckable(True)
+        self._queue_btn.clicked.connect(self._on_queue_clicked)
+        self._lyrics_btn = self._make_button("lyrics.svg", "Текст песни")
+        self._lyrics_btn.setCheckable(True)
+        self._lyrics_btn.clicked.connect(self._on_lyrics_clicked)
         self._download_btn = self._make_button("download.svg", "Скачать")
         self._download_btn.setEnabled(False)
         self._download_btn.clicked.connect(self._on_download_clicked)
         self._playlist_btn = self._make_button("folder.svg", "В плейлист")
         self._playlist_btn.setEnabled(False)
         self._playlist_btn.clicked.connect(self._on_add_to_playlist_clicked)
-        self._like_btn = self._make_button("heart.svg", "В любимые")
-        self._like_btn.clicked.connect(self.toggle_like)
         self._volume = QSlider(Qt.Orientation.Horizontal)
         self._volume.setObjectName("volSlider")
-        self._volume.setFixedWidth(72)
+        self._volume.setFixedWidth(88)
         self._volume.setRange(0, 100)
         self._volume.valueChanged.connect(self._vm.set_volume)
 
@@ -290,11 +304,11 @@ class PlayerBar(QFrame):
         )
         self._right_layout.addLayout(self._plugin_slot)
         for widget in (
-            self._hide_ui_btn,
-            self._now_btn,
+            self._lyrics_btn,
+            self._queue_btn,
             self._download_btn,
             self._playlist_btn,
-            self._like_btn,
+            self._hide_ui_btn,
             self._volume,
         ):
             self._right_layout.addWidget(widget)
@@ -317,13 +331,40 @@ class PlayerBar(QFrame):
         button.setAutoRaise(True)
         button.setFocusPolicy(Qt.FocusPolicy.NoFocus)
         icon_size = 18 if accent else 16
-        button.setIcon(resources.faded_when_disabled(resources.load_icon(icon_name)))
+        button.setProperty("iconName", icon_name)
+        if not accent:
+            button.setIcon(self._tinted(icon_name))
         button.setIconSize(QSize(icon_size, icon_size))
         self._set_hint(button, tooltip)
         button.setCursor(Qt.CursorShape.PointingHandCursor)
         button.setFixedSize(size, size)
         self._repolish(button)
         return button
+
+    @staticmethod
+    def _tinted(icon_name: str):
+        """Значок одним цветом — цветом текста темы (а не розово-голубой)."""
+        color = qcolor(UiPreferences().theme.colors.text_dim)
+        return resources.faded_when_disabled(resources.load_icon(icon_name, color))
+
+    def _on_queue_clicked(self) -> None:
+        # состояние кнопки выставит окно через set_queue_open
+        self._queue_btn.setChecked(not self._queue_btn.isChecked())
+        self.queue_toggle_requested.emit()
+
+    def _on_lyrics_clicked(self) -> None:
+        self._lyrics_btn.setChecked(not self._lyrics_btn.isChecked())
+        self.lyrics_toggle_requested.emit()
+
+    def set_side_panel(self, panel: str) -> None:
+        """Какая вкладка правой панели открыта: подсветка кнопок."""
+        self._queue_btn.setChecked(panel == "queue")
+        self._lyrics_btn.setChecked(panel == "lyrics")
+        self._repolish(self._queue_btn)
+        self._repolish(self._lyrics_btn)
+
+    def set_queue_open(self, open_: bool) -> None:
+        self.set_side_panel("queue" if open_ else "")
 
     @staticmethod
     def _set_hint(button: QToolButton, text: str) -> None:
@@ -371,7 +412,7 @@ class PlayerBar(QFrame):
         side = (self.width() - self.CENTER_RESERVE) // 2
         side = max(self.MIN_SIDE, min(self.SIDE, side))
         self._left.setFixedWidth(side)
-        text_width = side - COVER_SIZE - COVER_GAP
+        text_width = side - COVER_SIZE - 2 * COVER_GAP - self._like_btn.width()
         self._title.setMaximumWidth(text_width)
         self._author.setMaximumWidth(text_width)
         need = self._right_layout.sizeHint().width()
@@ -387,6 +428,9 @@ class PlayerBar(QFrame):
         self._vm.repeat_mode_changed.connect(self._update_repeat_button)
         self._vm.volume_changed.connect(self._on_volume_changed)
         AccentStyles.instance().accent_changed.connect(self._refresh_play_icon)
+        AccentStyles.instance().accent_changed.connect(
+            lambda *_: self._update_like_button()
+        )
         LivePalette.instance().palette_changed.connect(self._on_palette)
         self._extensions.player_actions_changed.connect(self._rebuild_plugin_actions)
 
@@ -460,7 +504,8 @@ class PlayerBar(QFrame):
 
     def _update_repeat_button(self, mode: RepeatMode) -> None:
         icon_name, tooltip = _REPEAT_LOOK[mode]
-        self._repeat_btn.setIcon(resources.load_icon(icon_name))
+        self._repeat_btn.setProperty("iconName", icon_name)
+        self._repeat_btn.setIcon(self._tinted(icon_name))
         self._set_hint(self._repeat_btn, tooltip)
         self._repeat_btn.setProperty("repeatMode", mode.value)
         self._repolish(self._repeat_btn)
@@ -510,8 +555,10 @@ class PlayerBar(QFrame):
         self._like_btn.setProperty("liked", liked)
         self._like_btn.setIcon(
             resources.faded_when_disabled(
-                resources.load_icon("heart-filled.svg" if liked else "heart.svg")
+                resources.load_icon("heart-filled.svg", AccentStyles.instance().color)
             )
+            if liked
+            else self._tinted("heart.svg")
         )
         self._set_hint(self._like_btn, "Убрать из любимых" if liked else "В любимые")
         self._repolish(self._like_btn)
@@ -609,6 +656,9 @@ class PlayerBar(QFrame):
 
     def refresh_theme(self) -> None:
         for button in self._card.findChildren(QToolButton):
+            name = button.property("iconName")
+            if name and not button.property("accent"):
+                button.setIcon(self._tinted(str(name)))
             self._repolish(button)
         self._set_title_playing(self._is_playing)
         self._update_like_button()

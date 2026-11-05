@@ -15,6 +15,12 @@ javac -encoding UTF-8 -source 11 -target 11 -Xlint:-options \
     $(find "$HERE/src" -name '*.java')
 jar cf "$OUT/aar/classes.jar" -C "$OUT/classes" .
 cp "$HERE/AndroidManifest.xml" "$OUT/aar/AndroidManifest.xml"
+# Значки плашки (векторы): Gradle сливает res/ библиотеки с ресурсами
+# приложения, Java находит их по имени (getIdentifier) — своего R нет.
+cp -r "$HERE/res" "$OUT/aar/res"
 : > "$OUT/aar/R.txt"
-(cd "$OUT/aar" && jar cfM "$OUT/quantis-media.aar" AndroidManifest.xml classes.jar R.txt)
+for f in "$HERE"/res/drawable/*.xml; do
+    echo "int drawable $(basename "$f" .xml) 0x0" >> "$OUT/aar/R.txt"
+done
+(cd "$OUT/aar" && jar cfM "$OUT/quantis-media.aar" AndroidManifest.xml classes.jar R.txt res)
 echo "$OUT/quantis-media.aar"

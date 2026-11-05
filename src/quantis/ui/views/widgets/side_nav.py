@@ -5,16 +5,23 @@ from PySide6.QtCore import (
     QEasingCurve,
     QPropertyAnimation,
     QRect,
+    QRectF,
     QSize,
     Qt,
     QTimer,
     Signal,
 )
-from PySide6.QtGui import QColor, QPainter, QPainterPath
+from PySide6.QtGui import (
+    QColor,
+    QIcon,
+    QLinearGradient,
+    QPainter,
+    QPainterPath,
+    QPixmap,
+)
 from PySide6.QtWidgets import (
     QButtonGroup,
     QFrame,
-    QHBoxLayout,
     QLabel,
     QSizePolicy,
     QToolButton,
@@ -25,10 +32,53 @@ from PySide6.QtWidgets import (
 from quantis.ui import resources
 from quantis.ui.design_tokens import ACCENT_FALLBACK
 from quantis.ui.ui_extensions import UiExtensionHost
-from quantis.ui.views.widgets.glass import install_glass
+from quantis.ui.views.widgets.cover_art import (
+    load_cover_pixmap,
+    playlist_cover_path,
+    screen_dpr,
+)
 
 _COLLAPSED_W = 72
-_EXPANDED_W = 208
+_EXPANDED_W = 224
+_PLAYLIST_LIMIT = 6
+"""Сколько плейлистов в меню: остальные — на главной («Все»)."""
+_PLAYLIST_COVER = 28
+
+
+def _playlist_icon(playlist) -> QIcon:
+    """Обложка плейлиста квадратиком со скруглением; без обложки — градиент
+    с первой буквой (как на главной)."""
+    size = _PLAYLIST_COVER
+    dpr = screen_dpr()
+    canvas = QPixmap(round(size * dpr), round(size * dpr))
+    canvas.setDevicePixelRatio(dpr)
+    canvas.fill(Qt.GlobalColor.transparent)
+    painter = QPainter(canvas)
+    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+    painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+    clip = QPainterPath()
+    clip.addRoundedRect(QRectF(0, 0, size, size), 7, 7)
+    painter.setClipPath(clip)
+    cover = load_cover_pixmap(playlist_cover_path(playlist), size)
+    if cover is not None and not cover.isNull():
+        painter.drawPixmap(QRectF(0, 0, size, size), cover, QRectF(cover.rect()))
+    else:
+        name = str(getattr(playlist, "name", "") or "?")
+        hue = sum(map(ord, name)) % 360
+        gradient = QLinearGradient(0, 0, size, size)
+        gradient.setColorAt(0, QColor.fromHsl(hue, 150, 120))
+        gradient.setColorAt(1, QColor.fromHsl((hue + 40) % 360, 140, 70))
+        painter.fillRect(QRectF(0, 0, size, size), gradient)
+        font = painter.font()
+        font.setPixelSize(13)
+        font.setBold(True)
+        painter.setFont(font)
+        painter.setPen(QColor(255, 255, 255, 230))
+        painter.drawText(
+            QRectF(0, 0, size, size), Qt.AlignmentFlag.AlignCenter, name[:1].upper()
+        )
+    painter.end()
+    return QIcon(canvas)
 
 
 class _NavItem(QToolButton):
@@ -51,18 +101,29 @@ class _NavItem(QToolButton):
         self._label = label
         self._page_id = page_id
         self.setToolTip(label + (" · плагин" if from_plugin else ""))
+        self.setAccessibleName(label)
+        self._icon_name = icon_name or ("" if icon_obj is not None else "plugins.svg")
         if icon_obj is not None:
             self.setIcon(icon_obj)
-        elif icon_name:
-            self.setIcon(resources.load_icon(icon_name))
-        else:
-            self.setIcon(resources.load_icon("puzzle.svg"))
+        self.tint(QColor("#B4BCC8"), QColor(ACCENT_FALLBACK))
         self.setIconSize(QSize(20, 20))
         self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setProperty("navIndex", page_id)
         self.setProperty("plugin", from_plugin)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.set_expanded(False)
+
+    def tint(self, normal: QColor, active: QColor) -> None:
+        """Одноцветный значок: обычный — цветом текста темы, выбранный — акцентом."""
+        if not self._icon_name:
+            return  # значок плагина — как есть
+        icon = QIcon()
+        for color, state in ((normal, QIcon.State.Off), (active, QIcon.State.On)):
+            pix = resources.load_icon(self._icon_name, color).pixmap(40, 40)
+            icon.addPixmap(pix, QIcon.Mode.Normal, state)
+            icon.addPixmap(pix, QIcon.Mode.Active, state)
+            icon.addPixmap(pix, QIcon.Mode.Selected, state)
+        self.setIcon(icon)
 
     def set_expanded(self, expanded: bool) -> None:
         if expanded:
@@ -84,57 +145,56 @@ class _NavItem(QToolButton):
         self.updateGeometry()
 
 
+class _PlaylistItem(_NavItem):
+    """Плейлист в меню: обложка вместо значка, не выделяется как раздел."""
+
+    def __init__(self, playlist, parent: QWidget | None = None) -> None:
+        super().__init__(
+            "",
+            str(getattr(playlist, "name", "")),
+            -1,
+            icon_obj=_playlist_icon(playlist),
+            parent=parent,
+        )
+        self.playlist = playlist
+        self.setCheckable(False)
+        self.setProperty("playlistItem", True)
+        self.setIconSize(QSize(_PLAYLIST_COVER, _PLAYLIST_COVER))
+
+
 class SideNavRail(QFrame):
-    """Выдвижная стеклянная рейка: свёрнута — иконки, развёрнута — подписи."""
+    """Меню слева: свёрнуто — значки (72 px), развёрнуто — подписи (224 px).
+    Переключается кнопкой в шапке, состояние хранится в UiPreferences."""
 
     page_changed = Signal(int)
     expanded_changed = Signal(bool)
+    playlist_activated = Signal(object)
 
     CORE_TOP = (
-        ("recent.svg", "Главная", 0),
-        ("radio.svg", "Моя волна", 8),
-        ("search.svg", "Поиск", 1),
-        ("download.svg", "Библиотека", 2),
-        ("stats.svg", "Статистика", 3),
-        ("puzzle.svg", "Плагины", 4),
+        ("home.svg", "Главная", 0),
+        ("wave.svg", "Моя волна", 8),
+        ("library.svg", "Библиотека", 2),
+        ("chart.svg", "Статистика", 3),
+        ("plugins.svg", "Плагины", 4),
     )
     CORE_BOTTOM = (
-        ("member.svg", "Member", 5),
-        ("settings.svg", "Настройки", 6),
+        ("user.svg", "Аккаунты", 5),
+        ("sliders.svg", "Настройки", 6),
     )
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setObjectName("sideNavRail")
-        install_glass(self, "QFrame#sideNavRail")
         self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.setAttribute(Qt.WidgetAttribute.WA_Hover, True)
 
         self._expanded = False
-        self._pinned = False
         self._rail_width = float(_COLLAPSED_W)
         self.setFixedWidth(_COLLAPSED_W)
 
         self._root = QVBoxLayout(self)
-        self._root.setContentsMargins(10, 14, 10, 14)
+        self._root.setContentsMargins(12, 8, 12, 14)
         self._root.setSpacing(6)
-
-        # Brand / expand hint
-        header = QHBoxLayout()
-        header.setContentsMargins(4, 0, 4, 4)
-        header.setSpacing(8)
-        self._brand_icon = QLabel()
-        logo = resources.load_icon("logo.png").pixmap(22, 22)
-        if logo.isNull():
-            logo = resources.load_icon("puzzle.svg").pixmap(22, 22)
-        self._brand_icon.setPixmap(logo)
-        self._brand_icon.setFixedSize(22, 22)
-        self._brand_label = QLabel("Quantis")
-        self._brand_label.setObjectName("navBrandLabel")
-        self._brand_label.hide()
-        header.addWidget(self._brand_icon)
-        header.addWidget(self._brand_label, stretch=1)
-        self._root.addLayout(header)
 
         self._items_layout = QVBoxLayout()
         self._items_layout.setSpacing(4)
@@ -145,19 +205,13 @@ class SideNavRail(QFrame):
         self._group.setExclusive(True)
         self._buttons: dict[int, _NavItem] = {}
         self._plugin_buttons: list[_NavItem] = []
+        self._playlists: list = []
+        self._playlist_widgets: list[QWidget] = []
+        self._playlist_label: QLabel | None = None
+        self._playlist_divider: QFrame | None = None
         self._accent = QColor(ACCENT_FALLBACK)
+        self._text = QColor("#B4BCC8")
         self._extensions = UiExtensionHost.instance()
-
-        self._pin_btn = QToolButton()
-        self._pin_btn.setObjectName("navPinButton")
-        self._pin_btn.setCheckable(True)
-        self._pin_btn.setToolTip("Закрепить меню")
-        self._pin_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._pin_btn.setIcon(resources.load_icon("restore.svg"))
-        self._pin_btn.setIconSize(QSize(14, 14))
-        self._pin_btn.setFixedHeight(32)
-        self._pin_btn.toggled.connect(self._on_pin_toggled)
-        self._root.addWidget(self._pin_btn)
 
         self._rebuild_core()
         self._extensions.nav_changed.connect(self._rebuild_plugin_nav)
@@ -171,11 +225,6 @@ class SideNavRail(QFrame):
         self._width_anim = QPropertyAnimation(self, b"railWidth", self)
         self._width_anim.setDuration(220)
         self._width_anim.setEasingCurve(QEasingCurve.Type.OutCubic)
-
-        self._collapse_timer = QTimer(self)
-        self._collapse_timer.setSingleShot(True)
-        self._collapse_timer.setInterval(280)
-        self._collapse_timer.timeout.connect(self._collapse_if_unpinned)
 
         self.set_active_page(0)
         self._apply_expanded_ui(False)
@@ -201,12 +250,27 @@ class SideNavRail(QFrame):
 
     def set_accent(self, color: QColor) -> None:
         if color.isValid():
+            changed = QColor(color).rgb() != self._accent.rgb()
             self._accent = QColor(color)
+            if changed:
+                self._retint()
             self.update()
+
+    def set_text_color(self, color: QColor) -> None:
+        if color.isValid():
+            self._text = QColor(color)
+            self._retint()
+
+    def _retint(self) -> None:
+        for button in self._buttons.values():
+            button.tint(self._text, self._accent)
 
     @property
     def is_expanded(self) -> bool:
         return self._expanded
+
+    def toggle_expanded(self) -> None:
+        self.set_expanded(not self._expanded)
 
     def set_expanded(self, expanded: bool, *, animate: bool = True) -> None:
         if self._expanded == expanded:
@@ -225,48 +289,23 @@ class SideNavRail(QFrame):
         QTimer.singleShot(30, self._sync_indicator)
 
     def _apply_expanded_ui(self, expanded: bool) -> None:
-        self._brand_label.setVisible(expanded)
         self.setProperty("expanded", expanded)
-        self._pin_btn.setText(" Закрепить" if expanded else "")
-        self._pin_btn.setToolButtonStyle(
-            Qt.ToolButtonStyle.ToolButtonTextBesideIcon
-            if expanded
-            else Qt.ToolButtonStyle.ToolButtonIconOnly
-        )
         align = (
             Qt.AlignmentFlag.AlignLeft if expanded else Qt.AlignmentFlag.AlignHCenter
         )
-        for button in self._buttons.values():
+        for button in [*self._buttons.values(), *self._playlist_items()]:
             button.set_expanded(expanded)
             self._items_layout.setAlignment(button, align)
+        if self._playlist_label is not None and self._playlist_divider is not None:
+            self._playlist_label.setVisible(expanded)
+            self._playlist_divider.setVisible(not expanded)
+            self._fit_playlists()
         style = self.style()
         style.unpolish(self)
         style.polish(self)
         self._items_layout.invalidate()
         self.updateGeometry()
         self.update()
-
-    def _on_pin_toggled(self, pinned: bool) -> None:
-        self._pinned = pinned
-        if pinned:
-            self._collapse_timer.stop()
-            self.set_expanded(True)
-        elif not self.underMouse():
-            self.set_expanded(False)
-
-    def _collapse_if_unpinned(self) -> None:
-        if not self._pinned and not self.underMouse():
-            self.set_expanded(False)
-
-    def enterEvent(self, event) -> None:
-        super().enterEvent(event)
-        self._collapse_timer.stop()
-        self.set_expanded(True)
-
-    def leaveEvent(self, event) -> None:
-        super().leaveEvent(event)
-        if not self._pinned:
-            self._collapse_timer.start()
 
     def _clear_items(self) -> None:
         while self._items_layout.count():
@@ -276,6 +315,9 @@ class SideNavRail(QFrame):
                 if isinstance(widget, _NavItem):
                     self._group.removeButton(widget)
                 widget.deleteLater()
+        self._playlist_widgets.clear()
+        self._playlist_label = None
+        self._playlist_divider = None
         self._buttons.clear()
         self._plugin_buttons.clear()
 
@@ -286,12 +328,61 @@ class SideNavRail(QFrame):
                 self._make_button(icon, label, page_id, from_plugin=False)
             )
         self._items_layout.addStretch(1)
+        self._rebuild_playlists()
         self._rebuild_plugin_nav()
         for icon, label, page_id in self.CORE_BOTTOM:
             self._items_layout.addWidget(
                 self._make_button(icon, label, page_id, from_plugin=False)
             )
         self._apply_expanded_ui(self._expanded)
+
+    # ------------------------------------------------------------ playlists
+
+    def _playlist_items(self) -> list[_PlaylistItem]:
+        return [w for w in self._playlist_widgets if isinstance(w, _PlaylistItem)]
+
+    def set_playlists(self, playlists) -> None:
+        """Плейлисты под разделами (первые _PLAYLIST_LIMIT)."""
+        playlists = list(playlists)[:_PLAYLIST_LIMIT]
+        keys = [(getattr(p, "name", ""), playlist_cover_path(p)) for p in playlists]
+        old = [
+            (getattr(p, "name", ""), playlist_cover_path(p)) for p in self._playlists
+        ]
+        self._playlists = playlists
+        for widget, playlist in zip(self._playlist_items(), playlists, strict=False):
+            widget.playlist = playlist  # свежий объект (новые треки) — без пересборки
+        if keys != old:
+            self._rebuild_playlists()
+
+    def _rebuild_playlists(self) -> None:
+        for widget in self._playlist_widgets:
+            self._items_layout.removeWidget(widget)
+            widget.deleteLater()
+        self._playlist_widgets.clear()
+        self._playlist_label = None
+        self._playlist_divider = None
+        if not self._playlists:
+            return
+        insert_at = len(self.CORE_TOP)
+        divider = QFrame(self)
+        divider.setObjectName("navDivider")
+        divider.setFixedHeight(1)
+        label = QLabel("Плейлисты", self)
+        label.setObjectName("navSectionLabel")
+        widgets: list[QWidget] = [divider, label]
+        for playlist in self._playlists:
+            item = _PlaylistItem(playlist, self)
+            item.clicked.connect(
+                lambda _=False, w=item: self.playlist_activated.emit(w.playlist)
+            )
+            widgets.append(item)
+        for offset, widget in enumerate(widgets):
+            self._items_layout.insertWidget(insert_at + offset, widget)
+        self._playlist_widgets = widgets
+        self._playlist_label = label
+        self._playlist_divider = divider
+        self._apply_expanded_ui(self._expanded)
+        self._fit_playlists()
 
     def _rebuild_plugin_nav(self, *_args) -> None:
         for button in list(self._plugin_buttons):
@@ -339,11 +430,20 @@ class SideNavRail(QFrame):
         )
         self._group.addButton(button, page_id)
         self._buttons[page_id] = button
+        button.tint(self._text, self._accent)
         return button
 
     def set_active_page(self, page_id: int) -> None:
         button = self._group.button(page_id)
         if button is None:
+            # страницы нет в меню (поиск — в шапке): ничего не выделяем
+            checked = self._group.checkedButton()
+            if checked is not None:
+                self._group.setExclusive(False)
+                checked.setChecked(False)
+                self._group.setExclusive(True)
+            self._indicator_h = 0.0
+            self.update()
             return
         if not button.isChecked():
             self._group.blockSignals(True)
@@ -373,7 +473,35 @@ class SideNavRail(QFrame):
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
+        self._fit_playlists()
         self._sync_indicator()
+
+    def _fit_playlists(self) -> None:
+        """Плейлистов показываем столько, сколько влезает по высоте: на
+        невысоком окне (ноутбук, 150 %) меню не должно вылезать за край."""
+        items = self._playlist_items()
+        if not items:
+            return
+
+        def tall(button: QWidget) -> int:
+            # у свёрнутых кнопок высота задана жёстко, sizeHint её не знает
+            return max(button.sizeHint().height(), button.minimumHeight())
+
+        fixed = sum(
+            tall(button) + self._items_layout.spacing()
+            for button in self._buttons.values()
+        )
+        margins = self._root.contentsMargins()
+        fixed += margins.top() + margins.bottom() + 40  # подпись/линия раздела
+        row = tall(items[0]) + self._items_layout.spacing()
+        room = max(0, (self.height() - fixed) // max(1, row))
+        for index, item in enumerate(items):
+            item.setVisible(index < room)
+        for widget in self._playlist_widgets:
+            if not isinstance(widget, _PlaylistItem):
+                widget.setVisible(
+                    room > 0 and ((widget is self._playlist_label) == self._expanded)
+                )
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
@@ -381,6 +509,8 @@ class SideNavRail(QFrame):
 
     def paintEvent(self, event) -> None:
         super().paintEvent(event)
+        if self._group.checkedButton() is None:
+            return
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
@@ -398,11 +528,4 @@ class SideNavRail(QFrame):
             QColor(self._accent.red(), self._accent.green(), self._accent.blue(), 40),
         )
 
-        bar = QRect(4, rect.y() + 10, 3, max(8, rect.height() - 20))
-        bar_path = QPainterPath()
-        bar_path.addRoundedRect(bar, 2, 2)
-        painter.fillPath(
-            bar_path,
-            QColor(self._accent.red(), self._accent.green(), self._accent.blue(), 220),
-        )
         painter.end()

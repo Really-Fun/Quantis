@@ -386,6 +386,12 @@ class Player:
     def time(self) -> int:
         position = max(0, int(self._engine.get_position_ms()))
         if self._loading_source:
+            if position <= 500:
+                # Движок уже на новом треке: дальше его позиция — новая, даже
+                # когда проходит мимо места, где стоял прошлый. Иначе после
+                # прошлого трека, сыгранного 2–3 с, новый «стоял» на 0 до ~4 с
+                # и потом прыгал (ползунок, фон) — а звук всё это время шёл.
+                self._stale_position_ms = 0
             stale = max(0, self._stale_position_ms)
             if stale > 1500 and abs(position - stale) <= 2000:
                 return max(0, self._last_known_ms)

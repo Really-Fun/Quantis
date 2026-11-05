@@ -1,10 +1,8 @@
 QLabel#settingsSectionLabel {
-    color: rgb(${hl_rgb});
-    font-size: 11px;
+    color: ${title};
+    font-size: 15px;
     font-weight: 700;
-    letter-spacing: 1.8px;
-    text-transform: uppercase;
-    padding: 12px 0 4px 0;
+    padding: 0 0 2px 0;
     background: transparent;
     font-family: ${font_label};
 }
@@ -63,17 +61,25 @@ QWidget#settingsPage {
     background: transparent;
 }
 
-QFrame#settingsPanel {
+QWidget#settingsPanel {
+    background: transparent;
+}
+
+QFrame#settingsGroup {
     background: ${surface};
-    border: 1px solid rgba(${hl_rgb}, 0.12);
-    border-radius: 24px;
+    border: 1px solid rgba(${ink_rgb}, 0.06);
+    border-radius: 16px;
+}
+
+QFrame#settingsDivider {
+    background: rgba(${ink_rgb}, 0.07);
+    border: none;
+    margin: 0 20px;
 }
 
 QFrame#settingsRow {
-    background: rgba(${ink_rgb}, 0.035);
-    border: 1px solid rgba(${ink_rgb}, 0.07);
-    border-radius: 16px;
-    padding: 14px 16px;
+    background: transparent;
+    border: none;
 }
 
 QCheckBox#settingsCheck::indicator {
@@ -157,4 +163,171 @@ QPushButton#updateBannerButton:hover {
     background: rgba(${hl_rgb}, 0.14);
     border-color: rgba(${hl_rgb}, 0.55);
     color: ${title};
+}
+
+/* --- Аккаунты --- */
+
+QLabel#memberTitle {
+    color: ${title};
+    font-size: 26px;
+    font-weight: 700;
+    background: transparent;
+    font-family: ${font_display};
+}
+
+QLabel#memberSubtitle {
+    color: rgba(${mist_rgb}, 0.72);
+    font-size: 13px;
+    background: transparent;
+}
+
+QFrame#memberCard {
+    background: rgba(${ink_rgb}, 0.035);
+    border: 1px solid rgba(${ink_rgb}, 0.08);
+    border-radius: 18px;
+}
+
+QFrame#memberDivider {
+    background: rgba(${ink_rgb}, 0.08);
+    border: none;
+    min-height: 1px;
+    max-height: 1px;
+}
+
+QLabel#memberService {
+    color: ${title};
+    font-size: 17px;
+    font-weight: 700;
+    background: transparent;
+    font-family: ${font_ui};
+}
+
+QLabel#memberDot {
+    border-radius: 5px;
+    min-width: 10px;
+    max-width: 10px;
+    min-height: 10px;
+    max-height: 10px;
+}
+
+QLabel#memberDot[source="yandex"] {
+    background: #FFCC00;
+}
+
+QLabel#memberDot[source="youtube"] {
+    background: #FF3D3D;
+}
+
+QLabel#memberChip {
+    border-radius: 11px;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 650;
+    font-family: ${font_label};
+    background: rgba(${ink_rgb}, 0.07);
+    color: ${text_soft};
+}
+
+QLabel#memberChip[state="ok"] {
+    background: rgba(${ok_rgb}, 0.16);
+    color: rgb(${ok_rgb});
+}
+
+QLabel#memberChip[state="limited"],
+QLabel#memberChip[state="expired"] {
+    background: rgba(${warn_rgb}, 0.16);
+    color: rgb(${warn_rgb});
+}
+
+QLabel#memberChip[state="error"] {
+    background: rgba(${bad_rgb}, 0.16);
+    color: rgb(${bad_rgb});
+}
+
+QLabel#memberAccount {
+    color: ${title};
+    font-size: 14px;
+    font-weight: 600;
+    background: transparent;
+}
+
+QLabel#memberDetail {
+    color: rgba(${mist_rgb}, 0.82);
+    font-size: 13px;
+    background: transparent;
+}
+
+QLabel#memberFieldLabel {
+    color: ${text_soft};
+    font-size: 12px;
+    font-weight: 650;
+    background: transparent;
+    font-family: ${font_label};
+}
+
+QLabel#memberFeedback {
+    font-size: 12px;
+    background: transparent;
+    color: rgba(${mist_rgb}, 0.72);
+}
+
+QLabel#memberFeedback[state="ok"] {
+    color: rgb(${ok_rgb});
+}
+
+QLabel#memberFeedback[state="warn"] {
+    color: rgb(${warn_rgb});
+}
+
+QLabel#memberFeedback[state="error"] {
+    color: rgb(${bad_rgb});
+}
+
+QPlainTextEdit#memberCookieEdit {
+    background: ${field_bg};
+    border: 1px solid rgba(${ink_rgb}, 0.1);
+    border-radius: 12px;
+    padding: 8px 10px;
+    color: ${title};
+    font-size: 12px;
+    font-family: ${font_mono};
+}
+
+QPlainTextEdit#memberCookieEdit:focus {
+    border-color: rgba(${hl_rgb}, 0.55);
+}
+
+QToolButton#memberGuideToggle {
+    background: transparent;
+    border: none;
+    color: rgb(${hl_rgb});
+    font-size: 12px;
+    font-weight: 650;
+    padding: 2px 0;
+}
+
+QToolButton#memberGuideToggle:hover {
+    color: ${title};
+}
+
+QLabel#memberGuide {
+    background: rgba(${ink_rgb}, 0.04);
+    border-radius: 12px;
+    padding: 12px 14px;
+    color: ${text_soft};
+    font-size: 12px;
+}
+
+QPushButton#memberDanger {
+    background: transparent;
+    border: 1px solid rgba(${bad_rgb}, 0.35);
+    border-radius: 12px;
+    padding: 8px 14px;
+    color: rgb(${bad_rgb});
+    font-size: 12px;
+    font-weight: 600;
+}
+
+QPushButton#memberDanger:hover {
+    background: rgba(${bad_rgb}, 0.12);
 }

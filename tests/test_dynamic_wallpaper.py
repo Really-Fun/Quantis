@@ -10,6 +10,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
 from PySide6.QtCore import QObject, Signal  # noqa: E402
 
+from quantis.models import YandexTrack  # noqa: E402
 from quantis.plugins.event_bus import EventBus  # noqa: E402
 from quantis.services.wallpaper_sync import VideoState  # noqa: E402
 from quantis.ui.controllers import dynamic_wallpaper  # noqa: E402
@@ -163,3 +164,21 @@ def test_stall_burst_is_rate_limited(controller, monkeypatch) -> None:
     for _ in range(20):
         ctrl._on_stream_stalled()
     assert bridge.scheduled.count("DynamicWallpaperController._reload_video") == 1
+
+
+def test_upcoming_track_clip_is_prefetched_once(controller) -> None:
+    ctrl, bridge = controller
+    ctrl._on_track_changed(_Track())
+    upcoming = YandexTrack(track_id="7", title="Next", author="A")
+    for _ in range(3):
+        ctrl._on_upcoming_track(upcoming)
+    assert bridge.scheduled.count("DynamicWallpaperController._prefetch_video") == 1
+    ctrl._on_upcoming_track(_Track())  # это уже текущий трек
+    assert bridge.scheduled.count("DynamicWallpaperController._prefetch_video") == 1
+
+
+def test_upcoming_ignored_when_wallpaper_off(controller) -> None:
+    ctrl, bridge = controller
+    ctrl._prefs.dynamic_wallpaper_enabled = False
+    ctrl._on_upcoming_track(YandexTrack(track_id="7", title="Next", author="A"))
+    assert "DynamicWallpaperController._prefetch_video" not in bridge.scheduled

@@ -33,6 +33,7 @@ from quantis.ui.views.widgets.now_playing_stage import (
     UpNextItem,
     UpNextPanel,
 )
+from quantis.ui.views.widgets.page_layout import PAGE_MARGINS
 from quantis.ui.views.widgets.playlist_card import PlaylistShelf, QuickPickShelf
 from quantis.ui.views.widgets.track_card import TrackCardDelegate
 from quantis.ui.views.widgets.wave_card import WaveCard
@@ -41,7 +42,8 @@ _MAX_VISIBLE_TRACKS = 6
 """Строк в «Недавнем» и «Рекомендациях»: остальное — по «Все» и «Слушать»."""
 _TWO_COLUMNS_MIN = 880
 """Уже этого «Недавнее» и «Рекомендации» встают друг под другом."""
-_SIDE_MARGIN = 28
+_SIDE_MARGIN = (PAGE_MARGINS[0] + PAGE_MARGINS[2]) // 2
+"""Среднее поле слева/справа — для расчёта ширины."""
 _STAGE_GAP = 24
 _STAGE_TEXT_MIN = 240
 """Колонка названия трека — уже этого сцена не сжимается."""
@@ -87,7 +89,9 @@ class HomePage(QWidget):
         content = QWidget()
         content.setObjectName("homeScrollContent")
         self._layout = QVBoxLayout(content)
-        self._layout.setContentsMargins(_SIDE_MARGIN, 20, _SIDE_MARGIN, 40)
+        self._layout.setContentsMargins(
+            PAGE_MARGINS[0], PAGE_MARGINS[1], PAGE_MARGINS[2], 40
+        )
         self._layout.setSpacing(26)
 
         # Сцена «Сейчас играет» и справа «Дальше». Пока очередь пуста, на месте
@@ -101,6 +105,7 @@ class HomePage(QWidget):
         self._stage_row = stage_row
         self._up_next_below: bool | None = None
         self._side: QWidget | None = None
+        self._queue_elsewhere = False
         self._stage = NowPlayingStage()
         self._stage.resume_requested.connect(lambda: self._on_featured_play(0))
         self._stage.wave_requested.connect(self._on_wave_play)
@@ -128,7 +133,7 @@ class HomePage(QWidget):
         )
         listen_btn = QToolButton()
         listen_btn.setObjectName("homeSectionAction")
-        listen_btn.setText("▶ Слушать")
+        listen_btn.setText("Слушать все")
         listen_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         listen_btn.setToolTip("Слушать поток рекомендаций")
         listen_btn.clicked.connect(self._on_recommendations_play)
@@ -163,7 +168,7 @@ class HomePage(QWidget):
         self._recent_section.add_widget_block(recent_host)
         self._all_recent_btn = all_recent = QToolButton()
         all_recent.setObjectName("homeSectionAction")
-        all_recent.setText("Все")
+        all_recent.setText("Вся история")
         all_recent.setCursor(Qt.CursorShape.PointingHandCursor)
         all_recent.setToolTip("Вся история прослушивания")
         all_recent.clicked.connect(self._on_recent_open)
@@ -323,6 +328,14 @@ class HomePage(QWidget):
         self._up_next.set_items(items)
         self._relayout_stage()
 
+    def set_queue_elsewhere(self, shown: bool) -> None:
+        """Очередь видна в правой панели окна: «Дальше» у сцены прячем."""
+        if self._queue_elsewhere == shown:
+            return
+        self._queue_elsewhere = shown
+        self._side = None  # пересобрать ряд сцены
+        self._relayout_stage()
+
     def set_eco(self, enabled: bool) -> None:
         self._stage.set_eco(enabled)
 
@@ -394,6 +407,14 @@ class HomePage(QWidget):
         self._stage.set_cover_size(min(by_width, by_height))
 
         count = len(self._up_next.items())
+        if count and self._queue_elsewhere:
+            # очередь открыта в правой панели — сцене не нужен второй «Дальше»
+            self._stage.set_cover_size(
+                min(int((width - _STAGE_TEXT_MIN) / per_cover), by_height)
+            )
+            self._up_next.hide()
+            self._wave_card.hide()
+            return
         side = self._up_next if count else self._wave_card
         other = self._wave_card if count else self._up_next
         other.hide()

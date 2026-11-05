@@ -22,6 +22,7 @@ from quantis.ui.async_ui import schedule
 from quantis.ui.playlist_actions import add_track_actions, show_add_to_playlist_menu
 from quantis.ui.viewmodels.playlist_vm import PlaylistViewModel
 from quantis.ui.views.widgets.cover_art import playlist_cover_path
+from quantis.ui.views.widgets.page_layout import PAGE_MARGINS
 from quantis.ui.views.widgets.playlist_card import GradientCover
 from quantis.ui.views.widgets.playlist_track_delegate import PlaylistTrackDelegate
 
@@ -79,13 +80,14 @@ class PlaylistPage(QWidget):
         self.setObjectName("playlistPage")
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(24, 16, 24, 16)
+        root.setContentsMargins(*PAGE_MARGINS[:3], 16)
         root.setSpacing(0)
 
-        panel = QFrame()
-        panel.setObjectName("TrackListPanel")
+        # Плейлист — сама страница, без панели-рамки вокруг списка.
+        panel = QWidget()
+        panel.setObjectName("playlistBody")
         panel_layout = QVBoxLayout(panel)
-        panel_layout.setContentsMargins(24, 20, 24, 18)
+        panel_layout.setContentsMargins(0, 0, 0, 0)
         panel_layout.setSpacing(0)
 
         panel_layout.addLayout(self._build_header())

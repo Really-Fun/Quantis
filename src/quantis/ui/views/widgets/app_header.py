@@ -5,8 +5,8 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QToolButton,
-    QVBoxLayout,
     QWidget,
 )
 
@@ -17,7 +17,16 @@ from quantis.ui.views.widgets.brand_mark import BrandMark
 
 
 class AppHeader(QFrame):
-    """Шапка: бренд QUANTIS + заголовок страницы + chrome окна."""
+    """Шапка: кнопка меню, бренд, поиск по центру, кнопки окна.
+
+    Заголовок страницы виден в меню слева (и в заголовке окна), поэтому в
+    шапке его нет."""
+
+    nav_toggle_requested = Signal()
+    search_edited = Signal(str)
+    """Текст в поле поиска изменился (пользователем)."""
+    search_submitted = Signal(str)
+    """Enter в поле поиска."""
 
     hide_ui_requested = Signal()
     backdrop_requested = Signal()
@@ -34,8 +43,17 @@ class AppHeader(QFrame):
         self._maximized = False
 
         row = QHBoxLayout(self)
-        row.setContentsMargins(16, 0, 0, 0)
-        row.setSpacing(12)
+        row.setContentsMargins(12, 0, 0, 0)
+        row.setSpacing(10)
+
+        self._nav_btn = self._make_control(
+            "headerNavToggle",
+            "sidebar.svg",
+            "Свернуть меню",
+            self.nav_toggle_requested.emit,
+        )
+        self._nav_btn.setFixedSize(40, 40)
+        row.addWidget(self._nav_btn, 0, Qt.AlignmentFlag.AlignVCenter)
 
         self._brand = BrandMark()
         row.addWidget(self._brand, 0, Qt.AlignmentFlag.AlignVCenter)
@@ -44,19 +62,27 @@ class AppHeader(QFrame):
         self._wordmark.setObjectName("headerBrandWordmark")
         row.addWidget(self._wordmark, 0, Qt.AlignmentFlag.AlignVCenter)
 
-        text_col = QVBoxLayout()
-        text_col.setSpacing(0)
-        text_col.setContentsMargins(8, 0, 0, 0)
+        self._title = ""
+        row.addStretch(1)
 
-        self._title = QLabel("Главная")
-        self._title.setObjectName("headerGreeting")
-        self._subtitle = QLabel("")
-        self._subtitle.setObjectName("headerSub")
-        self._subtitle.setVisible(False)
-
-        text_col.addWidget(self._title)
-        text_col.addWidget(self._subtitle)
-        row.addLayout(text_col, stretch=1)
+        self._search = QLineEdit()
+        self._search.setObjectName("headerSearch")
+        self._search.setPlaceholderText("Трек, артист или ссылка")
+        self._search.setClearButtonEnabled(True)
+        self._search.setAccessibleName("Поиск")
+        self._search.setToolTip("Поиск (Ctrl+K)")
+        self._search.setFixedHeight(34)
+        self._search.setMinimumWidth(240)
+        self._search.setMaximumWidth(440)
+        self._search.addAction(
+            resources.load_icon("search.svg"), QLineEdit.ActionPosition.LeadingPosition
+        )
+        self._search.textEdited.connect(self.search_edited.emit)
+        self._search.returnPressed.connect(
+            lambda: self.search_submitted.emit(self._search.text())
+        )
+        row.addWidget(self._search, 3, Qt.AlignmentFlag.AlignVCenter)
+        row.addStretch(1)
 
         controls = QHBoxLayout()
         controls.setSpacing(0)
@@ -125,6 +151,7 @@ class AppHeader(QFrame):
         """Значки кнопок окна цветом ``text_soft`` темы (в SVG — светло-серый)."""
         color = qcolor(self._prefs.theme.colors.text_soft)
         for button in (
+            self._nav_btn,
             self._backdrop_btn,
             self._hide_ui_btn,
             self._min_btn,
@@ -138,13 +165,31 @@ class AppHeader(QFrame):
         """Якорь панели «Фон»."""
         return self._backdrop_btn
 
+    @property
+    def search_field(self) -> QLineEdit:
+        return self._search
+
+    def focus_search(self) -> None:
+        self._search.setFocus(Qt.FocusReason.ShortcutFocusReason)
+        self._search.selectAll()
+
+    def clear_search(self) -> None:
+        self._search.clear()
+
+    def set_nav_expanded(self, expanded: bool) -> None:
+        tip = "Свернуть меню" if expanded else "Развернуть меню"
+        self._nav_btn.setToolTip(tip)
+        self._nav_btn.setAccessibleName(tip)
+
+    def page_title(self) -> str:
+        return self._title
+
     def set_page(self, title: str, subtitle: str = "") -> None:
-        self._title.setText(title)
-        if subtitle:
-            self._subtitle.setText(subtitle)
-            self._subtitle.setVisible(True)
-        else:
-            self._subtitle.setVisible(False)
+        """Название страницы — в заголовок окна (панель задач, диктор)."""
+        self._title = title
+        window = self.window()
+        if window is not None and window is not self:
+            window.setWindowTitle(f"{title} — Quantis" if title else "Quantis")
 
     def set_maximized(self, maximized: bool) -> None:
         self._maximized = maximized
@@ -157,7 +202,7 @@ class AppHeader(QFrame):
     def _can_drag(self, pos: QPoint) -> bool:
         widget = self.childAt(pos)
         while widget is not None and widget is not self:
-            if isinstance(widget, QToolButton):
+            if isinstance(widget, (QToolButton, QLineEdit)):
                 return False
             widget = widget.parentWidget()
         return True

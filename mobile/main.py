@@ -17,8 +17,12 @@ from pathlib import Path
 if hasattr(sys, "getandroidapilevel"):
     os.environ.setdefault("QT_MEDIA_BACKEND", "android")
 os.environ.setdefault("QT_QUICK_CONTROLS_STYLE", "Material")
+# Фоновые задачи (поиск, разбор ответов, yt-dlp) — тоже Python и держат GIL
+# до 5 мс подряд; интерфейсу каждый раз приходилось ждать, и ввод в поиске
+# залипал. Отдаём GIL чаще: замер на компьютере — пик паузы 133 → 37 мс.
+sys.setswitchinterval(0.001)
 
-from PySide6.QtCore import QStandardPaths, QUrl  # noqa: E402
+from PySide6.QtCore import QStandardPaths, QTimer, QUrl  # noqa: E402
 from PySide6.QtGui import QGuiApplication  # noqa: E402
 from PySide6.QtQml import QQmlApplicationEngine  # noqa: E402
 
@@ -67,6 +71,18 @@ def main() -> None:
     engine.load(QUrl.fromLocalFile(str(HERE / "qml" / "Main.qml")))
     if not engine.rootObjects():
         sys.exit("Не удалось загрузить интерфейс (qml/Main.qml)")
+    # Сеть и тяжёлые импорты — после первого кадра (и ещё 300 мс на
+    # дорисовку), чтобы не тормозить появление интерфейса.
+    window = engine.rootObjects()[0]
+
+    def first_frame() -> None:
+        # frameSwapped приходит из потока отрисовки: второй сигнал мог уже
+        # стоять в очереди, uiReady повторный вызов просто игнорирует.
+        window.frameSwapped.disconnect(first_frame)
+        QTimer.singleShot(300, controller.uiReady)
+
+    window.frameSwapped.connect(first_frame)
+    QTimer.singleShot(5000, controller.uiReady)  # на случай, если кадра не дождались
     app.aboutToQuit.connect(controller.shutdown)
     sys.exit(app.exec())
 

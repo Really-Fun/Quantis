@@ -16,10 +16,10 @@ UI_FONTS = (
     "Segoe UI",
     "sans-serif",
 )
-# Aurora и Glass — по референсу редизайна: Manrope для интерфейса, Unbounded для
-# крупных заголовков (название трека, заголовки страниц). Оба встроены.
+# Aurora и Glass: Manrope и для интерфейса, и для заголовков (жирным).
+# Широкий Unbounded рядом с Manrope спорил с ним — остался только в логотипе.
 AURORA_UI_FONTS = ("Manrope", "Segoe UI Variable Display", "Segoe UI", "sans-serif")
-AURORA_DISPLAY_FONTS = ("Unbounded", "Manrope", "Segoe UI", "sans-serif")
+AURORA_DISPLAY_FONTS = AURORA_UI_FONTS
 MONO_FONTS = (
     "Cascadia Mono",
     "JetBrains Mono",
@@ -70,25 +70,12 @@ QToolButton#sourceFilterChip:checked {
     color: #8A92A6;
 }
 
-QToolButton#navPinButton {
-    color: #8A92A6;
-}
-
-QToolButton#navPinButton:checked {
-    border-color: rgba(${tint_rgb}, 0.45);
-    color: #F2F4F8;
-}
-
 QToolButton#advancedToggle:checked {
     border-color: rgba(255, 255, 255, 0.28);
 }
 
 #searchStatus {
     min-height: 16px;
-}
-
-QFrame#sideNavRail[expanded="true"] {
-    border: 1px solid rgba(${tint_rgb}, 0.22);
 }
 
 QToolButton#navIconButton:hover {

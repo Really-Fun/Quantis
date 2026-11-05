@@ -103,7 +103,7 @@ def test_wave_is_first_quick_tile_with_play_and_count(qapp) -> None:
     assert tile is not None and tile._subtitle.text() == "Загружаем…"
     assert not tile._play_btn.isEnabled()
     shelf.set_wave_state(available=True, track_count=5)
-    assert tile._subtitle.text() == "5 в потоке" and tile._play_btn.isEnabled()
+    assert tile._subtitle.text() == "5 треков в потоке" and tile._play_btn.isEnabled()
     played: list[bool] = []
     shelf.wave_play_requested.connect(lambda: played.append(True))
     tile._play_btn.click()

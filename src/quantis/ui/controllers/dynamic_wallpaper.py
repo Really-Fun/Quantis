@@ -85,6 +85,10 @@ class DynamicWallpaperController(QObject):
         self._applied_quality: int | None = None
         self._video_armed = False
         self._excluded_itags: frozenset[str] = frozenset()
+        # Исходная ссылка googlevideo: плеер фона видит адрес прокси, а itag
+        # (битый формат, конфликт со звуком) берём отсюда.
+        self._video_upstream: str | None = None
+        self._prefetch_key: str | None = None
 
         self._sync = WallpaperSync()
         self._last_report_at = 0.0
@@ -104,10 +108,14 @@ class DynamicWallpaperController(QObject):
         event_bus.playback_seeked.connect(self._on_audio_seeked)
         backdrop.stream_stalled.connect(self._on_stream_stalled)
         backdrop.media_ready.connect(self._on_video_ready)
+        self._upcoming_key: str | None = None
         if playback is not None:
             hook = getattr(playback.player, "on_source_changed", None)
             if callable(hook):
                 hook(self._on_audio_source)
+            upcoming = getattr(playback, "add_upcoming_listener", None)
+            if callable(upcoming):
+                upcoming(self._on_upcoming_track)
         self._apply_enabled()
         self._apply_render_prefs()
         self._applied_quality = self._prefs.dynamic_wallpaper_quality
@@ -326,6 +334,7 @@ class DynamicWallpaperController(QObject):
         self._stalls = 0
         self._loading_key = None
         self._excluded_itags = frozenset()
+        self._video_upstream = None
         self._stop_sync()
         cover = self._existing_cover_path(track)
         if cover is not None:
@@ -340,6 +349,42 @@ class DynamicWallpaperController(QObject):
             audio_live=self._video_should_play(),
         ):
             self._start_video_load(track)
+        elif self._prefetch_key != track_key:
+            # Пока звук ищет ссылку, фон ищет свою: к старту звука она уже в
+            # кэше. Раньше поиск видео начинался только после старта звука.
+            self._prefetch_key = track_key
+            self._bridge.schedule(self._prefetch_video(track))
+
+    def _on_upcoming_track(self, track: Track) -> None:
+        """Следующий трек известен заранее — его клип ищем, пока играет этот.
+
+        У треков Яндекса и SoundCloud это поиск клипа и yt-dlp (~1,5–2 с):
+        к смене трека ответ уже в кэше, и фон встаёт сразу со звуком.
+        """
+        if not self._prefs.dynamic_wallpaper_enabled or self._eco:
+            return
+        key = _track_key(track)
+        if key in (self._upcoming_key, self._pending_track_key):
+            return
+        if self._local_video_path(track) is not None:
+            return
+        self._upcoming_key = key
+        self._bridge.schedule(self._prefetch_video(track, exclude_current=False))
+
+    async def _prefetch_video(
+        self, track: Track, *, exclude_current: bool = True
+    ) -> None:
+        try:
+            await self._music.streamer.get_video_info(
+                track,
+                finder=self._music.finder,
+                height=self._prefs.dynamic_wallpaper_quality,
+                exclude_itags=(
+                    self._wallpaper_exclude_itags() if exclude_current else frozenset()
+                ),
+            )
+        except Exception:
+            logger.debug("Предзагрузка видео-фона: %s", track, exc_info=True)
 
     def _start_video_load(self, track: Track) -> None:
         self._video_armed = False
@@ -361,7 +406,9 @@ class DynamicWallpaperController(QObject):
             self._stalls = 0
         self._last_stall_at = now
         self._stalls += 1
-        itag = wallpaper_url_itag(self._backdrop.current_video_url())
+        itag = wallpaper_url_itag(
+            self._video_upstream or self._backdrop.current_video_url()
+        )
         if self._stalls >= _STALLS_BEFORE_COVER:
             logger.warning(
                 "Видео-фон: поток встаёт %d раз подряд — показываем обложку",
@@ -395,7 +442,7 @@ class DynamicWallpaperController(QObject):
                 self._play_stream(track_key, local_path, loop=True)
                 return
 
-            url, duration = await self._music.streamer.get_video_info(
+            url, upstream, duration = await self._music.streamer.open_video(
                 track,
                 finder=self._music.finder,
                 height=self._prefs.dynamic_wallpaper_quality,
@@ -412,7 +459,7 @@ class DynamicWallpaperController(QObject):
             return
         if url:
             logger.info("Динамические обои: стрим %ss для %s", duration or "?", track)
-            self._play_stream(track_key, url, loop=False)
+            self._play_stream(track_key, url, loop=False, upstream=upstream)
             return
 
         if self._try_follow_audio(track, require_quality=False):
@@ -428,7 +475,7 @@ class DynamicWallpaperController(QObject):
         self._reload_pending = True
         self._last_reload_at = monotonic()
         try:
-            url, _duration = await self._music.streamer.get_video_info(
+            url, upstream, _duration = await self._music.streamer.open_video(
                 track,
                 finder=self._music.finder,
                 height=self._prefs.dynamic_wallpaper_quality,
@@ -444,7 +491,7 @@ class DynamicWallpaperController(QObject):
                     await self._show_cover(track, track_key)
                 return
             logger.info("Динамические обои: новый URL с позиции аудио для %s", track)
-            self._play_stream(track_key, url, loop=False)
+            self._play_stream(track_key, url, loop=False, upstream=upstream)
         except Exception:
             logger.exception("Не удалось обновить видео-фон: %s", track)
             self._reload_fails += 1
@@ -508,12 +555,21 @@ class DynamicWallpaperController(QObject):
             itags.add(current)
         return frozenset(itags)
 
-    def _play_stream(self, track_key: str, url: str, *, loop: bool) -> None:
+    def _play_stream(
+        self,
+        track_key: str,
+        url: str,
+        *,
+        loop: bool,
+        upstream: str | None = None,
+    ) -> None:
+        source_url = upstream or url
+
         def _run() -> None:
             if self._pending_track_key != track_key:
                 return
-            if wallpaper_stream_conflicts(self._audio_source(), url):
-                itag = wallpaper_url_itag(url)
+            if wallpaper_stream_conflicts(self._audio_source(), source_url):
+                itag = wallpaper_url_itag(source_url)
                 logger.info(
                     "Видео-фон: тот же itag, что и аудио (%s) — ищем video-only",
                     itag or "?",
@@ -532,6 +588,7 @@ class DynamicWallpaperController(QObject):
             # Короткий локальный клип крутится по кругу — к позиции трека его
             # не привязываем, только ставим на паузу вместе со звуком.
             # Поток ждёт на паузе, пока ядро не перемотает его к звуку.
+            self._video_upstream = None if loop else source_url
             self._backdrop.play_video_url(
                 url, loop=loop, autoplay=loop and self._video_should_play()
             )

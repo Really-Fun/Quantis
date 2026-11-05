@@ -34,10 +34,6 @@ QFrame#nowPlayingPanel {
     border: 1px solid rgba(${ink_rgb}, 0.10);
 }
 
-QFrame#sideNavRail {
-    border: 1px solid rgba(${ink_rgb}, 0.10);
-}
-
 QFrame#PlayMenu {
     border: 1px solid rgba(${ink_rgb}, 0.12);
 }

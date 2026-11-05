@@ -28,7 +28,11 @@ from quantis.plugins.installer import (
 )
 from quantis.plugins.loader import resolve_plugins_dir
 from quantis.ui import resources
-from quantis.ui.views.widgets.glass_panel import GlassPanel
+from quantis.ui.views.widgets.page_layout import (
+    CONTENT_MAX_W,
+    PageTitle,
+    apply_page_margins,
+)
 from quantis.ui.views.widgets.switch import Switch
 
 logger = logging.getLogger(__name__)
@@ -53,30 +57,20 @@ class PluginsPage(QWidget):
 
         content = QWidget()
         self._outer = QVBoxLayout(content)
-        self._outer.setContentsMargins(16, 8, 16, 20)
-        self._outer.setSpacing(12)
+        apply_page_margins(self._outer, spacing=0)
 
-        panel = GlassPanel()
+        panel = QWidget()
+        panel.setObjectName("settingsPanel")
+        panel.setMaximumWidth(CONTENT_MAX_W)
         panel_layout = QVBoxLayout(panel)
-        panel_layout.setContentsMargins(22, 20, 22, 22)
+        panel_layout.setContentsMargins(0, 0, 0, 0)
         panel_layout.setSpacing(14)
 
-        header = QHBoxLayout()
-        title = QLabel("ПЛАГИНЫ")
-        title.setObjectName("settingsSectionLabel")
-        header.addWidget(title)
-        header.addStretch()
-        puzzle = QLabel()
-        puzzle.setPixmap(resources.load_icon("puzzle.svg").pixmap(18, 18))
-        puzzle.setToolTip("Элементы от плагинов помечаются иконкой пазла")
-        header.addWidget(puzzle)
-        panel_layout.addLayout(header)
+        panel_layout.addWidget(
+            PageTitle("Плагины", "Добавляют кнопки, страницы и действия в Quantis")
+        )
 
         # Полный путь — в подсказке «Открыть папку»: строкой он только шумел.
-        intro = QLabel("Плагины добавляют кнопки, страницы и действия в Quantis")
-        intro.setObjectName("settingsRowDesc")
-        intro.setWordWrap(True)
-        panel_layout.addWidget(intro)
 
         actions = QHBoxLayout()
         actions.setSpacing(8)
@@ -116,6 +110,7 @@ class PluginsPage(QWidget):
         self._status.setWordWrap(True)
         panel_layout.addWidget(self._status)
 
+        panel_layout.addSpacing(10)
         installed = QLabel("Установленные")
         installed.setObjectName("settingsSectionLabel")
         panel_layout.addWidget(installed)

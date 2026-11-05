@@ -20,7 +20,16 @@ import art
 import lyrics
 import offline
 import sources
-from android_media import NEXT, PAUSE, PLAY, PREV, SEEK_BASE, MediaControls
+from android_media import (
+    LIKE,
+    NEXT,
+    PAUSE,
+    PLAY,
+    PREV,
+    REPEAT,
+    SEEK_BASE,
+    MediaControls,
+)
 from PySide6.QtCore import (
     Property,
     QAbstractListModel,
@@ -55,10 +64,16 @@ LIBRARY_REFRESH_S = 300
 PLAYLISTS_KEY = "library/playlists"  # свои плейлисты на телефоне
 HOME_CHART_KEY = "home/chart"
 HOME_RELEASES_KEY = "home/releases"
+ONBOARDED_KEY = "app/onboarded"  # приветствие пройдено
+MOTION_KEY = "ui/motion"  # живой интерфейс: аврора, пластинка
+# Подпись источника в плашке шторки.
+SOURCE_LABELS = {YANDEX: "Яндекс Музыка", YOUTUBE: "YouTube", SOUNDCLOUD: "SoundCloud"}
 HOME_REFRESH_S = 1800
 COLLECTIONS_LIMIT = 40
 HISTORY_LIMIT = 30
 QUERIES_LIMIT = 8
+SEARCH_CACHE_S = 300  # повтор того же запроса за 5 минут — без сети
+SEARCH_CACHE_LIMIT = 30
 REPEAT_OFF, REPEAT_ALL, REPEAT_ONE = 0, 1, 2
 
 
@@ -133,6 +148,8 @@ class TrackModel(QAbstractListModel):
         return list(self._items)
 
     def set_items(self, items: list[Result]) -> None:
+        if list(items) == self._items:
+            return  # те же треки: не пересоздавать строки, обложки не моргают
         self.beginResetModel()
         self._items = list(items)
         self.endResetModel()
@@ -265,6 +282,8 @@ class AppController(QObject):
     playlistsChanged = Signal()
     searchExtrasChanged = Signal()
     homeChanged = Signal()
+    onboardedChanged = Signal()
+    motionChanged = Signal()
 
     def __init__(self, parent: QObject | None = None) -> None:
         super().__init__(parent)
@@ -312,10 +331,22 @@ class AppController(QObject):
         self._collection_seq = 0
         # Поиск Яндекса по всему: кроме треков — исполнители, альбомы, плейлисты.
         self._search_extras: dict = {}
+        # Номер поиска: ответ старого запроса не затирает новый. Кэш —
+        # повтор запроса (из истории, назад-вперёд) отвечает сразу.
+        self._search_gen = 0
+        self._last_query = ""  # последний запрос поиска
+        self._shown_query = ""  # запрос и источник выдачи на экране
+        self._shown_source = ""
+        self._search_cache: dict[tuple[str, str], tuple[float, object]] = {}
+        # Трек, для которого после ошибки плеера уже брали свежую ссылку.
+        self._retried: Result | None = None
+        # Следующий трек, выбранный и предзагруженный заранее (индекс в очереди).
+        self._planned_next: int | None = None
         # Главная: чарт и новые релизы Яндекса (кэш, обновление раз в 30 минут).
         self._home_chart = TrackModel(self)
         self._home_chart.set_items(self._load_tracks(HOME_CHART_KEY))
         self._home_releases = self._load_json(HOME_RELEASES_KEY)
+        self._home_jobs = 0
         self._home_at = -HOME_REFRESH_S
         # Текст песни текущего трека: грузится, только пока открыт экран текста.
         self._lyrics_open = False
@@ -329,6 +360,7 @@ class AppController(QObject):
         self._wave: wave.WaveSession | None = None
         self._wave_name = ""
         self._wave_loading = False
+        self._controls_cover_job = ""  # обложка для плашки, которую уже качаем
         self._wave_more_pending = False
         self._started_at: tuple[Result, int] | None = (
             None  # трек и позиция для feedback
@@ -357,10 +389,15 @@ class AppController(QObject):
         self._proxy = StreamProxy()
         self._controls = MediaControls()
         self._animations = self._controls.animations_enabled()
+        self._motion = self._settings.value(MOTION_KEY, True, type=bool)
+        self._onboarded = self._settings.value(ONBOARDED_KEY, False, type=bool)
         self._controls_timer = QTimer(self)
         self._controls_timer.setInterval(400)
         self._controls_timer.timeout.connect(self._poll_controls)
         self._controls_timer.start()
+        # Лайк, повтор и волна меняются и из приложения: плашку — следом.
+        for signal in (self.likesChanged, self.modeChanged, self.waveChanged):
+            signal.connect(self._sync_controls)
 
         self._player = QMediaPlayer(self)
         self._audio = QAudioOutput(self)
@@ -369,13 +406,32 @@ class AppController(QObject):
         self._player.durationChanged.connect(self._on_duration)
         self._player.playbackStateChanged.connect(self._on_play_state)
         self._player.mediaStatusChanged.connect(self._on_media_status)
-        self._player.errorOccurred.connect(
-            lambda _err, text: self._set_status(f"Ошибка плеера: {text}")
-        )
+        self._player.errorOccurred.connect(self._on_player_error)
+        # Сеть и тяжёлые импорты — только когда интерфейс уже на экране
+        # (uiReady). Фоновый Python держит GIL, и раньше он отнимал его у
+        # построения интерфейса: запуск шёл на секунды дольше.
+        self._ui_ready = False
+        self._deferred: list = []
         # Импорт yt-dlp и yandex-music на телефоне — секунды: заранее, в фоне.
-        self._run(sources.warm_up, (), lambda _: None, lambda _: None)
+        self._when_ready(lambda: self._run(sources.warm_up, (), lambda _: None, lambda _: None))
         if self._token:
-            self.checkAccount()
+            self._when_ready(self.checkAccount)
+
+    def _when_ready(self, fn) -> None:
+        if self._ui_ready:
+            fn()
+        elif fn not in self._deferred:
+            self._deferred.append(fn)
+
+    @Slot()
+    def uiReady(self) -> None:
+        """Первый кадр интерфейса показан: запустить отложенную работу."""
+        if self._ui_ready:
+            return
+        self._ui_ready = True
+        deferred, self._deferred = self._deferred, []
+        for fn in deferred:
+            fn()
 
     # --- фоновые задачи ---------------------------------------------------
 
@@ -538,6 +594,11 @@ class AppController(QObject):
     def homeReleases(self) -> list[dict]:
         return self._home_releases
 
+    @Property(bool, notify=homeChanged)
+    def homeLoading(self) -> bool:
+        """Главная грузит чарт или релизы: экран держит место заглушками."""
+        return self._home_jobs > 0
+
     @Property(QObject, constant=True)
     def queue(self) -> TrackModel:
         return self._queue_model
@@ -649,6 +710,8 @@ class AppController(QObject):
             self._play_at(row)
             return
         model = self._model(name)
+        if name == "results" and self._last_query:
+            self._remember_query(self._last_query)  # поиск по мере ввода: запомнить сыгранное
         if model is not None and 0 <= row < model.count:
             self._stop_wave()
             self._set_queue(model.items())
@@ -666,6 +729,8 @@ class AppController(QObject):
         queue = list(self._queue)
         queue.insert(self._current + 1, item)
         self._set_queue(queue)
+        self._planned_next = self._current + 1  # и в перемешивании — он
+        self._prefetch_result(item)
         self._flash("Сыграет следующим")
 
     @Slot(str, int)
@@ -691,8 +756,17 @@ class AppController(QObject):
         return item is not None and self._is_liked(item)
 
     def _set_queue(self, items: list[Result]) -> None:
+        planned = (
+            self._queue[self._planned_next]
+            if self._planned_next is not None and self._planned_next < len(self._queue)
+            else None
+        )
         self._queue = list(items)
         self._queue_model.set_items(self._queue)
+        # Запланированный следующий — тот же трек на его новом месте (или никакой).
+        self._planned_next = next(
+            (i for i, r in enumerate(self._queue) if r is planned), None
+        )
 
     # --- скачанное --------------------------------------------------------
 
@@ -925,24 +999,35 @@ class AppController(QObject):
     @Slot()
     def refreshHome(self) -> None:
         """Чарт и новые релизы: при открытии главной, не чаще раза в 30 минут."""
+        if not self._ui_ready:
+            self._when_ready(self.refreshHome)
+            return
         if not self._token or time.monotonic() - self._home_at < HOME_REFRESH_S:
             return
         self._home_at = time.monotonic()
         token = self._token
+        self._home_jobs = 2
+        self.homeChanged.emit()
+
+        def finish() -> None:
+            self._home_jobs = max(0, self._home_jobs - 1)
+            self.homeChanged.emit()
 
         def chart_done(items: list[Result]) -> None:
             if token == self._token:
                 self._home_chart.set_items(items)
                 self._save_tracks(HOME_CHART_KEY, items)
+            finish()
 
         def releases_done(items: list[dict]) -> None:
-            if token == self._token:
+            if token == self._token and items != self._home_releases:
                 self._home_releases = items
                 self._settings.setValue(HOME_RELEASES_KEY, json.dumps(items, ensure_ascii=False))
-                self.homeChanged.emit()
+            finish()
 
         def failed(_text: str) -> None:
             self._home_at = -HOME_REFRESH_S  # в следующий раз попробовать снова
+            finish()
 
         self._run(sources.yandex_chart, (token,), chart_done, failed)
         self._run(sources.yandex_new_releases, (token,), releases_done, failed)
@@ -994,6 +1079,9 @@ class AppController(QObject):
     @Slot()
     def refreshYandexLibrary(self) -> None:
         """Открыта медиатека: обновить, если с прошлого раза прошло 5 минут."""
+        if not self._ui_ready:
+            self._when_ready(self.refreshYandexLibrary)
+            return
         if time.monotonic() - self._library_at > LIBRARY_REFRESH_S:
             self._refresh_library()
 
@@ -1017,7 +1105,7 @@ class AppController(QObject):
             finish()
 
         def playlists_done(items: list[dict]) -> None:
-            if token == self._token:
+            if token == self._token and items != self._yandex_playlists:
                 self._yandex_playlists = items
                 self._settings.setValue(
                     YANDEX_PLAYLISTS_KEY, json.dumps(items, ensure_ascii=False)
@@ -1270,10 +1358,42 @@ class AppController(QObject):
     def accentText(self) -> QColor:
         return self._palette.accent_text
 
-    @Property(bool, constant=True)
+    @Property(bool, notify=motionChanged)
     def animations(self) -> bool:
-        """Системные анимации включены: иначе пластинка и аврора стоят."""
-        return self._animations
+        """Системные анимации и свой выбор «живой интерфейс»: иначе всё стоит."""
+        return self._animations and self._motion
+
+    @Property(bool, notify=motionChanged)
+    def motion(self) -> bool:
+        """Выбор пользователя: аврора и вращение пластинки."""
+        return self._motion
+
+    @Slot(bool)
+    def setMotion(self, enabled: bool) -> None:
+        if enabled != self._motion:
+            self._motion = enabled
+            self._settings.setValue(MOTION_KEY, enabled)
+            self.motionChanged.emit()
+
+    @Property(bool, notify=onboardedChanged)
+    def onboarded(self) -> bool:
+        """Первый запуск позади: приветствие больше не показываем."""
+        return self._onboarded
+
+    @Slot()
+    def finishOnboarding(self) -> None:
+        if not self._onboarded:
+            self._onboarded = True
+            self._settings.setValue(ONBOARDED_KEY, True)
+            self.onboardedChanged.emit()
+
+    @Slot()
+    def showOnboarding(self) -> None:
+        """Из настроек: показать приветствие ещё раз."""
+        if self._onboarded:
+            self._onboarded = False
+            self._settings.setValue(ONBOARDED_KEY, False)
+            self.onboardedChanged.emit()
 
     @Property(bool, notify=playStateChanged)
     def playing(self) -> bool:
@@ -1370,24 +1490,70 @@ class AppController(QObject):
 
     @Slot(str)
     def search(self, query: str) -> None:
+        """Поиск по Enter или смене источника: запрос — в недавние."""
+        self._search(query, remember=True)
+
+    @Slot(str)
+    def searchAsYouType(self, query: str) -> None:
+        """Поиск по мере ввода: в недавние попадёт, только если из выдачи что-то включат."""
+        self._search(query, remember=False)
+
+    def _search(self, query: str, *, remember: bool) -> None:
         query = query.strip()
         if not query:
             return
+        self._last_query = query
+        if remember:
+            self._remember_query(query)
+        if query == self._shown_query and self._shown_source == self._source and not remember:
+            return  # тот же запрос уже на экране
+        self._shown_query, self._shown_source = query, self._source
+        self._search_gen += 1
+        gen = self._search_gen
+        self._set_status("")
+        key = (self._source, query.casefold())
+        cached = self._search_cache.get(key)
+        if cached is not None and time.monotonic() - cached[0] < SEARCH_CACHE_S:
+            self._on_results(cached[1])
+            return
         self._searching = True
         self.searchingChanged.emit()
-        self._set_status("")
-        self._remember_query(query)
         if self._source == YANDEX:
             fn, args = sources.search_yandex_all, (self._token, query)
         elif self._source == SOUNDCLOUD:
             fn, args = sources.search_soundcloud, (query,)
         else:
             fn, args = sources.search_youtube, (query,)
-        self._run(fn, args, self._on_results, self._on_search_failed)
+
+        def done(results) -> None:
+            self._search_cache[key] = (time.monotonic(), results)
+            while len(self._search_cache) > SEARCH_CACHE_LIMIT:  # старейший — вон
+                self._search_cache.pop(next(iter(self._search_cache)))
+            if gen == self._search_gen:
+                self._on_results(results)
+
+        def failed(text: str) -> None:
+            if gen == self._search_gen:
+                self._shown_query = ""  # не удалось — тот же запрос можно повторить
+                self._on_search_failed(text)
+
+        self._run(fn, args, done, failed)
 
     def _on_results(self, results) -> None:
         self._searching = False
         self.searchingChanged.emit()
+        if isinstance(results, dict):
+            top = results["tracks"][0] if results["tracks"] else None
+        else:
+            top = results[0] if results else None
+        if top is not None:  # чаще всего касаются первого — ссылку заранее
+            # Не сразу: пока человек печатает, предзагрузка (для YouTube — это
+            # разбор yt-dlp) отнимала GIL у ввода. Через 1,5 с, если запрос
+            # не сменился.
+            gen = self._search_gen
+            QTimer.singleShot(
+                1500, lambda: gen == self._search_gen and self._prefetch_result(top)
+            )
         extras: dict = {}
         if isinstance(results, dict):  # Яндекс: поиск по всему
             extras = {k: v for k, v in results.items() if k != "tracks"}
@@ -1414,6 +1580,8 @@ class AppController(QObject):
             return
         self._wave_feedback_end()
         self._current = row
+        self._planned_next = None
+        self._retried = None
         self._wants_play = True
         self._loading = True
         self._player.stop()
@@ -1464,7 +1632,10 @@ class AppController(QObject):
             )
         self._player.setSource(QUrl(url))
         self._player.play()
-        self._prefetch(self._next_index(manual=True))
+        # Следующий выбираем сейчас (в перемешивании — тоже), его и готовим.
+        self._planned_next = self._next_index(manual=True)
+        if self._planned_next is not None:
+            self._prefetch_result(self._queue[self._planned_next])
 
     def _on_resolve_failed(self, text: str) -> None:
         self._loading = False
@@ -1473,19 +1644,57 @@ class AppController(QObject):
         self.playStateChanged.emit()
         self._sync_controls()
 
-    def _prefetch(self, row: int | None) -> None:
-        """Ссылку YouTube разбирать секунды — для следующего трека заранее."""
+    def _prefetch_result(self, result: Result) -> None:
+        """Ссылку разобрать заранее: YouTube — секунды, Яндекс и SoundCloud —
+        запросы к API. Готовая лежит в кэше sources, касание играет сразу."""
+        if self._offline.has(result):
+            return
+        if result.source == YANDEX and not self._token:
+            return
+        self._run(
+            lambda: sources.resolve(result, self._token, self._proxy),
+            (),
+            lambda _: None,
+            lambda _: None,
+        )
+
+    def _on_player_error(self, _error: object, text: str) -> None:
+        """Ссылка из кэша могла протухнуть: один раз берём свежую и играем."""
+        track = self._track()
         if (
-            row is not None
-            and self._queue[row].source == YOUTUBE
-            and not self._offline.has(self._queue[row])
+            track is None
+            or not self._wants_play
+            or self._retried is track
+            or self._offline.path(track) is not None
         ):
-            self._run(
-                sources.youtube_stream,
-                (self._queue[row].track_id,),
-                lambda _: None,
-                lambda _: None,
-            )
+            self._set_status(f"Ошибка плеера: {text}")
+            return
+        self._retried = track
+        sources.forget_link(track)
+        row, position = self._current, self._player.position()
+        self._loading = True
+        self.playStateChanged.emit()
+
+        def done(url: str) -> None:
+            if row != self._current:
+                return
+            self._loading = False
+            self._player.setSource(QUrl(url))
+            if position > 0:
+                self._player.setPosition(position)
+            self._player.play()
+            self.playStateChanged.emit()
+
+        def failed(_text: str) -> None:
+            if row == self._current:
+                self._on_resolve_failed(f"Ошибка плеера: {text}")
+
+        self._run(
+            lambda: sources.resolve(track, self._token, self._proxy, fresh=True),
+            (),
+            done,
+            failed,
+        )
 
     def _next_index(self, *, manual: bool) -> int | None:
         count = len(self._queue)
@@ -1494,6 +1703,9 @@ class AppController(QObject):
         if self._repeat == REPEAT_ONE and not manual:
             return self._current
         if self._shuffle and count > 1:
+            planned = self._planned_next  # уже выбран и предзагружен
+            if planned is not None and planned < count and planned != self._current:
+                return planned
             choices = [i for i in range(count) if i != self._current]
             return random.choice(choices)
         following = self._current + 1
@@ -1586,7 +1798,30 @@ class AppController(QObject):
             self.playing,
             self._player.position(),
             self.duration,
+            self._controls_cover(track),
+            self._wave_name if self._wave is not None else SOURCE_LABELS.get(track.source, ""),
+            self._is_liked(track),
+            self._repeat,
         )
+
+    def _controls_cover(self, track: Result) -> str:
+        """Файл обложки для плашки; нет на диске — скачать в фоне и обновить."""
+        url = track.cover if track.cover.startswith("https://") else ""
+        if not url:
+            return ""
+        path = art.cover_file(url)
+        if path.exists():
+            return str(path)
+        if url != self._controls_cover_job:
+            self._controls_cover_job = url
+
+            def loaded(_image) -> None:
+                current = self._track()
+                if current is not None and current.cover == url:
+                    self._sync_controls()
+
+            self._run(art.load_cover, (url,), loaded, lambda _text: None)
+        return ""
 
     def _poll_controls(self) -> None:
         """Кнопки плашки: Java складывает нажатия в очередь, забираем здесь."""
@@ -1599,6 +1834,10 @@ class AppController(QObject):
                 self.next()
             elif command == PREV:
                 self.previous()
+            elif command == LIKE:
+                self.toggleLike()
+            elif command == REPEAT:
+                self.cycleRepeat()
             elif command >= SEEK_BASE:
                 self.seek(command - SEEK_BASE)
 

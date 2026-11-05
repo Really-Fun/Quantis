@@ -145,9 +145,20 @@ ApplicationWindow {
         bottomPadding: window.safeBottom
     }
 
+    // Приветствие при первом запуске — поверх всего, пока не пройдено.
+    Loader {
+        id: onboarding
+        anchors.fill: parent
+        z: 10
+        active: !app.onboarded
+        sourceComponent: Onboarding {}
+    }
+
     // «Назад» на Android: сначала свернуть плеер, потом на главную.
     onClosing: function (close) {
-        if (lyricsSheet.opened) {
+        if (onboarding.item) {
+            close.accepted = !onboarding.item.back() // на первом экране — выйти
+        } else if (lyricsSheet.opened) {
             close.accepted = false
             lyricsSheet.close()
         } else if (queueSheet.opened) {

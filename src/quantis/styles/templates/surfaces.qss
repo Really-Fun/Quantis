@@ -17,9 +17,8 @@ QFrame#glassPanel {
 }
 
 QFrame#sideNavRail {
-    background-color: ${panel_bg};
-    border: 1px solid rgba(${ink_rgb}, 0.06);
-    border-radius: ${radius};
+    background: transparent;
+    border: none;
 }
 
 #trackTitle[playing="true"] {

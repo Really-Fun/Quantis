@@ -22,6 +22,7 @@ import sys
 log = logging.getLogger(__name__)
 
 NONE, PLAY, PAUSE, NEXT, PREV, SEEK_BASE = -1, 1, 2, 3, 4, 10
+LIKE, REPEAT = 5, 6  # свои кнопки плашки: «Нравится» и режим повтора
 
 # Номера функций в таблицах JNI (jni.h из NDK r28c, без комментариев).
 _ATTACH_CURRENT_THREAD = 4
@@ -206,7 +207,10 @@ class MediaControls:
                 cls, "init", "(Landroid/content/Context;)V", static=True
             )
             self._update = jni.method_id(
-                cls, "update", "(Ljava/lang/String;Ljava/lang/String;ZJJ)V", static=True
+                cls,
+                "update",
+                "(Ljava/lang/String;Ljava/lang/String;ZJJLjava/lang/String;Ljava/lang/String;ZI)V",
+                static=True,
             )
             self._poll = jni.method_id(cls, "poll", "()J", static=True)
             self._release = jni.method_id(cls, "release", "()V", static=True)
@@ -223,13 +227,24 @@ class MediaControls:
             log.exception("Плашка плеера недоступна")
 
     def update(
-        self, title: str, artist: str, playing: bool, position_ms: int, duration_ms: int
+        self,
+        title: str,
+        artist: str,
+        playing: bool,
+        position_ms: int,
+        duration_ms: int,
+        cover_path: str = "",
+        source: str = "",
+        liked: bool = False,
+        repeat_mode: int = 0,
     ) -> None:
+        """cover_path — файл обложки на диске (Java читает его сама)."""
         jni = self._jni
         if jni is None:
             return
         try:
-            jtitle, jartist = jni.string(title), jni.string(artist)
+            strings = [jni.string(s) for s in (title, artist, cover_path, source)]
+            jtitle, jartist, jcover, jsource = strings
             try:
                 jni.call(
                     _CALL_STATIC_VOID_METHOD_A,
@@ -237,12 +252,20 @@ class MediaControls:
                     self._cls,
                     self._update,
                     jni.jvalues(
-                        jtitle, jartist, int(playing), position_ms, duration_ms
+                        jtitle,
+                        jartist,
+                        int(playing),
+                        position_ms,
+                        duration_ms,
+                        jcover,
+                        jsource,
+                        int(liked),
+                        repeat_mode,
                     ),
                 )
             finally:
-                jni.delete(jtitle)
-                jni.delete(jartist)
+                for ref in strings:
+                    jni.delete(ref)
         except Exception:
             log.exception("Не удалось обновить плашку")
 

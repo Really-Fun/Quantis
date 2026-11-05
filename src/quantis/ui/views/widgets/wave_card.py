@@ -23,6 +23,7 @@ from quantis.ui.preferences import UiPreferences
 from quantis.ui.themes.spec import qcolor
 from quantis.ui.views.widgets.glass import paint_glass
 from quantis.ui.views.widgets.wave_moods import WaveMoodStrip
+from quantis.utils.get_ru_words import get_ru_words_for_number
 
 
 class WaveCard(QWidget):
@@ -137,7 +138,7 @@ class WaveCard(QWidget):
         elif loading:
             text = "Загружаем…"
         elif track_count:
-            text = f"{track_count} в потоке"
+            text = f"{get_ru_words_for_number(track_count)} в потоке"
         else:
             text = "Подберём треки по твоей истории"
         self._status.setText(text)

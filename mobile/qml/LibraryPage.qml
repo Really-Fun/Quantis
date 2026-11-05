@@ -1,5 +1,5 @@
 // Медиатека: Любимое, История, медиатека Яндекса («Мне нравится» и свои
-// плейлисты, если выполнен вход) и аккаунт; каждое — своя страница.
+// плейлисты, если выполнен вход); шестерёнка в шапке — настройки.
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Controls.Material
@@ -27,6 +27,17 @@ StackView {
     Component {
         id: accountPage
         AccountPage { onBack: stack.pop() }
+    }
+    Component {
+        id: settingsPage
+        SettingsPage {
+            onBack: stack.pop()
+            onOpenAccount: stack.push(accountPage)
+        }
+    }
+    function openSettings() {
+        if (stack.depth === 1)
+            stack.push(settingsPage)
     }
     Component {
         id: likedPage
@@ -208,6 +219,10 @@ StackView {
     Flickable {
         id: root
         contentHeight: column.implicitHeight + 24
+        // Только вертикаль: без contentWidth ширину считали по детям, и шире
+        // экрана (аврора, тени) страница ловила горизонтальный жест вместо прокрутки.
+        contentWidth: width
+        flickableDirection: Flickable.VerticalFlick
         clip: true
         boundsBehavior: Flickable.StopAtBounds
         ScrollIndicator.vertical: ScrollIndicator {}
@@ -216,15 +231,24 @@ StackView {
             width: root.width
             spacing: 10
 
-            Text {
+            RowLayout {
+                Layout.fillWidth: true
                 Layout.leftMargin: theme.gutter
-                Layout.topMargin: 20
-                Layout.bottomMargin: 4
-                text: "Медиатека"
-                color: theme.text
-                font.family: theme.display
-                font.pixelSize: 26
-                font.weight: Font.DemiBold
+                Layout.rightMargin: theme.gutter - 12
+                Layout.topMargin: 12
+                Text {
+                    Layout.fillWidth: true
+                    text: "Медиатека"
+                    color: theme.text
+                    font.family: theme.display
+                    font.pixelSize: 26
+                    font.weight: Font.DemiBold
+                }
+                IconButton {
+                    iconName: "settings"
+                    label: "Настройки"
+                    onClicked: stack.openSettings()
+                }
             }
             LibraryRow {
                 iconName: "heart"
@@ -288,14 +312,6 @@ StackView {
                     cover: modelData.cover ? encodeURIComponent(modelData.cover) : ""
                     onClicked: stack.openPlaylist(modelData)
                 }
-            }
-            SectionLabel { text: "Аккаунт" }
-            LibraryRow {
-                iconName: "user"
-                caption: "Яндекс Музыка"
-                hint: app.loggedIn ? (app.account || "Вход выполнен") : "Не выполнен вход"
-                hintColor: app.loggedIn ? theme.textDim : theme.yandex
-                onClicked: stack.push(accountPage)
             }
         }
     }

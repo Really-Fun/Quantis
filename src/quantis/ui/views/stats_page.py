@@ -21,6 +21,7 @@ from quantis.ui.viewmodels.stats_vm import StatsViewModel
 from quantis.ui.views.widgets.glass_panel import GlassPanel
 from quantis.ui.views.widgets.home_section import HomeSection
 from quantis.ui.views.widgets.listen_bars import ListenBars
+from quantis.ui.views.widgets.page_layout import PAGE_MARGINS
 from quantis.ui.views.widgets.track_card import TrackCardDelegate
 
 _EMPTY_HINT = "Дослушай трек до конца — он попадёт в топ"
@@ -89,7 +90,7 @@ class StatsPage(QWidget):
         content = QWidget()
         content.setObjectName("homeScrollContent")
         root = QVBoxLayout(content)
-        root.setContentsMargins(28, 20, 28, 40)
+        root.setContentsMargins(PAGE_MARGINS[0], PAGE_MARGINS[1], PAGE_MARGINS[2], 40)
         root.setSpacing(24)
 
         hero = QWidget()
@@ -99,11 +100,11 @@ class StatsPage(QWidget):
         hero_layout.setSpacing(6)
         # Как заголовки разделов («Топ треков», «Скачанные»): у прежних
         # homeKicker/homeGreeting после редизайна не осталось стилей.
-        title = QLabel("Твоя статистика")
-        title.setObjectName("homeSectionTitle")
+        title = QLabel("Статистика")
+        title.setObjectName("pageTitle")
         hero_layout.addWidget(title)
         self._subtitle = QLabel(_EMPTY_HINT)
-        self._subtitle.setObjectName("homeSectionSubtitle")
+        self._subtitle.setObjectName("pageSubtitle")
         self._subtitle.setWordWrap(True)
         hero_layout.addWidget(self._subtitle)
         root.addWidget(hero)

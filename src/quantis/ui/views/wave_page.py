@@ -62,9 +62,9 @@ from quantis.ui.views.widgets.cover_art import (
 )
 from quantis.ui.views.widgets.home_section import HomeSection
 from quantis.ui.views.widgets.mood_field import NODE_BY_SEED, MoodField
+from quantis.ui.views.widgets.page_layout import PAGE_MARGINS
 from quantis.ui.wave_art import WaveArtStore, mood_color, mood_kind, paint_wave_art
 
-_SIDE_MARGIN = 28
 _KIND_LABELS = {
     "mood": "Настроение",
     "activity": "Занятие",
@@ -670,7 +670,7 @@ class WavePage(QWidget):
     toggle_pause_requested = Signal()
 
     NARROW = 1040
-    """Уже этого панель уходит под карту."""
+    """Окно уже этого — панель уходит под карту."""
     STAGE_HEIGHT = 560
 
     def __init__(
@@ -699,7 +699,7 @@ class WavePage(QWidget):
         content = QWidget()
         content.setObjectName("waveScrollContent")
         layout = QVBoxLayout(content)
-        layout.setContentsMargins(_SIDE_MARGIN, 20, _SIDE_MARGIN, 40)
+        layout.setContentsMargins(PAGE_MARGINS[0], PAGE_MARGINS[1], PAGE_MARGINS[2], 40)
         layout.setSpacing(30)
 
         self._stage = QBoxLayout(QBoxLayout.Direction.LeftToRight)
@@ -943,7 +943,7 @@ class WavePage(QWidget):
 
             mood = WaveMood(
                 id="diversity:reshuffle",
-                name="Встряхнуть Мою волну",
+                name="Встряхнуть «Мою волну»",
                 seeds=(f"diversity:reshuffle_{int(time.time() * 1000)}",),
                 style="CONTROL_ACCENT",
             )

@@ -58,6 +58,13 @@ class ThemeColors:
     popup_bg: str
     popup_border: str
     list_bg: str
+    # --- состояния (чипы статусов, сообщения у полей) ---
+    ok_rgb: str = "61, 220, 151"
+    """Готово / подключено."""
+    warn_rgb: str = "255, 184, 77"
+    """Работает с ограничениями / нужно обновить."""
+    bad_rgb: str = "255, 107, 107"
+    """Ошибка."""
 
 
 @dataclass(frozen=True)

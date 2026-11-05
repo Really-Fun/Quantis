@@ -211,6 +211,9 @@ class WallpaperBackdrop(QWidget):
         self._loop_enabled = False
         self._stall_notified = False
         self._host_player: QMediaPlayer | None = None
+        # После setSource Qt ещё какое-то время отдаёт длительность прошлого
+        # клипа: до durationChanged нового источника ей не верим.
+        self._duration_fresh = False
 
         self._video_feed = _VideoFeed(self._compositor, self)
 
@@ -365,6 +368,7 @@ class WallpaperBackdrop(QWidget):
                 player.play()
             return
         self._current_source = url
+        self._duration_fresh = False
         self._silence_video_audio()
         player.setPlaybackRate(1.0)
         player.setSource(_media_url(url))
@@ -430,7 +434,7 @@ class WallpaperBackdrop(QWidget):
         status = player.mediaStatus()
         return VideoState(
             position_ms=max(0, int(player.position())),
-            duration_ms=max(0, int(player.duration())),
+            duration_ms=max(0, int(player.duration())) if self._duration_fresh else 0,
             playing=player.playbackState() == QMediaPlayer.PlaybackState.PlayingState,
             buffering=status in _STALLED_STATUSES,
             seekable=status in _SEEKABLE_STATUSES,
@@ -440,7 +444,7 @@ class WallpaperBackdrop(QWidget):
         player = self._streaming_player()
         if player is None:
             return
-        duration = int(player.duration())
+        duration = int(player.duration()) if self._duration_fresh else 0
         if not wallpaper_can_apply_seek(duration_ms=duration, media_ready=True):
             return
         player.setPosition(wallpaper_seek_target(position_ms, duration))
@@ -485,6 +489,7 @@ class WallpaperBackdrop(QWidget):
 
     def _on_duration_ready(self, duration: int) -> None:
         if duration > 0 and self._streaming:
+            self._duration_fresh = True
             self.media_ready.emit()
 
     def _notify_stall(self) -> None:
@@ -496,8 +501,23 @@ class WallpaperBackdrop(QWidget):
     def _on_video_status(self, status: QMediaPlayer.MediaStatus) -> None:
         if self._video_player is None:
             return
+        if (
+            status == QMediaPlayer.MediaStatus.BufferedMedia
+            and not self._duration_fresh
+            and self._streaming
+            and self._video_player.duration() > 0
+        ):
+            # Длина совпала с прошлым клипом — durationChanged не придёт,
+            # а данные нового источника уже пошли.
+            self._duration_fresh = True
+            self.media_ready.emit()
+            return
         if status == QMediaPlayer.MediaStatus.LoadedMedia:
-            if self._streaming and self._video_player.duration() > 0:
+            if (
+                self._streaming
+                and self._duration_fresh
+                and self._video_player.duration() > 0
+            ):
                 self.media_ready.emit()
             return
         if status != QMediaPlayer.MediaStatus.EndOfMedia:

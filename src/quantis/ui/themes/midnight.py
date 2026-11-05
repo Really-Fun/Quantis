@@ -26,10 +26,6 @@ QFrame#glassPanel {
     border: 1px solid rgba(${mist_rgb}, 0.07);
 }
 
-QFrame#sideNavRail[expanded="true"] {
-    border: 1px solid rgba(${tint_rgb}, 0.25);
-}
-
 QToolButton#navIconButton[plugin="true"] {
     border: 1px solid rgba(${mist_rgb}, 0.2);
 }

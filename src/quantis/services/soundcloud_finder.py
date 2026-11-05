@@ -7,7 +7,12 @@ from asyncio import get_running_loop
 from concurrent.futures import ThreadPoolExecutor
 
 from quantis.models import Track
-from quantis.services.soundcloud import track_from_ydl, watch_url, ydl_opts
+from quantis.services.soundcloud import (
+    track_from_api,
+    track_from_ydl,
+    watch_url,
+    ydl_opts,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -32,9 +37,44 @@ class AsyncSoundCloudFinder:
         )
 
     def _sync_get_tracks(self, title: str, value: int = 5) -> list[Track]:
+        limit = max(1, value)
+        try:
+            return self._search_api(title, limit)
+        except Exception:
+            logger.debug("SoundCloud api-v2 не ответил — scsearch", exc_info=True)
+        return self._search_ydl(title, limit)
+
+    @staticmethod
+    def _search_api(title: str, limit: int) -> list[Track]:
+        """Один запрос к api-v2 вместо scsearch.
+
+        scsearch yt-dlp на каждый найденный трек делает ещё запрос — 13–21
+        запрос, 3–19 с. client_id (и его обновление при 401/403) — те же,
+        что у yt-dlp: берём их у его экстрактора.
+        """
         from yt_dlp import YoutubeDL
 
-        limit = max(1, value)
+        with YoutubeDL(ydl_opts()) as ydl:
+            ie = ydl.get_info_extractor("Soundcloud")
+            ie.initialize()  # client_id из кэша yt-dlp или со страницы сайта
+            data = ie._call_api(
+                ie._API_V2_BASE + "search/tracks",
+                title,
+                "Searching",
+                query={"q": title, "limit": limit * 2},  # часть отсеет DRM
+                headers=ie._HEADERS,
+            )
+        collection = data.get("collection") if isinstance(data, dict) else None
+        if not isinstance(collection, list):
+            raise RuntimeError("SoundCloud: неожиданный ответ поиска")
+        tracks: list[Track] = [
+            t for t in map(track_from_api, collection) if t is not None
+        ]
+        return tracks[:limit]
+
+    def _search_ydl(self, title: str, limit: int) -> list[Track]:
+        from yt_dlp import YoutubeDL
+
         query = f"scsearch{limit}:{title}"
         opts = ydl_opts(extract_flat=True, skip_download=True, noplaylist=False)
         try:

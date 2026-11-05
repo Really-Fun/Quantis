@@ -60,8 +60,9 @@ QLabel#headerSub {
 }
 
 QLabel#headerBrandWordmark {
-    font-size: 15px;
-    font-weight: 700;
+    font-family: "Unbounded", ${font_display};
+    font-size: 13px;
+    font-weight: 600;
     letter-spacing: 2.4px;
     color: ${title};
     background: transparent;

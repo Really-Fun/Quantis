@@ -12,6 +12,7 @@ import asyncio
 import contextlib
 import logging
 import random
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Sequence
@@ -76,13 +77,25 @@ class WaveMood:
         cover = (data.get("agent") or {}).get("cover") or {}
         return cls(
             id=str(item.get("id") or ",".join(seeds)),
-            name=str(wave["name"]),
+            name=fix_wave_text(str(wave["name"])),
             seeds=seeds,
-            description=str(wave.get("description") or ""),
+            description=fix_wave_text(str(wave.get("description") or "")),
             style=str(item.get("style") or "DEFAULT"),
             cover_uri=cover.get("uri"),
             color=cover.get("color"),
         )
+
+
+# Опечатки в названиях волн, которые отдаёт API Яндекса (сочетания с карты).
+# «по красоте» — предлог с существительным, пишется раздельно; дефис только
+# у наречий (по-новому, по-русски).
+_WAVE_TEXT_FIXES = ((re.compile(r"\b([Пп]о)-(красот[еуы])\b"), r"\1 \2"),)
+
+
+def fix_wave_text(text: str) -> str:
+    for pattern, replacement in _WAVE_TEXT_FIXES:
+        text = pattern.sub(replacement, text)
+    return text
 
 
 def _catalog(
@@ -118,7 +131,7 @@ WAVE_ACTIVITIES = _catalog(
         ("run", "Бежать быстрее ветра", "#76FF03"),
         ("workout", "Тренироваться в ритме", "#FF3D00"),
         ("road-trip", "В дорогу", "#FF7043"),
-        ("party", "Вечериниться", "#D500F9"),
+        ("party", "Устроить вечеринку", "#D500F9"),
         ("romantic-date", "Свидание на 10 из 10", "#C2185B"),
         ("fall-asleep", "Сон зовёт", "#3949AB"),
     ),
@@ -216,7 +229,7 @@ class AsyncWaveService:
 
         wave = result.get("wave") or {}
         playlist = WavePlaylist(
-            name=name or wave.get("name") or "Моя волна",
+            name=name or fix_wave_text(str(wave.get("name") or "")) or "Моя волна",
             tracks=tracks,
             source="yandex",
             seeds=wanted,

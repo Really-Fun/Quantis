@@ -50,17 +50,8 @@ QFrame#pluginCard {
     border-radius: 20px;
 }
 
-QToolButton#navPinButton {
-    border-radius: 12px;
-    color: rgba(255, 255, 255, 0.65);
-}
-
 QToolButton#advancedToggle:checked {
     border-color: rgba(255, 255, 255, 0.28);
-}
-
-QFrame#sideNavRail[expanded="true"] {
-    border: 1px solid rgba(0, 217, 163, 0.28);
 }
 
 QToolButton#navIconButton {

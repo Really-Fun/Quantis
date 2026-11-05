@@ -15,6 +15,7 @@ from quantis.services.wallpaper_policy import (
     WALLPAPER_DEFAULT_QUALITY,
     clamp_wallpaper_quality,
     wallpaper_format_quality,
+    wallpaper_source_has_video,
     wallpaper_url_itag,
     wallpaper_yt_dlp_android_format,
     wallpaper_yt_dlp_format,
@@ -23,8 +24,9 @@ from quantis.services.yandex_streamer import AsyncStreamerInterface
 
 logger = logging.getLogger(__name__)
 
-_INFO_CACHE_TTL_SEC = 90.0
-_INFO_CACHE_MAX = 8
+# Ссылки googlevideo живут ~6 ч: 20 минут кэша — с большим запасом.
+_INFO_CACHE_TTL_SEC = 20 * 60.0
+_INFO_CACHE_MAX = 32
 _SLIM_FORMAT_KEYS = (
     "url",
     "protocol",
@@ -93,6 +95,13 @@ class AsyncYoutubeStreamer(AsyncStreamerInterface):
         self._info_lock = Lock()
         self._info_cache: dict[str, tuple[float, dict[str, Any]]] = {}
         self._video_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+        # Звук, его предзагрузка и видео-фон одного ролика не гоняют yt-dlp
+        # параллельно: второй ждёт первого и берёт ответ из кэша.
+        self._id_locks: dict[str, Lock] = {}
+
+    def _id_lock(self, track_id: str) -> Lock:
+        with self._info_lock:
+            return self._id_locks.setdefault(str(track_id), Lock())
 
     def invalidate(self, track_id: str) -> None:
         with self._info_lock:
@@ -176,15 +185,12 @@ class AsyncYoutubeStreamer(AsyncStreamerInterface):
             skip_player: bool = True,
         ) -> dict:
             youtube: dict[str, Any] = {
-                "player_client": clients,
-                # Video-only itag 134/160 сидят в adaptive; skip dash их выкидывает,
-                # и фон остаётся с тем же itag=18, что и звук.
-                "skip": (
-                    ["hls", "translated_subs"]
-                    if video
-                    else ["hls", "dash", "translated_subs"]
-                ),
+                # dash не пропускаем: video-only itag живут в adaptive, и тот же
+                # ответ потом отдаёт фону видео без нового запроса.
+                "skip": ["hls", "translated_subs"],
             }
+            if clients:
+                youtube["player_client"] = clients
             if skip_player:
                 # Innertube android без webpage/player JS — обычно <2с.
                 youtube["player_skip"] = ["webpage", "configs"]
@@ -197,12 +203,17 @@ class AsyncYoutubeStreamer(AsyncStreamerInterface):
                 opts["cookiefile"] = cookiefile
             return opts
 
-        attempts: list[dict] = []
-        if video:
-            # android больше не отдаёт adaptive 720/1080 — только muxed itag 18.
-            attempts.append(build(["tv_embedded"], format_id=fmt, skip_player=False))
-        else:
-            attempts.append(build(["android"], format_id=android_fmt))
+        # Клиенты yt-dlp по умолчанию за один запрос отдают и звук (itag 140),
+        # и video-only дорожки любого качества — фон берёт их из кэша, без
+        # второго yt-dlp. android/ios/tv по отдельности сейчас часто отвечают
+        # одними картинками (SABR) или muxed itag 18, а tv_embedded эта версия
+        # yt-dlp не знает вовсе и молча откатывается на те же умолчания.
+        attempts: list[dict] = [build([], format_id=fmt, skip_player=False)]
+        # Для фона android без player JS не отдаёт и muxed 18 — тот путь
+        # оставляем полным, как было.
+        attempts.append(
+            build(["android"], format_id=android_fmt, skip_player=not video)
+        )
         if cookiefile:
             attempts.append(
                 build(
@@ -212,13 +223,6 @@ class AsyncYoutubeStreamer(AsyncStreamerInterface):
                     skip_player=False,
                 )
             )
-        else:
-            attempts.append(build(["web"], format_id=fmt, skip_player=False))
-        if video:
-            attempts.append(
-                build(["android"], format_id=android_fmt, skip_player=False)
-            )
-
         return attempts
 
     @staticmethod
@@ -420,6 +424,10 @@ class AsyncYoutubeStreamer(AsyncStreamerInterface):
         )
 
     def sync_stream(self, track_id: str) -> tuple[str | None, int]:
+        with self._id_lock(track_id):
+            return self._sync_stream_locked(track_id)
+
+    def _sync_stream_locked(self, track_id: str) -> tuple[str | None, int]:
         from yt_dlp import YoutubeDL
 
         from quantis.services.url_resolver import is_youtube_video_id
@@ -429,10 +437,14 @@ class AsyncYoutubeStreamer(AsyncStreamerInterface):
             return None, 0
 
         cached = self._cached_info(track_id)
-        if cached:
-            picked = self._pick_stream_url(cached, prefer_video=False)
-            if picked:
-                return picked, self._duration_ms_from_info(cached)
+        picked = self._pick_stream_url(cached, prefer_video=False)
+        if picked:
+            return picked, self._duration_ms_from_info(cached)
+        # Ответ для фона (те же клиенты) содержит и звуковые дорожки.
+        cached = self._cached_video_info(track_id)
+        picked = self._pick_stream_url(cached, prefer_video=False)
+        if picked and not wallpaper_source_has_video(picked):
+            return picked, self._duration_ms_from_info(cached)
 
         url = f"https://www.youtube.com/watch?v={track_id}"
         last_exc: BaseException | None = None
@@ -473,6 +485,15 @@ class AsyncYoutubeStreamer(AsyncStreamerInterface):
         return None, 0
 
     def sync_video_stream(
+        self,
+        track_id: str,
+        height: int = WALLPAPER_DEFAULT_QUALITY,
+        exclude_itags: frozenset[str] | None = None,
+    ) -> tuple[str | None, int]:
+        with self._id_lock(track_id):
+            return self._sync_video_stream_locked(track_id, height, exclude_itags)
+
+    def _sync_video_stream_locked(
         self,
         track_id: str,
         height: int = WALLPAPER_DEFAULT_QUALITY,

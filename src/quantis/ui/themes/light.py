@@ -136,14 +136,6 @@ QToolButton#sourceFilterChip:checked {
     color: #667085;
 }
 
-QToolButton#navPinButton {
-    color: #667085;
-}
-
-QToolButton#navPinButton:checked {
-    border-color: rgba(${tint_rgb}, 0.40);
-}
-
 QToolButton#advancedToggle {
     color: #667085;
     border-color: rgba(27, 32, 48, 0.12);
@@ -163,14 +155,6 @@ QLabel#homePillBadge[variant="wave"] {
 
 QLabel#homePillBadge[variant="continue"] {
     color: #C2415A;
-}
-
-QToolButton#homeSectionAction {
-    border: 1px solid rgba(27, 32, 48, 0.10);
-}
-
-QToolButton#homeSectionAction:hover {
-    border-color: rgba(${tint_rgb}, 0.40);
 }
 
 #searchStatus {
@@ -203,10 +187,6 @@ QComboBox#themeCombo QAbstractItemView {
     selection-background-color: rgba(${tint_rgb}, 0.16);
 }
 
-QFrame#sideNavRail[expanded="true"] {
-    border: 1px solid rgba(${tint_rgb}, 0.22);
-}
-
 QToolButton#navIconButton[plugin="true"] {
     border: 1px solid rgba(102, 112, 133, 0.22);
 }
@@ -215,7 +195,7 @@ QToolButton#navIconButton[plugin="true"] {
     border: 1px solid rgba(102, 112, 133, 0.28);
 }
 
-QFrame#settingsPanel {
+QFrame#settingsGroup {
     border: 1px solid rgba(27, 32, 48, 0.08);
 }
 
@@ -272,6 +252,10 @@ THEME = ThemeSpec(
         popup_bg="#F7F8FB",
         popup_border="1px solid rgba(27, 32, 48, 0.10)",
         list_bg="#FFFFFF",
+        # на белом нужны тёмные оттенки, иначе текст статусов не читается
+        ok_rgb="11, 100, 63",
+        warn_rgb="138, 78, 0",
+        bad_rgb="172, 28, 28",
     ),
     fonts=ThemeFonts(ui=UI_FONTS, display=UI_FONTS, mono=MONO_FONTS),
     backdrop=BackdropSpec(

@@ -33,6 +33,7 @@ Item {
     // Поиск снаружи (недавний запрос на главной).
     function runQuery(text) {
         query.text = text
+        typing.stop()
         app.search(text)
     }
 
@@ -59,8 +60,22 @@ Item {
             iconName: "search"
             placeholderText: "Трек, артист или альбом"
             inputMethodHints: Qt.ImhNoPredictiveText
-            onAccepted: app.search(text)
+            EnterKey.type: Qt.EnterKeySearch
+            // Enter с русской клавиатуры на Android доходил не всегда, и поиск
+            // молчал: ищем и по мере ввода, через 0,7 с после последней буквы.
+            // displayText — с текстом, который клавиатура ещё не зафиксировала.
+            onDisplayTextChanged: typing.restart()
+            onAccepted: {
+                typing.stop()
+                Qt.inputMethod.commit()
+                app.search(text)
+            }
             Accessible.name: "Поиск музыки"
+            Timer {
+                id: typing
+                interval: 700
+                onTriggered: if (query.displayText.trim().length >= 2) app.searchAsYouType(query.displayText)
+            }
         }
 
         Flow { // на узком экране чипы переносятся
@@ -112,6 +127,10 @@ Item {
                 visible: page.rich && !app.searching
                 clip: true
                 contentHeight: richColumn.implicitHeight + 24
+                // Только вертикаль: без contentWidth ширину считали по детям, и шире
+                // экрана (аврора, тени) страница ловила горизонтальный жест вместо прокрутки.
+                contentWidth: width
+                flickableDirection: Flickable.VerticalFlick
                 boundsBehavior: Flickable.DragOverBounds
                 ScrollIndicator.vertical: ScrollIndicator {}
                 Connections { target: app; function onSearchExtrasChanged() { richView.contentY = 0 } }

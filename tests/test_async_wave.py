@@ -277,3 +277,24 @@ async def test_no_token_means_no_wave(monkeypatch) -> None:
     service = AsyncWaveService()
     assert await service.start_yandex_wave(["mood:calm"]) is None
     assert await service.fetch_wheel() == []
+
+
+def test_yandex_wave_name_typo_is_fixed() -> None:
+    from quantis.services.async_wave import WaveMood, fix_wave_text
+
+    assert fix_wave_text("Работаю по-красоте") == "Работаю по красоте"
+    assert fix_wave_text("По-красоте") == "По красоте"
+    assert fix_wave_text("Слушать по-новому") == "Слушать по-новому"
+    mood = WaveMood.from_wheel_item(
+        {
+            "type": "WAVE",
+            "id": "x",
+            "data": {
+                "wave": {
+                    "name": "Работаю по-красоте",
+                    "seeds": ["activity:work-background", "mood:beautiful"],
+                }
+            },
+        }
+    )
+    assert mood is not None and mood.name == "Работаю по красоте"

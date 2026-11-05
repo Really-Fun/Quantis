@@ -26,7 +26,5 @@ QPushButton#searchButton:hover {
     font-family: ${font_label};
 }
 
-#sideNavRail {
-    border-color: rgba(${accent_fallback_rgb}, 36);
-}
+
 

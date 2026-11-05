@@ -55,20 +55,6 @@ QFrame#PlayMenu {
     border: none;
 }
 
-QFrame#sideNavRail {
-    border: 1px solid rgba(46, 230, 255, 0.12);
-    border-radius: 22px;
-    border-top: 2px solid rgba(58, 168, 216, 0.35);
-}
-
-QLabel#navBrandLabel {
-    color: #E8EEF5;
-}
-
-QToolButton#navPinButton {
-    color: rgba(232, 238, 245, 0.7);
-}
-
 QWidget {
     color: #dde2e8;
 }

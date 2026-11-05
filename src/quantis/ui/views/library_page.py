@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QAction, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QAbstractItemView,
     QHeaderView,
-    QLabel,
     QMenu,
     QMessageBox,
     QTableView,
@@ -17,11 +16,17 @@ from quantis.core.async_bridge import AsyncBridge
 from quantis.ui.async_ui import schedule
 from quantis.ui.playlist_actions import add_track_actions, show_add_to_playlist_menu
 from quantis.ui.viewmodels.home_vm import HomeViewModel
-from quantis.ui.views.widgets.home_section import HomeSection
+from quantis.ui.views.widgets.page_layout import (
+    EmptyState,
+    PageTitle,
+    apply_page_margins,
+)
 from quantis.ui.views.widgets.track_card import TrackCardDelegate
 
 
 class LibraryPage(QWidget):
+    search_requested = Signal()
+
     def __init__(
         self,
         view_model: HomeViewModel,
@@ -34,10 +39,11 @@ class LibraryPage(QWidget):
         self.setObjectName("libraryPage")
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(28, 20, 28, 24)
-        layout.setSpacing(8)
+        apply_page_margins(layout, spacing=18)
+        layout.addWidget(
+            PageTitle("Библиотека", "Скачанные треки — играют и без интернета")
+        )
 
-        section = HomeSection("Скачанные", "Треки, которые можно слушать офлайн")
         host = QWidget()
         host_layout = QVBoxLayout(host)
         host_layout.setContentsMargins(0, 0, 0, 0)
@@ -67,15 +73,19 @@ class LibraryPage(QWidget):
         delete.setContext(Qt.ShortcutContext.WidgetWithChildrenShortcut)
         delete.activated.connect(self._on_delete_selected)
 
-        self._empty = QLabel("Скачай трек из плеера — он появится здесь")
-        self._empty.setObjectName("homeEmptyHint")
-        self._empty.setWordWrap(True)
-        self._empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._empty = EmptyState(
+            "download.svg",
+            "Здесь будут скачанные треки",
+            "Нажми ↓ в плеере, и трек сохранится на компьютер: его можно "
+            "слушать без интернета и найти здесь.",
+            "Найти музыку",
+        )
+        assert self._empty.button is not None
+        self._empty.button.clicked.connect(self.search_requested.emit)
 
         host_layout.addWidget(self._list, stretch=1)
         host_layout.addWidget(self._empty, stretch=1)
-        section.add_widget_block(host, expand=True)
-        layout.addWidget(section, stretch=1)
+        layout.addWidget(host, stretch=1)
 
         self._vm.downloaded_changed.connect(self._sync_empty)
         self._sync_empty()

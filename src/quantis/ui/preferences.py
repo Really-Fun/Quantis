@@ -47,7 +47,8 @@ class UiPreferences(QObject):
     _KEY_BACKDROP_VIDEO_FILE = "ui/backdrop_video_file"
     _KEY_BACKDROP_DIM = "ui/backdrop_dim"
     _KEY_BACKDROP_BLUR = "ui/backdrop_blur"
-    _KEY_NOW_PLAYING = "ui/show_now_playing_panel"
+    _KEY_SIDE_PANEL = "ui/side_panel"
+    _KEY_NAV_EXPANDED = "ui/nav_expanded"
     _KEY_BACKGROUND_ECO = "ui/background_eco"
     _KEY_VOLUME = "playback/volume"
     _KEY_REPEAT_MODE = "playback/repeat_mode"
@@ -101,17 +102,30 @@ class UiPreferences(QObject):
         except (TypeError, ValueError):
             return default
 
-    @property
-    def show_now_playing_panel(self) -> bool:
-        return self._read_bool(
-            self._settings.value(self._KEY_NOW_PLAYING, True),
-            True,
-        )
+    SIDE_PANELS = ("", "queue", "lyrics")
+    """Правая выдвижная панель: закрыта, «Очередь» или «Текст»."""
 
-    def set_show_now_playing_panel(self, value: bool) -> None:
-        if self.show_now_playing_panel == value:
+    @property
+    def side_panel(self) -> str:
+        raw = str(self._settings.value(self._KEY_SIDE_PANEL, "") or "")
+        return raw if raw in self.SIDE_PANELS else ""
+
+    def set_side_panel(self, value: str) -> None:
+        value = value if value in self.SIDE_PANELS else ""
+        if self.side_panel == value:
             return
-        self._settings.setValue(self._KEY_NOW_PLAYING, value)
+        self._settings.setValue(self._KEY_SIDE_PANEL, value)
+        self._emit(self.layout_changed)
+
+    @property
+    def nav_expanded(self) -> bool:
+        """Меню слева с подписями (иначе — только значки)."""
+        return self._read_bool(self._settings.value(self._KEY_NAV_EXPANDED, True), True)
+
+    def set_nav_expanded(self, value: bool) -> None:
+        if self.nav_expanded == value:
+            return
+        self._settings.setValue(self._KEY_NAV_EXPANDED, value)
         self._emit(self.layout_changed)
 
     @property

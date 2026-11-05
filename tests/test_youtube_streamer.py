@@ -127,29 +127,29 @@ def test_audio_attempts_use_socket_timeout() -> None:
     attempts = streamer._attempt_opts(video=False)
     assert attempts
     assert all(opts.get("socket_timeout") == 8 for opts in attempts)
-    first_youtube = (attempts[0].get("extractor_args") or {}).get("youtube", {})
-    assert first_youtube.get("player_client") == ["android"]
-    assert "webpage" in (first_youtube.get("player_skip") or [])
-    assert "dash" in (first_youtube.get("skip") or [])
-    assert "web" not in first_youtube.get("player_client", [])
-    second_clients = (
-        (attempts[1].get("extractor_args") or {})
-        .get("youtube", {})
-        .get("player_client")
-    )
-    assert "web" in second_clients
 
 
-def test_wallpaper_video_uses_tv_embedded_first() -> None:
+def _clients(opts: dict) -> list[str] | None:
+    return ((opts.get("extractor_args") or {}).get("youtube", {})).get("player_client")
+
+
+def test_first_attempt_uses_default_clients_with_adaptive_formats() -> None:
+    """Умолчания yt-dlp отдают и звук 140, и video-only для фона одним ответом."""
     streamer = AsyncYoutubeStreamer(None)  # type: ignore[arg-type]
-    video_opts = streamer._attempt_opts(video=True, height=1080)
-    first = (video_opts[0].get("extractor_args") or {}).get("youtube", {})
-    assert first.get("player_client") == ["tv_embedded"]
-    clients = [
-        ((opts.get("extractor_args") or {}).get("youtube", {})).get("player_client")
-        for opts in video_opts
-    ]
-    assert ["android"] in clients
+    for video in (False, True):
+        first = streamer._attempt_opts(video=video)[0]
+        youtube = (first.get("extractor_args") or {}).get("youtube", {})
+        assert _clients(first) is None
+        assert "dash" not in (youtube.get("skip") or [])
+        assert "webpage" not in (youtube.get("player_skip") or [])
+
+
+def test_android_is_the_fallback_and_tv_embedded_is_gone() -> None:
+    streamer = AsyncYoutubeStreamer(None)  # type: ignore[arg-type]
+    for video in (False, True):
+        clients = [_clients(o) for o in streamer._attempt_opts(video=video)]
+        assert clients[1] == ["android"]
+        assert all("tv_embedded" not in (c or []) for c in clients)
 
 
 def test_wallpaper_video_format_is_360p() -> None:
