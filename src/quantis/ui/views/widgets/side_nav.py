@@ -482,13 +482,17 @@ class SideNavRail(QFrame):
         items = self._playlist_items()
         if not items:
             return
+        def tall(button: QWidget) -> int:
+            # у свёрнутых кнопок высота задана жёстко, sizeHint её не знает
+            return max(button.sizeHint().height(), button.minimumHeight())
+
         fixed = sum(
-            button.sizeHint().height() + self._items_layout.spacing()
+            tall(button) + self._items_layout.spacing()
             for button in self._buttons.values()
         )
         margins = self._root.contentsMargins()
         fixed += margins.top() + margins.bottom() + 40  # подпись/линия раздела
-        row = items[0].sizeHint().height() + self._items_layout.spacing()
+        row = tall(items[0]) + self._items_layout.spacing()
         room = max(0, (self.height() - fixed) // max(1, row))
         for index, item in enumerate(items):
             item.setVisible(index < room)
