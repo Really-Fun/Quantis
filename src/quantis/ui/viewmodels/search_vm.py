@@ -231,9 +231,7 @@ class SearchViewModel(BaseViewModel):
                 def show_empty() -> None:
                     hint = "Ничего не найдено. Попробуйте другой запрос."
                     if not _has_yandex_token():
-                        hint += (
-                            " Токен Yandex в Настройках добавит выдачу Яндекс.Музыки."
-                        )
+                        hint += " Токен Яндекса в разделе «Аккаунты» добавит выдачу Яндекс Музыки."
                     self.status_message.emit(hint)
 
                 bridge.invoke_main(show_empty)

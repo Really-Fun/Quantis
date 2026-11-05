@@ -302,10 +302,11 @@ def _normalize_youtube_auth(value: str) -> str:
 
             return setup(headers_raw=text)
         except Exception as exc:
+            logger.warning("ytmusicapi не разобрал заголовки", exc_info=True)
             raise ValueError(
-                "Не удалось разобрать Request Headers. "
-                "Скопируйте headers целиком с POST browse на music.youtube.com "
-                f"(нужны cookie и x-goog-authuser). Детали: {exc}"
+                "Не удалось разобрать заголовки. Скопируй их целиком из любого "
+                "запроса youtubei на music.youtube.com (Copy → Copy request "
+                "headers): нужны cookie и x-goog-authuser."
             ) from exc
 
     # 2) JSON
@@ -360,7 +361,8 @@ def _normalize_youtube_auth(value: str) -> str:
 
     raise ValueError(
         "Непонятный формат. Нужно одно из:\n"
-        "• Request Headers с music.youtube.com (DevTools → Network → browse → Headers)\n"
+        "• заголовки любого запроса youtubei с music.youtube.com "
+        "(DevTools → Network → Copy request headers)\n"
         "• JSON Cookie-Editor / EditThisCookie с youtube.com\n"
         "• Готовый browser.json от ytmusicapi browser"
     )
@@ -485,6 +487,20 @@ def save_youtube_cookie(cookie: str) -> None:
         except OSError:
             logger.exception("Не удалось экспортировать Netscape cookies для yt-dlp")
 
+    try:
+        delete_password(SERVICE_NAME_YOUTUBE_COOKIE, USER)
+    except (KeyringError, PasswordDeleteError):
+        pass
+    Clients().reload_youtube_client()
+
+
+def delete_youtube_cookie() -> None:
+    """Забывает куки YouTube Music: файл для ytmusicapi и копию для yt-dlp."""
+    for path in (_youtube_cookie_path(), youtube_netscape_cookies_path()):
+        try:
+            path.unlink(missing_ok=True)
+        except OSError as exc:
+            raise RuntimeError(f"Не удалось удалить куки: {exc}") from exc
     try:
         delete_password(SERVICE_NAME_YOUTUBE_COOKIE, USER)
     except (KeyringError, PasswordDeleteError):

@@ -114,7 +114,7 @@ class QuantisMainWindow(QMainWindow):
         PAGE_LIBRARY: ("Библиотека", ""),
         PAGE_STATS: ("Статистика", ""),
         PAGE_PLUGINS: ("Плагины", ""),
-        PAGE_MEMBER: ("Member", ""),
+        PAGE_MEMBER: ("Аккаунты", ""),
         PAGE_SETTINGS: ("Настройки", ""),
         PAGE_WAVE: ("Моя волна", ""),
     }

@@ -392,7 +392,7 @@ class WaveQuickTile(QuickPickTile):
         elif available:
             text = "Пока пусто"
         else:
-            text = "Нужен токен Yandex (Member)"
+            text = "Нужен токен Яндекса — раздел «Аккаунты»"
         self._subtitle.setText(text)
         self._subtitle.setToolTip(text)
 

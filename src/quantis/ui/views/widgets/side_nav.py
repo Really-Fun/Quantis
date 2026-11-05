@@ -99,7 +99,7 @@ class SideNavRail(QFrame):
         ("puzzle.svg", "Плагины", 4),
     )
     CORE_BOTTOM = (
-        ("member.svg", "Member", 5),
+        ("member.svg", "Аккаунты", 5),
         ("settings.svg", "Настройки", 6),
     )
 
