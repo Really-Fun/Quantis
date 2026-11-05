@@ -32,6 +32,18 @@ _TITLE_NOISE = re.compile(
     r"[^)\]]*[\)\]]",
     re.I,
 )
+# Версии и соавторы: у ремикса тот же текст, что у оригинала, но своей записи
+# в LRCLIB обычно нет.
+_VERSION_WORDS = (
+    r"remix|mix|edit|version|ver\.|cover|live|remaster(?:ed)?|sped[\s-]*up|"
+    r"slowed|reverb|nightcore|acoustic|bootleg|rework|flip|vip|extended|"
+    r"ремикс|версия|кавер|feat\.?|ft\.?|prod\.?"
+)
+_BRACKETS = re.compile(r"\s*[\(\[][^)\]]*[\)\]]")
+_DASH_VERSION = re.compile(rf"\s+[-–—]\s+[^-–—]*\b(?:{_VERSION_WORDS})[^-–—]*$", re.I)
+_FEAT = re.compile(r"\s+(?:feat\.?|ft\.?|featuring)\s.*$", re.I)
+_CACHE_VERSION = 2
+"""Записи «не нашлось» старее этой версии поиска спрашиваем заново."""
 
 
 @dataclass
@@ -88,6 +100,21 @@ def artist_title(track: Track) -> tuple[str, str]:
     return artist, title
 
 
+def base_title(title: str) -> str:
+    """Название без версии и соавторов: «X (remix)», «X - Extended Mix»,
+    «X feat. Y» → «X». Скобки срезаются все — после _TITLE_NOISE в них
+    остаются только версии и «feat.»."""
+    base = _BRACKETS.sub("", title)
+    base = _DASH_VERSION.sub("", base)
+    return _FEAT.sub("", base).strip() or title.strip()
+
+
+def _main_artist(artist: str) -> str:
+    """Первый исполнитель: «A feat. B», «A, B», «A & B» → «A»."""
+    first = re.split(r",|&|\s+(?:feat\.?|ft\.?|x)\s", artist, maxsplit=1, flags=re.I)
+    return first[0].strip() or artist
+
+
 # ------------------------------------------------------------------ cache
 
 
@@ -102,6 +129,8 @@ def cached(track: Track) -> Lyrics | None:
     try:
         raw = json.loads(_cache_path(track).read_text(encoding="utf-8"))
         lines = [LyricLine(int(line["t"]), str(line["text"])) for line in raw["lines"]]
+        if not lines and raw.get("v", 1) < _CACHE_VERSION:
+            return None  # промах старого поиска — новый может найти
         return Lyrics(lines, bool(raw.get("synced")), str(raw.get("source", "")))
     except (OSError, ValueError, TypeError, KeyError):
         return None
@@ -110,7 +139,8 @@ def cached(track: Track) -> Lyrics | None:
 def _store(track: Track, lyrics: Lyrics) -> None:
     try:
         _cache_path(track).write_text(
-            json.dumps(asdict(lyrics), ensure_ascii=False), encoding="utf-8"
+            json.dumps({**asdict(lyrics), "v": _CACHE_VERSION}, ensure_ascii=False),
+            encoding="utf-8",
         )
     except OSError:
         logger.warning("Не удалось сохранить текст в кэш", exc_info=True)
@@ -168,23 +198,41 @@ class LyricsService:
         return None
 
     async def _from_lrclib(self, track: Track) -> Lyrics | None:
+        """Сначала точное название, потом — без версии («(remix)», «feat.»):
+        у ремикса тот же текст, но длина другая, поэтому без синхронизации."""
         artist, title = artist_title(track)
         duration = (track.duration_ms or 0) / 1000
+        async with aiohttp.ClientSession(timeout=_TIMEOUT, headers=_HEADERS) as http:
+            found = await self._lrclib_get(http, artist, title, duration)
+            if found:
+                return found
+            items = await self._lrclib_search(http, artist, title)
+            found = pick_search_result(items, duration)
+            if found:
+                return found
+            base_artist, base = _main_artist(artist), base_title(title)
+            if (base_artist, base) != (artist, title):
+                items = await self._lrclib_search(http, base_artist, base)
+            return pick_search_result(items, duration, loose=True)
+
+    async def _lrclib_get(
+        self, http: aiohttp.ClientSession, artist: str, title: str, duration: float
+    ) -> Lyrics | None:
         query = {"artist_name": artist, "track_name": title}
         if duration:
             query["duration"] = str(round(duration))
-        async with aiohttp.ClientSession(timeout=_TIMEOUT, headers=_HEADERS) as http:
-            async with http.get(f"{_LRCLIB}/get", params=query) as response:
-                if response.status == 200:
-                    found = _lyrics_from_item(await response.json())
-                    if found:
-                        return found
-            # точного совпадения нет — ищем шире
-            params = {"q": f"{artist} {title}".strip()}
-            async with http.get(f"{_LRCLIB}/search", params=params) as response:
-                response.raise_for_status()
-                items = await response.json()
-        return pick_search_result(items or [], duration)
+        async with http.get(f"{_LRCLIB}/get", params=query) as response:
+            if response.status != 200:
+                return None
+            return _lyrics_from_item(await response.json())
+
+    async def _lrclib_search(
+        self, http: aiohttp.ClientSession, artist: str, title: str
+    ) -> list[dict]:
+        params = {"q": f"{artist} {title}".strip()}
+        async with http.get(f"{_LRCLIB}/search", params=params) as response:
+            response.raise_for_status()
+            return list(await response.json() or [])
 
 
 def _lyrics_from_item(item: dict) -> Lyrics | None:
@@ -197,8 +245,14 @@ def _lyrics_from_item(item: dict) -> Lyrics | None:
     return None
 
 
-def pick_search_result(items: list[dict], duration: float) -> Lyrics | None:
-    """Ближайший по длине (если она известна); синхронный текст — лучше."""
+def pick_search_result(
+    items: list[dict], duration: float, *, loose: bool = False
+) -> Lyrics | None:
+    """Ближайший по длине (если она известна); синхронный текст — лучше.
+
+    ``loose`` — длина может не совпасть (ремикс, sped up): такой текст
+    отдаём без времени строк, иначе подсветка шла бы мимо.
+    """
 
     def gap(item: dict) -> float:
         return abs(float(item.get("duration") or 0) - duration) if duration else 0.0
@@ -207,9 +261,16 @@ def pick_search_result(items: list[dict], duration: float) -> Lyrics | None:
         return (gap(item) > 5, not item.get("syncedLyrics"), gap(item))
 
     for item in sorted(items, key=rank)[:3]:
-        if duration and gap(item) > 10:
+        far = bool(duration) and gap(item) > 10
+        if far and not loose:
             continue
         found = _lyrics_from_item(item)
+        if found and far and found.synced:
+            found = Lyrics(
+                [LyricLine(-1, line.text) for line in found.lines if line.text],
+                False,
+                found.source,
+            )
         if found:
             return found
     return None
