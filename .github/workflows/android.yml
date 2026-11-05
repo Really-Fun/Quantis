@@ -32,6 +32,15 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # Что нужно python-for-android для рецептов из исходников (libffi —
+      # autoreconf с макросами libtool и т. д.), список из документации buildozer.
+      - name: System packages for python-for-android
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            autoconf automake libtool libltdl-dev pkg-config m4 \
+            zip unzip cmake zlib1g-dev libncurses-dev libffi-dev libssl-dev
+
       - uses: actions/setup-python@v6
         with:
           python-version: "3.14"
