@@ -68,6 +68,32 @@ def invalidate_cover_path(path: str | Path | None) -> None:
         _cover_lru.pop(key, None)
 
 
+class CoverEvents(QObject):
+    """Обложка легла на диск. Виджеты, читающие её один раз при смене трека
+    (сцена, «Дальше», фон), иначе так и остались бы с заглушкой."""
+
+    cover_ready = Signal(str)
+    """Путь файла, как его отдаёт ``track_cover_file``."""
+    _instance: CoverEvents | None = None
+
+    @classmethod
+    def instance(cls) -> CoverEvents:
+        if cls._instance is None:
+            cls._instance = CoverEvents()
+        return cls._instance
+
+
+def notify_cover_ready(path: str | Path) -> None:
+    """Обложка скачалась: забыть промах в кэше и сообщить подписчикам.
+    Звать из главного потока."""
+    invalidate_cover_path(path)
+    CoverEvents.instance().cover_ready.emit(str(path))
+
+
+def is_track_cover(track: Track, path: str) -> bool:
+    return str(track_cover_file(track)) == path
+
+
 def playlist_cover_path(playlist) -> str | None:
     """Обложка плейлиста: своя → иначе обложка первого трека."""
     cover = getattr(playlist, "cover_path", None)

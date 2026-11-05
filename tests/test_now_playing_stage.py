@@ -108,3 +108,48 @@ def test_wave_is_first_quick_tile_with_play_and_count(qapp) -> None:
     shelf.wave_play_requested.connect(lambda: played.append(True))
     tile._play_btn.click()
     assert played == [True]
+
+
+def _covers_in(monkeypatch, tmp_path):  # type: ignore[no-untyped-def]
+    from quantis.ui.views.widgets import cover_art
+
+    monkeypatch.setattr(
+        cover_art, "track_cover_file", lambda t: tmp_path / f"{t.track_id}.jpg"
+    )
+    cover_art.clear_cover_cache()
+    return cover_art
+
+
+def _save_cover(path) -> None:  # type: ignore[no-untyped-def]
+    from test_cover_art import _write_banded_jpeg  # мелкий файл — «заглушка»
+
+    _write_banded_jpeg(path)
+
+
+def test_stage_picks_up_cover_downloaded_after_track_change(
+    qapp, monkeypatch, tmp_path
+) -> None:  # type: ignore[no-untyped-def]
+    cover_art = _covers_in(monkeypatch, tmp_path)
+    track = _tracks(1)[0]
+    stage = NowPlayingStage()
+    stage.set_track(track, mode="playing")
+    assert stage._cover is None  # обложка ещё качается
+
+    _save_cover(tmp_path / "t0.jpg")
+    cover_art.notify_cover_ready(tmp_path / "t0.jpg")
+
+    assert stage._cover is not None and not stage._cover.isNull()
+
+
+def test_up_next_picks_up_covers_downloaded_later(qapp, monkeypatch, tmp_path) -> None:  # type: ignore[no-untyped-def]
+    cover_art = _covers_in(monkeypatch, tmp_path)
+    tracks = _tracks(4)
+    panel = UpNextPanel()
+    panel.set_items(upcoming(tracks, tracks[0], 0))
+    assert panel._covers == [None, None, None]
+
+    _save_cover(tmp_path / "t2.jpg")
+    cover_art.notify_cover_ready(tmp_path / "t2.jpg")
+
+    assert panel._covers[0] is None and panel._covers[2] is None
+    assert panel._covers[1] is not None and not panel._covers[1].isNull()

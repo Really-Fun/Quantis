@@ -54,7 +54,12 @@ from quantis.ui.image_fx import blur_image
 from quantis.ui.live_palette import LivePalette
 from quantis.ui.preferences import UiPreferences
 from quantis.ui.themes.spec import ThemeSpec, qcolor
-from quantis.ui.views.widgets.cover_art import load_track_cover, screen_dpr
+from quantis.ui.views.widgets.cover_art import (
+    CoverEvents,
+    is_track_cover,
+    load_track_cover,
+    screen_dpr,
+)
 from quantis.ui.views.widgets.elided_label import ElidedLabel
 from quantis.ui.views.widgets.glass import paint_glass
 from quantis.ui.views.widgets.source_badge import source_badge_color
@@ -206,6 +211,7 @@ class NowPlayingStage(QWidget):
         self._timer = QTimer(self)
         self._timer.setInterval(FRAME_MS)
         self._timer.timeout.connect(self._tick)
+        CoverEvents.instance().cover_ready.connect(self._on_cover_ready)
 
         row = QHBoxLayout(self)
         self._row = row
@@ -327,6 +333,12 @@ class NowPlayingStage(QWidget):
         self._cover = load_track_cover(track, self.COVER) if track is not None else None
         self._apply_mode()
         self.update()
+
+    def _on_cover_ready(self, path: str) -> None:
+        """Обложка докачалась уже после смены трека."""
+        if self._track is not None and is_track_cover(self._track, path):
+            self._cover = load_track_cover(self._track, self.COVER)
+            self.update()
 
     def set_greeting(self, greeting: str) -> None:
         self._greeting = greeting
@@ -634,6 +646,7 @@ class UpNextPanel(QWidget):
         self._palette = LivePalette.instance().current
         self._hover = -1
         LivePalette.instance().palette_changed.connect(self._on_palette)
+        CoverEvents.instance().cover_ready.connect(self._on_cover_ready)
 
     @classmethod
     def height_for(cls, rows: int) -> int:
@@ -665,6 +678,15 @@ class UpNextPanel(QWidget):
 
     def items(self) -> list[UpNextItem]:
         return list(self._items)
+
+    def _on_cover_ready(self, path: str) -> None:
+        hit = False
+        for row, item in enumerate(self._items):
+            if is_track_cover(item.track, path):
+                self._covers[row] = load_track_cover(item.track, 44)
+                hit = True
+        if hit:
+            self.update()
 
     def _on_palette(self, palette: CoverPalette) -> None:
         self._palette = palette

@@ -44,6 +44,7 @@ from quantis.ui.cover_accent import (
     palette_from_accent,
     palette_from_image,
 )
+from quantis.ui.cover_prefetch import schedule_cover_prefetch
 from quantis.ui.fonts import register_bundled_fonts, theme_font
 from quantis.ui.live_palette import LivePalette
 from quantis.ui.playlist_actions import bind_event_bus as bind_playlist_event_bus
@@ -79,6 +80,7 @@ from quantis.ui.views.widgets.backdrop_panel import (
     backdrop_kind,
 )
 from quantis.ui.views.widgets.background_frame import BackgroundFrame
+from quantis.ui.views.widgets.cover_art import CoverEvents, is_track_cover
 from quantis.ui.views.widgets.now_playing_fullscreen import NowPlayingFullscreen
 from quantis.ui.views.widgets.now_playing_stage import upcoming
 from quantis.ui.views.widgets.resize_grips import WindowResizeGrips
@@ -172,6 +174,8 @@ class QuantisMainWindow(QMainWindow):
         self._plugin_page_ids: dict[str, int] = {}
         self._eco = EcoMode(self)
         self._eco.set_pref_enabled(self._ui_prefs.background_eco_enabled)
+        # Трек сменился в эко — фон и палитра догонят его при выходе из эко.
+        self._palette_stale = False
 
         shell = BackgroundFrame(
             resources.wallpaper_path(),
@@ -373,6 +377,7 @@ class QuantisMainWindow(QMainWindow):
             parent=self,
         )
         self._eco.subscribe(self._apply_eco)
+        CoverEvents.instance().cover_ready.connect(self._on_cover_ready)
         app = QApplication.instance()
         if app is not None:
             app.applicationStateChanged.connect(self._on_app_state_changed)
@@ -430,6 +435,8 @@ class QuantisMainWindow(QMainWindow):
         self._bundle.music.streamer.set_eco(active)
         self._dynamic_wallpaper.set_eco(active)
         self._body_shell.backdrop.set_file_loop_paused(active)
+        if not active and self._palette_stale:
+            self._update_palette_from_track(self._bundle.playback.current_track)
         for widget in getattr(self, "_mounted_layers", {}).values():
             setter = getattr(widget, "set_eco", None)
             if callable(setter):
@@ -894,9 +901,16 @@ class QuantisMainWindow(QMainWindow):
         cycle = playlist.tracks
         current = self._bundle.playback.current_track
         index = getattr(cycle, "_index", 0)
-        self._home_page.set_up_next(upcoming(cycle.values, current, index))
-        self._side_panel.set_queue(
-            upcoming(cycle.values, current, index, count=SidePanel.QUEUE_COUNT)
+        queue = upcoming(cycle.values, current, index, count=SidePanel.QUEUE_COUNT)
+        self._home_page.set_up_next(queue[:4])
+        self._side_panel.set_queue(queue)
+        # Обложки очереди (волна, только что открытый плейлист) ещё не скачаны:
+        # докачанные подхватят «Дальше» и очередь в панели.
+        schedule_cover_prefetch(
+            [item.track for item in queue],
+            self._bundle.music.downloader,
+            self._bridge,
+            limit=len(queue),
         )
 
     def _play_up_next(self, index: int) -> None:
@@ -921,8 +935,22 @@ class QuantisMainWindow(QMainWindow):
         self._np_fullscreen.update()
         self._np_fullscreen.setFocus(Qt.FocusReason.ActiveWindowFocusReason)
 
+    def _on_cover_ready(self, path: str) -> None:
+        """Обложка играющего трека докачалась: фон, палитра, панели."""
+        track = self._bundle.playback.current_track
+        if track is None or not is_track_cover(track, path):
+            return
+        self._side_panel.set_track(track)
+        if self._np_fullscreen.isVisible():
+            self._np_fullscreen.set_track(track)
+        self._update_palette_from_track(track)
+
     def _update_palette_from_track(self, track) -> None:
         if self._eco.active:
+            self._palette_stale = True
+            return
+        self._palette_stale = False
+        if track is None:
             return
         path = Path(self._bundle.music.provider.get_cover_path(track))
         cover = load_cover_image(path if path.is_file() else None)
