@@ -136,14 +136,6 @@ QToolButton#sourceFilterChip:checked {
     color: #667085;
 }
 
-QToolButton#navPinButton {
-    color: #667085;
-}
-
-QToolButton#navPinButton:checked {
-    border-color: rgba(${tint_rgb}, 0.40);
-}
-
 QToolButton#advancedToggle {
     color: #667085;
     border-color: rgba(27, 32, 48, 0.12);
@@ -201,10 +193,6 @@ QLineEdit#settingLineEdit:focus {
 QComboBox#themeCombo QAbstractItemView {
     background: #FFFFFF;
     selection-background-color: rgba(${tint_rgb}, 0.16);
-}
-
-QFrame#sideNavRail[expanded="true"] {
-    border: 1px solid rgba(${tint_rgb}, 0.22);
 }
 
 QToolButton#navIconButton[plugin="true"] {

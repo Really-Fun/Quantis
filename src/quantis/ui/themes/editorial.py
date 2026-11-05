@@ -73,12 +73,6 @@ QFrame#PlayMenu {
     border-top: 2px solid rgba(0, 229, 255, 0.45);
 }
 
-QFrame#sideNavRail {
-    border: 1px solid rgba(46, 230, 255, 0.12);
-    border-radius: 0;
-    border-top: 2px solid rgba(0, 229, 255, 0.4);
-}
-
 QLabel#homeSectionTitle {
     font-size: 24px;
     font-weight: 400;

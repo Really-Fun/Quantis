@@ -70,25 +70,12 @@ QToolButton#sourceFilterChip:checked {
     color: #8A92A6;
 }
 
-QToolButton#navPinButton {
-    color: #8A92A6;
-}
-
-QToolButton#navPinButton:checked {
-    border-color: rgba(${tint_rgb}, 0.45);
-    color: #F2F4F8;
-}
-
 QToolButton#advancedToggle:checked {
     border-color: rgba(255, 255, 255, 0.28);
 }
 
 #searchStatus {
     min-height: 16px;
-}
-
-QFrame#sideNavRail[expanded="true"] {
-    border: 1px solid rgba(${tint_rgb}, 0.22);
 }
 
 QToolButton#navIconButton:hover {

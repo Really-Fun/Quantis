@@ -18,10 +18,74 @@ QToolButton#sourceFilterChip:checked {
     color: rgb(${ink_rgb});
 }
 
-QFrame#nowPlayingPanel {
+/* Правая выдвижная панель «Очередь» */
+QFrame#sidePanel {
     background: ${panel_bg};
     border: 1px solid rgba(${ink_rgb}, 0.06);
-    border-radius: 16px;
+    border-radius: ${radius};
+}
+
+QLabel#sidePanelTitle {
+    color: ${title};
+    font-size: 16px;
+    font-weight: 700;
+    background: transparent;
+}
+
+QLabel#sidePanelEyebrow {
+    color: ${text_meta};
+    font-size: 12px;
+    font-weight: 700;
+    background: transparent;
+}
+
+QFrame#sidePanelNow {
+    background: rgba(${ink_rgb}, 0.06);
+    border: none;
+    border-radius: 12px;
+}
+
+QLabel#sidePanelNowTitle {
+    color: ${text};
+    font-size: 14px;
+    font-weight: 700;
+    background: transparent;
+}
+
+QLabel#sidePanelNowArtist {
+    color: ${text_dim};
+    font-size: 12px;
+    background: transparent;
+}
+
+QToolButton#sidePanelTool,
+QToolButton#headerNavToggle {
+    background: transparent;
+    border: none;
+    border-radius: 10px;
+}
+
+QToolButton#sidePanelTool:hover,
+QToolButton#headerNavToggle:hover {
+    background: rgba(${ink_rgb}, 0.08);
+}
+
+QLineEdit#headerSearch {
+    background: ${field_bg};
+    border: 1px solid transparent;
+    border-radius: 17px;
+    color: ${text};
+    padding: 0 12px 0 4px;
+    font-size: 13px;
+    selection-background-color: rgba(${tint_rgb}, 0.4);
+}
+
+QLineEdit#headerSearch:focus {
+    border-color: rgba(${tint_rgb}, 0.55);
+}
+
+#controlButton:checked {
+    background: rgba(${tint_rgb}, 0.2);
 }
 
 #nowPlayingTitle {
@@ -72,33 +136,6 @@ QFrame#pluginCard {
 #pluginCardDesc {
     color: rgba(${ink_rgb}, 0.55);
     font-size: 12px;
-}
-
-QLabel#navBrandLabel {
-    color: ${text};
-    font-size: 14px;
-    font-weight: 700;
-    letter-spacing: 0.2px;
-}
-
-QToolButton#navPinButton {
-    background: ${chip_bg};
-    border: 1px solid rgba(${ink_rgb}, 0.06);
-    border-radius: 10px;
-    padding: 6px 10px;
-    font-size: 12px;
-    font-weight: 600;
-}
-
-QToolButton#navPinButton:hover {
-    background: rgba(${tint_rgb}, 0.18);
-    color: ${text};
-}
-
-QToolButton#navPinButton:checked {
-    background: rgba(${tint_rgb}, 0.26);
-    border-color: rgba(${tint_rgb}, 0.55);
-    color: rgb(${ink_rgb});
 }
 
 QToolButton#advancedToggle {

@@ -59,6 +59,8 @@ class SearchPage(QWidget):
         self._query.textChanged.connect(self._vm.search)
         self._query.returnPressed.connect(self._trigger_search)
         search_row.addWidget(self._query, stretch=1)
+        # Запрос вводят в шапке окна (set_query); своё поле — только хранилище.
+        self._query.hide()
 
         self._advanced_toggle = QToolButton()
         self._advanced_toggle.setObjectName("advancedToggle")
@@ -69,9 +71,7 @@ class SearchPage(QWidget):
             Qt.ToolButtonStyle.ToolButtonTextBesideIcon
         )
         self._advanced_toggle.toggled.connect(self._on_advanced_toggled)
-        search_row.addWidget(self._advanced_toggle)
 
-        panel_layout.addLayout(search_row)
 
         # ── Фильтры-источники ─────────────────────────────────────────────
         filters = QHBoxLayout()
@@ -98,6 +98,8 @@ class SearchPage(QWidget):
                 lambda checked=False, k=key: self._vm.set_source_filter(k)
             )
         filters.addStretch()
+        filters.addLayout(search_row)  # скрытое поле запроса
+        filters.addWidget(self._advanced_toggle)
         panel_layout.addLayout(filters)
 
         # ── Панель расширенного поиска (скрыта по умолчанию) ───────────────
@@ -261,11 +263,17 @@ class SearchPage(QWidget):
     # ──────────────────────────────────────────────────────────────────────
     # События окна / модели
     # ──────────────────────────────────────────────────────────────────────
+    def set_query(self, text: str, *, submit: bool = False) -> None:
+        """Запрос из поля в шапке окна."""
+        if self._query.text() != text:
+            self._query.setText(text)  # textChanged → поиск с задержкой
+        if submit and text.strip():
+            self._trigger_search()
+
     def showEvent(self, event) -> None:
         super().showEvent(event)
-        self._query.setFocus(Qt.FocusReason.OtherFocusReason)
-        if self._query.text().strip():
-            self._trigger_search()
+        if self._query.isVisible():
+            self._query.setFocus(Qt.FocusReason.OtherFocusReason)
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)

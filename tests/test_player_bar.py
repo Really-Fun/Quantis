@@ -384,11 +384,15 @@ def test_player_bar_failed_download_reenables_button(qapp, storage) -> None:
 def test_chrome_signals(qapp, storage) -> None:
     bar = PlayerBar(_FakeVM(), storage)
     fired: list[str] = []
-    bar.now_playing_toggle_requested.connect(lambda: fired.append("now"))
+    bar.queue_toggle_requested.connect(lambda: fired.append("queue"))
     bar.hide_ui_requested.connect(lambda: fired.append("hide"))
-    _button(bar, "Панель «Сейчас»").click()
+    _button(bar, "Очередь").click()
     _button(bar, "Скрыть интерфейс (S)").click()
-    assert fired == ["now", "hide"]
+    assert fired == ["queue", "hide"]
+    # кнопка не переключается сама — состояние задаёт окно
+    assert not _button(bar, "Очередь").isChecked()
+    bar.set_queue_open(True)
+    assert _button(bar, "Очередь").isChecked()
 
 
 def test_plugin_buttons_follow_extensions(qapp, storage) -> None:
@@ -415,8 +419,9 @@ def test_side_columns_shrink_on_narrow_window(qapp, storage, width, side) -> Non
     left = bar.findChild(QLabel, "trackTitle").parentWidget()
     assert left.objectName() == "playerLeft"
     assert left.maximumWidth() == side
-    assert _label(bar, "trackTitle").maximumWidth() == side - 56 - 12
-    right = _button(bar, "Панель «Сейчас»").parentWidget()
+    # обложка, отступы и сердечко рядом с названием
+    assert _label(bar, "trackTitle").maximumWidth() == side - 56 - 2 * 12 - 32
+    right = _button(bar, "Очередь").parentWidget()
     assert right.objectName() == "playerRight"
     assert right.maximumWidth() >= side
     bar.close()
@@ -454,14 +459,17 @@ def test_disabled_icons_keep_hue_but_fade(qapp, storage) -> None:
     normal = _alpha_peak(icon, QIcon.Mode.Normal)
     disabled = _alpha_peak(icon, QIcon.Mode.Disabled)
     assert disabled < normal * 0.5
-    image = icon.pixmap(32, 32, QIcon.Mode.Disabled).toImage()
-    colors = [
-        image.pixelColor(x, y)
-        for x in range(image.width())
-        for y in range(image.height())
-    ]
-    # Градиент значка сохранился: не серый.
-    assert any(abs(c.red() - c.blue()) > 40 for c in colors if c.alpha() > 20)
+    # Тот же цвет, что у активного, только прозрачнее — не серый значок Qt.
+    def tone(mode):
+        image = icon.pixmap(32, 32, mode).toImage()
+        best = max(
+            (image.pixelColor(x, y) for x in range(32) for y in range(32)),
+            key=lambda c: c.alpha(),
+        )
+        return best.red(), best.green(), best.blue()
+
+    faded, normal_tone = tone(QIcon.Mode.Disabled), tone(QIcon.Mode.Normal)
+    assert all(abs(a - b) <= 3 for a, b in zip(faded, normal_tone, strict=True))
 
 
 def test_seek_bar_is_flat_until_a_track_plays(qapp) -> None:

@@ -107,7 +107,6 @@ def dynamic_accent_qss(accent: QColor | None = None) -> str:
     if accent is None or not accent.isValid():
         accent = QColor(ACCENT_FALLBACK)
     rgb = f"rgb({accent.red()}, {accent.green()}, {accent.blue()})"
-    rgba14 = f"rgba({accent.red()}, {accent.green()}, {accent.blue()}, 36)"
     rgba40 = f"rgba({accent.red()}, {accent.green()}, {accent.blue()}, 102)"
     return f"""
 #controlButton[accent=true] {{
@@ -119,7 +118,6 @@ def dynamic_accent_qss(accent: QColor | None = None) -> str:
 }}
 #trackTitle[playing="true"] {{ color: {rgb}; }}
 #nowPlayingAccent {{ color: {rgb}; }}
-#sideNavRail {{ border-color: {rgba14}; }}
 #seekSlider::sub-page:horizontal {{
     background: {rgb};
     border-radius: 2px;

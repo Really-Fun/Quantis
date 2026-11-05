@@ -161,7 +161,7 @@ QInputDialog QComboBox QAbstractItemView {
 }
 
 #repeatButton[state="active"] {
-    background: rgba(${ink_rgb}, 0.08);
+    background: transparent;
 }
 
 #repeatButton[state="active"]:hover {

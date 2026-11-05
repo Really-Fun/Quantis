@@ -102,17 +102,6 @@ class SettingsPage(QWidget):
         theme_body.addWidget(self._theme_combo)
         panel_layout.addWidget(theme_row)
 
-        now_row, now_body = self._row(
-            "Панель «Сейчас»",
-            "Правая колонка с обложкой и метаданными (на широком окне)",
-        )
-        self._now_playing_cb = QCheckBox("Показывать панель «Сейчас»")
-        self._now_playing_cb.setObjectName("settingsCheck")
-        self._now_playing_cb.setCursor(Qt.CursorShape.PointingHandCursor)
-        self._now_playing_cb.toggled.connect(self._on_now_playing_toggled)
-        now_body.addWidget(self._now_playing_cb)
-        panel_layout.addWidget(now_row)
-
         static_wall_row, static_wall_body = self._row(
             "Обои",
             "По умолчанию фон без картинки — экономия ОЗУ",
@@ -369,7 +358,6 @@ class SettingsPage(QWidget):
         for signal in (
             self._prefs.theme_changed,
             self._prefs.wallpaper_changed,
-            self._prefs.layout_changed,
             self._prefs.eco_changed,
         ):
             signal.connect(self._sync_from_preferences)
@@ -393,10 +381,6 @@ class SettingsPage(QWidget):
         return frame, col
 
     def _sync_from_preferences(self) -> None:
-
-        self._now_playing_cb.blockSignals(True)
-        self._now_playing_cb.setChecked(self._prefs.show_now_playing_panel)
-        self._now_playing_cb.blockSignals(False)
 
         self._wallpaper_enabled_cb.blockSignals(True)
         self._wallpaper_enabled_cb.setChecked(self._prefs.wallpaper_enabled)
@@ -531,9 +515,6 @@ class SettingsPage(QWidget):
     def _open_folder(path: Path) -> None:
         path.mkdir(parents=True, exist_ok=True)
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(path)))
-
-    def _on_now_playing_toggled(self, checked: bool) -> None:
-        self._prefs.set_show_now_playing_panel(checked)
 
     def _on_wallpaper_enabled_toggled(self, checked: bool) -> None:
         self._wallpaper_picker.setVisible(checked)

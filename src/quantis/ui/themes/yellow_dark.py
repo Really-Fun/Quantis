@@ -101,15 +101,6 @@ QFrame#PlayMenu {
     border: none;
 }
 
-QFrame#sideNavRail {
-    border-radius: 22px;
-    border-top: 2px solid rgba(255, 170, 0, 0.35);
-}
-
-QToolButton#navPinButton {
-    color: rgba(250, 246, 238, 0.7);
-}
-
 #TrackListPanel {
     border-radius: 16px;
 }

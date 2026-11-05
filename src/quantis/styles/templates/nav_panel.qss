@@ -2,7 +2,7 @@ QToolButton#navIconButton {
     background: transparent;
     border: none;
     border-radius: 12px;
-    padding: 10px 12px;
+    padding: 10px 14px;
     color: ${text_dim};
     font-size: 13px;
     font-weight: 600;
@@ -15,7 +15,8 @@ QToolButton#navIconButton:hover {
 }
 
 QToolButton#navIconButton:checked {
-    background: rgba(${tint_rgb}, 0.14);
+    /* подложку выбранного пункта рисует меню — цветом обложки */
+    background: transparent;
     color: rgb(${ink_rgb});
 }
 

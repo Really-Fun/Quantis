@@ -101,6 +101,7 @@ class HomePage(QWidget):
         self._stage_row = stage_row
         self._up_next_below: bool | None = None
         self._side: QWidget | None = None
+        self._queue_elsewhere = False
         self._stage = NowPlayingStage()
         self._stage.resume_requested.connect(lambda: self._on_featured_play(0))
         self._stage.wave_requested.connect(self._on_wave_play)
@@ -323,6 +324,14 @@ class HomePage(QWidget):
         self._up_next.set_items(items)
         self._relayout_stage()
 
+    def set_queue_elsewhere(self, shown: bool) -> None:
+        """Очередь видна в правой панели окна: «Дальше» у сцены прячем."""
+        if self._queue_elsewhere == shown:
+            return
+        self._queue_elsewhere = shown
+        self._side = None  # пересобрать ряд сцены
+        self._relayout_stage()
+
     def set_eco(self, enabled: bool) -> None:
         self._stage.set_eco(enabled)
 
@@ -394,6 +403,14 @@ class HomePage(QWidget):
         self._stage.set_cover_size(min(by_width, by_height))
 
         count = len(self._up_next.items())
+        if count and self._queue_elsewhere:
+            # очередь открыта в правой панели — сцене не нужен второй «Дальше»
+            self._stage.set_cover_size(
+                min(int((width - _STAGE_TEXT_MIN) / per_cover), by_height)
+            )
+            self._up_next.hide()
+            self._wave_card.hide()
+            return
         side = self._up_next if count else self._wave_card
         other = self._wave_card if count else self._up_next
         other.hide()

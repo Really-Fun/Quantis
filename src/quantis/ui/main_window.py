@@ -55,6 +55,7 @@ from quantis.ui.shortcuts import (
     is_typing_target,
 )
 from quantis.ui.themes import registry
+from quantis.ui.themes.spec import qcolor
 from quantis.ui.ui_extensions import NavExtension, UiExtensionHost
 from quantis.ui.viewmodels.home_vm import HomeViewModel
 from quantis.ui.viewmodels.player_vm import PlayerViewModel
@@ -78,10 +79,10 @@ from quantis.ui.views.widgets.backdrop_panel import (
 )
 from quantis.ui.views.widgets.background_frame import BackgroundFrame
 from quantis.ui.views.widgets.now_playing_fullscreen import NowPlayingFullscreen
-from quantis.ui.views.widgets.now_playing_panel import NowPlayingPanel
 from quantis.ui.views.widgets.now_playing_stage import upcoming
 from quantis.ui.views.widgets.resize_grips import WindowResizeGrips
 from quantis.ui.views.widgets.side_nav import SideNavRail
+from quantis.ui.views.widgets.side_panel import SidePanel
 from quantis.ui.views.widgets.update_banner import UpdateBanner
 from quantis.ui.views.widgets.wallpaper_backdrop import BodyWithWallpaper
 
@@ -188,6 +189,9 @@ class QuantisMainWindow(QMainWindow):
         self._header.maximize_requested.connect(self._toggle_maximize)
         self._header.close_requested.connect(self.close)
         self._header.hide_ui_requested.connect(self._toggle_chrome_hidden)
+        self._header.nav_toggle_requested.connect(self._toggle_nav)
+        self._header.search_edited.connect(self._on_header_search_edited)
+        self._header.search_submitted.connect(self._on_header_search_submitted)
         root.addWidget(self._header)
 
         self._update_banner = UpdateBanner()
@@ -206,6 +210,8 @@ class QuantisMainWindow(QMainWindow):
 
         self._nav = SideNavRail()
         self._nav.page_changed.connect(self._on_page_changed)
+        self._nav.set_expanded(self._ui_prefs.nav_expanded, animate=False)
+        self._header.set_nav_expanded(self._ui_prefs.nav_expanded)
 
         # Content column
         content_host = QWidget()
@@ -250,12 +256,12 @@ class QuantisMainWindow(QMainWindow):
 
         content.addWidget(self._stack, stretch=1)
 
-        self._now_playing = NowPlayingPanel(
-            bundle.music.provider,
-            bridge=self._bridge,
-            music=bundle.music,
+        self._side_panel = SidePanel(bundle.music.provider)
+        self._side_panel.close_requested.connect(
+            lambda: self._ui_prefs.set_side_panel("")
         )
-        self._now_playing.lyrics_requested.connect(self._open_now_playing_fullscreen)
+        self._side_panel.track_activated.connect(self._play_up_next)
+        self._side_panel.queue_page_requested.connect(self._open_playing_queue)
 
         self._np_fullscreen = NowPlayingFullscreen(bundle.music.provider, parent=shell)
         self._np_fullscreen.closed.connect(self._np_fullscreen.hide)
@@ -275,7 +281,7 @@ class QuantisMainWindow(QMainWindow):
         mid_layout.setSpacing(10)
         mid_layout.addWidget(self._nav)
         mid_layout.addWidget(content_host, stretch=1)
-        mid_layout.addWidget(self._now_playing)
+        mid_layout.addWidget(self._side_panel)
 
         columns = QVBoxLayout()
         columns.setContentsMargins(0, 0, 0, 0)
@@ -293,7 +299,7 @@ class QuantisMainWindow(QMainWindow):
                 self._home_vm.refresh_liked(self._bridge)
             ),
         )
-        self._player_bar.now_playing_toggle_requested.connect(self._toggle_now_playing)
+        self._player_bar.queue_toggle_requested.connect(self._toggle_side_panel)
         self._player_bar.hide_ui_requested.connect(self._toggle_chrome_hidden)
         columns.addWidget(self._player_bar)
 
@@ -337,7 +343,7 @@ class QuantisMainWindow(QMainWindow):
         self._wallpaper_source = self._backdrop_source()
         self._apply_backdrop_look()
         self._apply_file_loop()
-        self._ui_prefs.layout_changed.connect(self._sync_now_playing_visibility)
+        self._ui_prefs.layout_changed.connect(self._sync_side_panel)
         self._ui_prefs.eco_changed.connect(self._on_eco_pref_changed)
         self._dynamic_wallpaper = DynamicWallpaperController(
             self._body_shell.backdrop,
@@ -356,7 +362,7 @@ class QuantisMainWindow(QMainWindow):
         self._install_shortcuts()
         self._refresh_eco_state()
         self._apply_ui_theme(self._ui_prefs.ui_theme)
-        self._sync_now_playing_visibility()
+        self._sync_side_panel(animate=False)
         self._mounted_layers: dict[str, QWidget] = {}
         self._extensions = UiExtensionHost.instance()
         self._extensions.pages_changed.connect(self._sync_plugin_pages)
@@ -411,10 +417,31 @@ class QuantisMainWindow(QMainWindow):
             if callable(setter):
                 setter(active)
 
-    def _toggle_now_playing(self) -> None:
-        self._ui_prefs.set_show_now_playing_panel(
-            not self._ui_prefs.show_now_playing_panel
-        )
+    def _toggle_side_panel(self) -> None:
+        self._ui_prefs.set_side_panel("" if self._ui_prefs.side_panel else "queue")
+
+    def _toggle_nav(self) -> None:
+        expanded = not self._nav.is_expanded
+        self._nav.set_expanded(expanded)
+        self._header.set_nav_expanded(expanded)
+        self._ui_prefs.set_nav_expanded(expanded)
+
+    def _on_header_search_edited(self, text: str) -> None:
+        page = self._ensure_search_page()
+        if self._stack.currentIndex() != self.PAGE_SEARCH:
+            self._goto_page(self.PAGE_SEARCH)
+        page.set_query(text)
+
+    def _on_header_search_submitted(self, text: str) -> None:
+        page = self._ensure_search_page()
+        if self._stack.currentIndex() != self.PAGE_SEARCH:
+            self._goto_page(self.PAGE_SEARCH)
+        page.set_query(text, submit=True)
+
+    def _focus_search(self) -> None:
+        if self._chrome_hidden:
+            self._set_chrome_hidden(False)
+        self._header.focus_search()
 
     def _toggle_chrome_hidden(self) -> None:
         self._set_chrome_hidden(not self._chrome_hidden)
@@ -435,14 +462,14 @@ class QuantisMainWindow(QMainWindow):
         self._content_host.setVisible(not hidden)
         if hidden:
             self._update_banner.hide()
-            self._now_playing.hide()
+            self._side_panel.set_open(False, animate=False)
             if self._np_fullscreen.isVisible():
                 self._np_fullscreen.hide()
             self._body_shell.layout_host.setContentsMargins(0, 0, 0, 0)
         else:
             self._body_shell.layout_host.setContentsMargins(10, 10, 10, 0)
             self._sync_update_banner()
-            self._sync_now_playing_visibility()
+            self._sync_side_panel(animate=False)
         self._body_shell.set_theater_mode(hidden)
         self._shell.set_cinematic(hidden)
         self._player_bar.set_cinematic(hidden)
@@ -486,6 +513,8 @@ class QuantisMainWindow(QMainWindow):
             )
         self._make_shortcut("Alt+M", lambda: self._goto_page(self.PAGE_MEMBER))
         self._make_shortcut("Alt+S", lambda: self._goto_page(self.PAGE_SETTINGS))
+        self._make_shortcut("Ctrl+K", self._focus_search)
+        self._make_shortcut("Ctrl+F", self._focus_search)
         self._sync_shortcut_enabled()
 
     def _make_shortcut(self, key, slot) -> QShortcut:
@@ -542,16 +571,11 @@ class QuantisMainWindow(QMainWindow):
             widget = widget.parentWidget()
         return self._resize_grips.owns(obj if isinstance(obj, QWidget) else None)
 
-    def _sync_now_playing_visibility(self) -> None:
-        if self._chrome_hidden:
-            self._now_playing.hide()
-            return
-        wide = self.width() >= 1100
-        # на главной трек показывает сцена, справа — «Дальше»; у волны своя шапка
-        page = self._stack.currentIndex()
-        own_stage = page in (self.PAGE_HOME, self.PAGE_WAVE)
-        show = self._ui_prefs.show_now_playing_panel and wide and not own_stage
-        self._now_playing.setVisible(show)
+    def _sync_side_panel(self, *_: object, animate: bool = True) -> None:
+        open_ = bool(self._ui_prefs.side_panel) and not self._chrome_hidden
+        self._side_panel.set_open(open_, animate=animate)
+        self._player_bar.set_queue_open(open_)
+        self._home_page.set_queue_elsewhere(open_)
 
     def _on_page_changed(self, page_id: int) -> None:
         if page_id < 0 or page_id >= self._stack.count():
@@ -743,12 +767,14 @@ class QuantisMainWindow(QMainWindow):
         self._current_page = page_id
         self._stack.setCurrentIndex(page_id)
         self._nav.set_active_page(page_id)
-        self._sync_now_playing_visibility()
         self._fade_current_page()
         title, subtitle = self._page_meta.get(page_id, ("Quantis", ""))
         self._header.set_page(title, subtitle)
         if previous == self.PAGE_SEARCH and page_id != self.PAGE_SEARCH:
             self._search_vm.clear_results()
+            self._header.clear_search()
+        if page_id == self.PAGE_SEARCH and not self._header.search_field.hasFocus():
+            self._header.focus_search()
         # Home уже подгружается после первого кадра; Library — при открытии.
         if page_id == self.PAGE_LIBRARY:
             self._home_vm.request_load(self._bridge)
@@ -781,7 +807,6 @@ class QuantisMainWindow(QMainWindow):
         self._return_page_id = self._current_page
         self._playlist_vm.set_playlist(playlist)
         self._stack.setCurrentIndex(self.PAGE_PLAYLIST)
-        self._sync_now_playing_visibility()
         count = len(playlist)
         self._header.set_page(playlist.name, f"{count} треков")
         _ = page
@@ -806,7 +831,7 @@ class QuantisMainWindow(QMainWindow):
             self._playlist_page.set_playing_track(track)
         self._home_page.set_now_playing(track)
         self._refresh_up_next()
-        self._now_playing.set_track(track)
+        self._side_panel.set_track(track)
         self._np_fullscreen.set_track(track)
         self._update_palette_from_track(track)
 
@@ -814,14 +839,14 @@ class QuantisMainWindow(QMainWindow):
         playlist = self._bundle.playback.playlist_manager.current_playlist
         if playlist is None:
             self._home_page.set_up_next([])
+            self._side_panel.set_queue([])
             return
         cycle = playlist.tracks
-        self._home_page.set_up_next(
-            upcoming(
-                cycle.values,
-                self._bundle.playback.current_track,
-                getattr(cycle, "_index", 0),
-            )
+        current = self._bundle.playback.current_track
+        index = getattr(cycle, "_index", 0)
+        self._home_page.set_up_next(upcoming(cycle.values, current, index))
+        self._side_panel.set_queue(
+            upcoming(cycle.values, current, index, count=SidePanel.QUEUE_COUNT)
         )
 
     def _play_up_next(self, index: int) -> None:
@@ -871,7 +896,8 @@ class QuantisMainWindow(QMainWindow):
 
     def _on_live_palette(self, palette: CoverPalette) -> None:
         self._shell.set_palette(palette)
-        self._nav.set_accent(palette.accent)
+        if not LivePalette.instance().is_animating():
+            self._nav.set_accent(palette.accent)  # значки перекрашиваем один раз
 
     def apply_accent(self, color: QColor) -> None:
         """Акцент одним цветом, без перехода (палитра достраивается из него)."""
@@ -1033,6 +1059,7 @@ class QuantisMainWindow(QMainWindow):
         self._shell.set_theme(theme)
         self._body_shell.set_theme(theme)
         self._player_bar.refresh_theme()
+        self._nav.set_text_color(qcolor(theme.colors.text_dim))
 
     MIN_SIZE = QSize(1024, 640)
 
@@ -1115,7 +1142,6 @@ class QuantisMainWindow(QMainWindow):
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
         self._resize_grips.update_geometry()
-        self._sync_now_playing_visibility()
         if self._np_fullscreen.isVisible():
             self._np_fullscreen.setGeometry(self._shell.rect())
         if self._backdrop_panel.isVisible():
