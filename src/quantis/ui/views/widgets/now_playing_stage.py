@@ -49,6 +49,7 @@ from PySide6.QtWidgets import (
 
 from quantis.models import Track
 from quantis.ui.accent import AccentStyles
+from quantis.ui.corners import corner
 from quantis.ui.cover_accent import CoverPalette
 from quantis.ui.image_fx import blur_image
 from quantis.ui.live_palette import LivePalette
@@ -161,10 +162,12 @@ class Spectrum(QWidget):
             bh = max(3.0, base * v)
             x = i * step
             painter.setOpacity(1.0)
-            painter.drawRoundedRect(QRectF(x, base - bh, bar, bh), bar / 2, bar / 2)
+            painter.drawRoundedRect(
+                QRectF(x, base - bh, bar, bh), corner(bar / 2), corner(bar / 2)
+            )
             painter.setOpacity(0.16)
             painter.drawRoundedRect(
-                QRectF(x, base + 3, bar, bh * 0.3), bar / 2, bar / 2
+                QRectF(x, base + 3, bar, bh * 0.3), corner(bar / 2), corner(bar / 2)
             )
 
 
@@ -455,7 +458,9 @@ class NowPlayingStage(QWidget):
         painter.setBrush(QColor(0, 0, 0, 60 if light else 150))
         inset = size * 0.04
         painter.drawRoundedRect(
-            QRectF(pad + inset, pad + inset, size - 2 * inset, size - 2 * inset), 24, 24
+            QRectF(pad + inset, pad + inset, size - 2 * inset, size - 2 * inset),
+            corner(24),
+            corner(24),
         )
         painter.end()
         shadow = QPixmap.fromImage(blur_image(image, 0.18))
@@ -563,7 +568,7 @@ class NowPlayingStage(QWidget):
             shadow,
         )
         path = QPainterPath()
-        path.addRoundedRect(cover, 22, 22)
+        path.addRoundedRect(cover, corner(22), corner(22))
         if self._cover is not None and not self._cover.isNull():
             painter.save()
             painter.setClipPath(path)
@@ -578,7 +583,9 @@ class NowPlayingStage(QWidget):
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.setPen(QPen(QColor(255, 255, 255, 30), 1))
         inner = QPainterPath()
-        inner.addRoundedRect(cover.adjusted(0.5, 0.5, -0.5, -0.5), 22, 22)
+        inner.addRoundedRect(
+            cover.adjusted(0.5, 0.5, -0.5, -0.5), corner(22), corner(22)
+        )
         painter.drawPath(inner)
 
     def _paint_placeholder(
@@ -734,7 +741,7 @@ class UpNextPanel(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
         path = QPainterPath()
-        path.addRoundedRect(rect, 22, 22)
+        path.addRoundedRect(rect, corner(22), corner(22))
         if not paint_glass(self, painter, path):
             painter.fillPath(path, qcolor(theme.colors.surface))
         painter.setPen(QPen(_alpha(qcolor(theme.colors.ink_rgb), 26), 1))
@@ -805,11 +812,11 @@ class UpNextPanel(QWidget):
             if row == self._hover:
                 painter.setPen(Qt.PenStyle.NoPen)
                 painter.setBrush(_alpha(qcolor(colors.ink_rgb), 14))
-                painter.drawRoundedRect(cell, 12, 12)
+                painter.drawRoundedRect(cell, corner(12), corner(12))
             x, y, right = cell.x() + 10, cell.y() + 6, cell.right() - 10
             box = QRectF(x, y, 44, 44)
             clip = QPainterPath()
-            clip.addRoundedRect(box, 9, 9)
+            clip.addRoundedRect(box, corner(9), corner(9))
             if cover is not None and not cover.isNull():
                 painter.save()
                 painter.setClipPath(clip)

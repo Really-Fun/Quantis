@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 )
 
 from quantis.models.playlist import Playlist
+from quantis.ui.corners import corner
 from quantis.ui.fonts import app_font
 from quantis.ui.preferences import UiPreferences
 from quantis.ui.themes.spec import qcolor
@@ -104,7 +105,7 @@ class GradientCover(QWidget):
             painter.setRenderHint(QPainter.RenderHint.Antialiasing)
             painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
             backdrop = QPainterPath()
-            backdrop.addRoundedRect(rect, self._radius, self._radius)
+            backdrop.addRoundedRect(rect, corner(self._radius), corner(self._radius))
             painter.fillPath(backdrop, QColor(255, 255, 255, 14))
             inset = round(rect.width() * 0.2)
             painter.drawPixmap(
@@ -121,7 +122,7 @@ class GradientCover(QWidget):
             )
         if self._play_overlay:
             overlay = QPainterPath()
-            overlay.addRoundedRect(rect, self._radius, self._radius)
+            overlay.addRoundedRect(rect, corner(self._radius), corner(self._radius))
             painter.fillPath(overlay, QColor(0, 0, 0, 118))
             size = max(26, rect.width() // 4)
             play = rect.adjusted(
@@ -323,7 +324,7 @@ class QuickPickTile(QFrame):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         rect = self.rect().adjusted(1, 1, -1, -1)
         path = QPainterPath()
-        path.addRoundedRect(rect, 14, 14)
+        path.addRoundedRect(rect, corner(14), corner(14))
         # Без обводки: плитку отделяет лёгкая подложка цветом «чернил» темы
         # (белая на тёмных, тёмная на светлой), под мышью — чуть плотнее.
         ink = qcolor(UiPreferences().theme.colors.ink_rgb)

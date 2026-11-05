@@ -53,6 +53,7 @@ from quantis.services.async_wave import (
     WaveMood,
 )
 from quantis.ui.async_ui import schedule
+from quantis.ui.corners import corner
 from quantis.ui.preferences import UiPreferences
 from quantis.ui.viewmodels.home_vm import HomeViewModel
 from quantis.ui.views.widgets.cover_art import (
@@ -311,7 +312,7 @@ class WaveMoodCard(QWidget):
         pill = QRectF(rect.left() + pad - 2, rect.top() + pad - 2, pill_w, 20)
         painter.setPen(Qt.PenStyle.NoPen)
         painter.setBrush(QColor(0, 0, 0, 120))
-        painter.drawRoundedRect(pill, 10, 10)
+        painter.drawRoundedRect(pill, corner(10), corner(10))
         painter.setPen(QColor(255, 255, 255, 220))
         painter.drawText(pill, Qt.AlignmentFlag.AlignCenter, label.upper())
 
@@ -354,7 +355,9 @@ class WaveMoodCard(QWidget):
         for i in range(4):
             level = 0.35 + 0.65 * abs(math.sin(self._phase + i * 1.3))
             h = 4 + 14 * level
-            painter.drawRoundedRect(QRectF(base_x + i * 5, base_y - h, 3, h), 1.5, 1.5)
+            painter.drawRoundedRect(
+                QRectF(base_x + i * 5, base_y - h, 3, h), corner(1.5), corner(1.5)
+            )
 
 
 class _CardFlow(QWidget):
@@ -453,7 +456,7 @@ class _PanelArt(QWidget):
         glow.setColorAt(1.0, _alpha(mood_color(self._mood), 0))
         painter.fillRect(QRectF(self.rect()), glow)
         path = QPainterPath()
-        path.addRoundedRect(art, 30, 30)
+        path.addRoundedRect(art, corner(30), corner(30))
         painter.save()
         painter.setClipPath(path)
         paint_wave_art(painter, art, self._mood)
@@ -506,7 +509,7 @@ class _QueueList(QWidget):
             if index == 0:
                 painter.setPen(Qt.PenStyle.NoPen)
                 painter.setBrush(_alpha(self._accent, 46))
-                painter.drawRoundedRect(row, 14, 14)
+                painter.drawRoundedRect(row, corner(14), corner(14))
             cover = QRectF(8, top + (self.ROW - self.COVER) / 2, self.COVER, self.COVER)
             paint_rounded_cover(
                 painter,
@@ -648,8 +651,14 @@ class WavePanel(QFrame):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
         path = QPainterPath()
-        path.addRoundedRect(rect, 28, 28)
+        path.addRoundedRect(rect, corner(28), corner(28))
         painter.fillPath(path, QColor(9, 10, 17, 236))
+        if UiPreferences().theme.card_style == "magazine":
+            # журнальная панель: сплошная, тонкая рамка цвета бумаги
+            painter.setPen(QPen(QColor(242, 240, 235, 40), 1.0))
+            painter.drawPath(path)
+            painter.end()
+            return
         tint = QLinearGradient(rect.topLeft(), rect.bottomLeft())
         tint.setColorAt(0.0, _alpha(self._color, 70))
         tint.setColorAt(0.55, _alpha(self._color, 0))

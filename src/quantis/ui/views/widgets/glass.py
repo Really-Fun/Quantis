@@ -27,6 +27,7 @@ from PySide6.QtGui import (
 )
 from PySide6.QtWidgets import QWidget
 
+from quantis.ui.corners import corner
 from quantis.ui.themes import qss
 from quantis.ui.views.widgets.backdrop_compositor import BackdropCompositor
 
@@ -52,7 +53,7 @@ def glass_path(widget: QWidget, selector: str) -> QPainterPath:
     rect = QRectF(widget.rect()).adjusted(border, border, -border, -border)
     path = QPainterPath()
     inner = max(0.0, radius - border)
-    path.addRoundedRect(rect, inner, inner)
+    path.addRoundedRect(rect, corner(inner), corner(inner))
     return path
 
 

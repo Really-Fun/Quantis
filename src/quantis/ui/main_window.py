@@ -956,9 +956,13 @@ class QuantisMainWindow(QMainWindow):
         cover = load_cover_image(path if path.is_file() else None)
         self._cover_palette = palette_from_image(cover)
         self._shell.compositor.set_cover(cover)
-        self.apply_palette(
-            self._cover_palette or fallback_palette(registry.get(self._applied_theme))
-        )
+        self.apply_palette(self._palette_for(registry.get(self._applied_theme)))
+
+    def _palette_for(self, theme) -> CoverPalette:  # type: ignore[no-untyped-def]
+        """Цвет обложки, если тема его берёт; иначе — свой акцент темы."""
+        if theme.fixed_accent or self._cover_palette is None:
+            return fallback_palette(theme)
+        return self._cover_palette
 
     def apply_palette(self, palette: CoverPalette, *, animate: bool = True) -> None:
         """Палитра трека. Виджеты со stylesheet получают итоговый акцент сразу и
@@ -1131,8 +1135,8 @@ class QuantisMainWindow(QMainWindow):
         self._applied_theme = theme_id
         theme = registry.get(theme_id)
         QApplication.setFont(theme_font(theme, "ui", 10))
-        if self._cover_palette is None:
-            self.apply_palette(fallback_palette(theme), animate=False)
+        # Тема могла сменить правило акцента (своя / из обложки) — пересчитать.
+        self.apply_palette(self._palette_for(theme), animate=False)
         self.setStyleSheet(resources.load_stylesheet(theme_id, accent=self._accent))
         self._shell.set_theme(theme)
         self._body_shell.set_theme(theme)

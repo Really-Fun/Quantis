@@ -29,6 +29,7 @@ from PySide6.QtGui import (
 
 from quantis.services.async_wave import WaveMood
 from quantis.services.cover_validate import cover_bytes_ok
+from quantis.ui.corners import corner
 from quantis.utils import get_asset_path
 from quantis.utils.app_paths import cache_dir
 
@@ -370,7 +371,7 @@ def _grain_image() -> QImage:
 
 def rounded_path(rect: QRectF, radius: float) -> QPainterPath:
     path = QPainterPath()
-    path.addRoundedRect(rect, radius, radius)
+    path.addRoundedRect(rect, corner(radius), corner(radius))
     return path
 
 

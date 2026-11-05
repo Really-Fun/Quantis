@@ -8,12 +8,12 @@ QWidget#playerRight {
     padding: 0;
     margin: 0;
     background: ${accent_fallback};
-    border-radius: 20px;
+    border-radius: ${r20};
     color: ${on_tint};
 }
 
 #controlButton[compact="true"] {
-    border-radius: 16px;
+    border-radius: ${r16};
 }
 
 #PlayMenu QLabel {

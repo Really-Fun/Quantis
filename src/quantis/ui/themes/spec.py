@@ -154,6 +154,8 @@ class ThemeSpec:
     """Старые id из настроек, которые ведут на эту тему."""
     order: int = 100
     """Место в выпадающем списке настроек."""
+    fixed_accent: bool = False
+    """Акцент всегда ``accent_fallback``: цвет обложки интерфейс не перекрашивает."""
 
     @property
     def is_light(self) -> bool:
@@ -162,6 +164,15 @@ class ThemeSpec:
     @property
     def has_glass(self) -> bool:
         return self.glass_blur > 0
+
+    @property
+    def rounded(self) -> bool:
+        """У темы есть скругления; ``radius=0`` — все углы прямые."""
+        return self.radius > 0
+
+    def corner(self, radius: float) -> float:
+        """Радиус угла с учётом темы — для QSS и для рисования кодом."""
+        return radius if self.rounded else 0.0
 
     def glass_tint_color(self) -> QColor:
         if self.glass_tint:
@@ -182,6 +193,9 @@ class ThemeSpec:
         # фон стеклянных панелей: стекло рисуют сами панели, QSS — только рамку
         values["panel_bg"] = "transparent" if self.has_glass else self.colors.surface
         values["radius_control"] = f"{self.radius_control}px"
+        # ${r12} и т.п. — фиксированные радиусы шаблонов; у тем без скруглений 0
+        for px in range(1, 41):
+            values[f"r{px}"] = f"{px}px" if self.rounded else "0px"
         return values
 
 

@@ -32,6 +32,7 @@ from PySide6.QtWidgets import (
 from quantis.models.track import Track
 from quantis.providers.path_provider import PathProvider
 from quantis.ui import resources
+from quantis.ui.corners import corner
 from quantis.ui.preferences import UiPreferences
 from quantis.ui.themes.spec import qcolor
 from quantis.ui.views.widgets.cover_art import load_cover_pixmap
@@ -60,7 +61,7 @@ class _NowCover(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         path = QPainterPath()
-        path.addRoundedRect(QRectF(self.rect()), 9, 9)
+        path.addRoundedRect(QRectF(self.rect()), corner(9), corner(9))
         if self._pixmap.isNull():
             painter.fillPath(path, QColor(128, 136, 160, 46))
         else:

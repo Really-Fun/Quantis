@@ -7,7 +7,7 @@ QFrame#PlayMenu {
 QFrame#TrackListPanel {
     background-color: ${surface};
     border: 1px solid rgba(${ink_rgb}, 0.08);
-    border-radius: 22px;
+    border-radius: ${r22};
 }
 
 QFrame#glassPanel {

@@ -23,6 +23,7 @@ from PySide6.QtGui import (
 from quantis.models.track import Track
 from quantis.providers.path_provider import PathProvider
 from quantis.services.cover_validate import cover_file_ok
+from quantis.ui.corners import corner
 from quantis.ui.design_tokens import BADGE_SOUNDCLOUD, BADGE_YANDEX, BADGE_YOUTUBE
 from quantis.ui.fonts import app_font
 
@@ -331,7 +332,7 @@ def paint_rounded_cover(
 
     if pixmap is not None and not pixmap.isNull():
         path = QPainterPath()
-        path.addRoundedRect(rect, radius, radius)
+        path.addRoundedRect(rect, corner(radius), corner(radius))
         painter.setClipPath(path)
         painter.drawPixmap(rect, pixmap)
         painter.setClipping(False)
@@ -350,7 +351,7 @@ def paint_rounded_cover(
         grad.setColorAt(1.0, c2)
         painter.setBrush(grad)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.drawRoundedRect(rect, radius, radius)
+        painter.drawRoundedRect(rect, corner(radius), corner(radius))
         initial = (label[:1] or "?").upper()
         painter.setPen(QColor(255, 255, 255, 230))
         painter.setFont(app_font(max(9, rect.width() // 4), QFont.Weight.Bold))

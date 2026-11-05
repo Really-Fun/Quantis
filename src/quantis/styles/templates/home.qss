@@ -53,7 +53,7 @@ QLabel#homeSectionBadge {
     color: rgba(${mist_rgb}, 0.75);
     background: rgba(${ink_rgb}, 0.05);
     border: 1px solid rgba(${ink_rgb}, 0.08);
-    border-radius: 8px;
+    border-radius: ${r8};
     min-width: 20px;
     padding: 2px 8px;
     max-height: 20px;
@@ -66,7 +66,7 @@ QLabel#homePillBadge {
     color: rgba(${mist_rgb}, 0.82);
     background: rgba(${ink_rgb}, 0.05);
     border: 1px solid rgba(${ink_rgb}, 0.08);
-    border-radius: 8px;
+    border-radius: ${r8};
     padding: 2px 8px;
     max-height: 20px;
 }
@@ -112,7 +112,7 @@ QLabel#playlistCardTitle {
 QFrame#quickPickTile {
     background: transparent;
     border: none;
-    border-radius: 14px;
+    border-radius: ${r14};
 }
 
 QLabel#quickPickTitle {
@@ -126,7 +126,7 @@ QLabel#quickPickTitle {
 QToolButton#homeSectionAction {
     background: transparent;
     border: none;
-    border-radius: 8px;
+    border-radius: ${r8};
     padding: 6px 8px;
     color: ${text_meta};
     font-size: 13px;
@@ -201,7 +201,7 @@ QPushButton#stagePill {
     font-weight: 600;
     background: rgba(${ink_rgb}, 0.08);
     border: 1px solid rgba(${ink_rgb}, 0.16);
-    border-radius: 16px;
+    border-radius: ${r16};
     min-height: 30px;
     padding: 0 16px;
 }
@@ -221,7 +221,7 @@ QToolButton#waveQuickPlay {
     color: ${on_tint};
     background: ${tint};
     border: none;
-    border-radius: 18px;
+    border-radius: ${r18};
     font-size: 13px;
 }
 
@@ -242,7 +242,7 @@ QWidget#ribbonRow {
 QToolButton#waveMoodChip {
     background: ${chip_bg};
     border: 1px solid rgba(${ink_rgb}, 0.10);
-    border-radius: 15px;
+    border-radius: ${r15};
     color: ${text_soft};
     padding: 6px 14px;
     font-size: 12px;
@@ -252,7 +252,7 @@ QToolButton#waveMoodChip {
 QToolButton#ribbonArrow {
     background: ${chip_bg};
     border: 1px solid rgba(${ink_rgb}, 0.16);
-    border-radius: 14px;
+    border-radius: ${r14};
 }
 
 QToolButton#ribbonArrow:hover {
@@ -288,7 +288,7 @@ QWidget#waveScrollContent {
 QToolButton#waveHeroPlay {
     background: rgb(${tint_rgb});
     border: none;
-    border-radius: 20px;
+    border-radius: ${r20};
     padding: 10px 22px;
     color: #ffffff;
     font-size: 13px;
@@ -302,7 +302,7 @@ QToolButton#waveHeroPlay:hover {
 QToolButton#waveHeroAction {
     background: rgba(255, 255, 255, 0.08);
     border: 1px solid rgba(255, 255, 255, 0.18);
-    border-radius: 20px;
+    border-radius: ${r20};
     padding: 10px 18px;
     color: #ffffff;
     font-size: 13px;
@@ -341,7 +341,7 @@ QLabel#wavePanelSubtitle {
 QLabel#wavePanelHint {
     background: rgba(255, 255, 255, 0.05);
     border: 1px dashed rgba(255, 255, 255, 0.16);
-    border-radius: 14px;
+    border-radius: ${r14};
     padding: 10px 12px;
     color: rgba(255, 255, 255, 0.62);
     font-size: 12px;
@@ -377,7 +377,7 @@ QLabel#homeWaveStatus {
 QToolButton#homeWavePlay {
     background: rgb(${tint_rgb});
     border: none;
-    border-radius: 18px;
+    border-radius: ${r18};
     padding: 9px 20px;
     color: #ffffff;
     font-size: 13px;
@@ -433,5 +433,5 @@ QWidget#emptyState {
 
 QLabel#emptyStateIcon {
     background: rgba(${ink_rgb}, 0.06);
-    border-radius: 32px;
+    border-radius: ${r32};
 }

@@ -30,6 +30,7 @@ from PySide6.QtWidgets import (
 )
 
 from quantis.ui import resources
+from quantis.ui.corners import corner
 from quantis.ui.design_tokens import ACCENT_FALLBACK
 from quantis.ui.ui_extensions import UiExtensionHost
 from quantis.ui.views.widgets.cover_art import (
@@ -57,7 +58,7 @@ def _playlist_icon(playlist) -> QIcon:
     painter.setRenderHint(QPainter.RenderHint.Antialiasing)
     painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
     clip = QPainterPath()
-    clip.addRoundedRect(QRectF(0, 0, size, size), 7, 7)
+    clip.addRoundedRect(QRectF(0, 0, size, size), corner(7), corner(7))
     painter.setClipPath(clip)
     cover = load_cover_pixmap(playlist_cover_path(playlist), size)
     if cover is not None and not cover.isNull():
@@ -522,7 +523,7 @@ class SideNavRail(QFrame):
             int(self._indicator_h),
         )
         path = QPainterPath()
-        path.addRoundedRect(rect, 12, 12)
+        path.addRoundedRect(rect, corner(12), corner(12))
         painter.fillPath(
             path,
             QColor(self._accent.red(), self._accent.green(), self._accent.blue(), 40),

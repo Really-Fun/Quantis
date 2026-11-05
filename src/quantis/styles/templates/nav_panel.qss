@@ -1,7 +1,7 @@
 QToolButton#navIconButton {
     background: transparent;
     border: none;
-    border-radius: 12px;
+    border-radius: ${r12};
     padding: 10px 14px;
     color: ${text_dim};
     font-size: 13px;

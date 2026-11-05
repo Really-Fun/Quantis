@@ -7,6 +7,7 @@ from PySide6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPainterPath
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
 from quantis.models import Track
+from quantis.ui.corners import corner
 from quantis.ui.design_tokens import ACCENT_FALLBACK
 from quantis.ui.preferences import UiPreferences
 from quantis.ui.views.widgets.delegate_paint_kit import paint_colors
@@ -105,7 +106,7 @@ class ListenBars(QWidget):
             row = QRect(8, y, width - 16, _ROW_H - 4)
             if index == self._hover:
                 hover = QPainterPath()
-                hover.addRoundedRect(QRectF(row), 10, 10)
+                hover.addRoundedRect(QRectF(row), corner(10), corner(10))
                 painter.fillPath(hover, colors.bg_hover)
 
             painter.setPen(colors.meta)
@@ -120,7 +121,7 @@ class ListenBars(QWidget):
             bar_w = int(bar_span * ratio)
             bar_rect = QRectF(bar_left, y + 26, bar_w, 8)
             path = QPainterPath()
-            path.addRoundedRect(bar_rect, 4, 4)
+            path.addRoundedRect(bar_rect, corner(4), corner(4))
             gradient = QLinearGradient(bar_rect.topLeft(), bar_rect.topRight())
             accent = self._accent
             gradient.setColorAt(

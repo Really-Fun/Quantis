@@ -103,7 +103,11 @@ def palette_from_accent(color: QColor) -> CoverPalette:
 
 
 def fallback_palette(theme: ThemeSpec | None = None) -> CoverPalette:
-    return palette_from_accent(fallback_accent(theme))
+    palette = palette_from_accent(fallback_accent(theme))
+    if theme is not None and theme.fixed_accent:
+        # один акцент: без второго оттенка (спектр, яблоко пластинки — одним цветом)
+        return CoverPalette(palette.accent, QColor(palette.accent), palette.deep)
+    return palette
 
 
 def fallback_accent(theme: ThemeSpec | None = None) -> QColor:
