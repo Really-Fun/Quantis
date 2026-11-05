@@ -212,6 +212,12 @@ class QuantisMainWindow(QMainWindow):
         self._nav = SideNavRail()
         self._nav.page_changed.connect(self._on_page_changed)
         self._nav.set_expanded(self._ui_prefs.nav_expanded, animate=False)
+        self._nav.playlist_activated.connect(
+            lambda pl: self._open_playlist_page(self._home_vm.resolve_playlist(pl))
+        )
+        self._home_vm.home_changed.connect(
+            lambda: self._nav.set_playlists(self._home_vm.snapshot.quick_playlists)
+        )
         self._header.set_nav_expanded(self._ui_prefs.nav_expanded)
 
         # Content column

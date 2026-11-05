@@ -23,3 +23,22 @@ QToolButton#navIconButton:checked {
 QToolButton#navIconButton:pressed {
     background: rgba(${tint_rgb}, 0.2);
 }
+
+QLabel#navSectionLabel {
+    color: ${text_meta};
+    font-size: 12px;
+    font-weight: 600;
+    padding: 14px 14px 4px 14px;
+    background: transparent;
+}
+
+QFrame#navDivider {
+    background: rgba(${ink_rgb}, 0.08);
+    border: none;
+    margin: 0 16px;
+}
+
+QToolButton#navIconButton[playlistItem="true"] {
+    padding: 6px 10px;
+    font-weight: 500;
+}
