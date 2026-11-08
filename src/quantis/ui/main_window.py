@@ -352,6 +352,7 @@ class QuantisMainWindow(QMainWindow):
         bind_playlist_event_bus(bundle.event_bus)
         bundle.event_bus.queue_extended.connect(self._on_queue_extended)
         bundle.event_bus.error_occurred.connect(self._show_error)
+        bundle.event_bus.notification_requested.connect(self._show_notification)
         self._download_toasts: dict[tuple[str, str], DownloadNotification] = {}
         bundle.event_bus.track_download_started.connect(self._on_download_started)
         bundle.event_bus.track_download_progress.connect(self._on_download_progress)
@@ -1300,6 +1301,19 @@ class QuantisMainWindow(QMainWindow):
                 return
         self._notifications.push(
             Notification("Ошибка", message, kind="error", timeout_ms=7000)
+        )
+
+    def _show_notification(self, title: str, message: str, kind: str) -> None:
+        title = (title or "").strip()
+        if not title:
+            return
+        # Такая же карточка уже на экране — второй не нужно.
+        for shown in self._notifications.notifications:
+            if shown.title == title and shown.message == message:
+                return
+        timeout = 7000 if kind == "error" else None
+        self._notifications.push(
+            Notification(title, message, kind=kind, timeout_ms=timeout)
         )
 
     def _maybe_check_for_update(self) -> None:

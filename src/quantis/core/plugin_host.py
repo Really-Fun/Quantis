@@ -24,6 +24,15 @@ class PluginHost:
     music: MusicService
     async_bridge: AsyncBridge | None = None
 
+    def notify(self, title: str, message: str = "", kind: str = "info") -> None:
+        """Всплывающее уведомление в окне. kind: "info", "success" или "error".
+
+        Потокобезопасно: можно звать из фонового потока плагина.
+        """
+        if kind not in ("info", "success", "error"):
+            kind = "info"
+        self.event_bus.notification_requested.emit(title, message, kind)
+
     def register_nav_item(
         self,
         item_id: str,

@@ -75,3 +75,38 @@ def test_progress_grows_card_and_restacks(qapp):
     upper.set_progress(0.5)
     QApplication.processEvents()
     assert lower.y() > before
+
+
+def test_plugin_host_notify_from_thread_arrives_in_main_thread(qapp):
+    import threading
+
+    from PySide6.QtCore import QObject, QThread
+
+    from quantis.core.plugin_host import PluginHost
+    from quantis.plugins.event_bus import EventBus
+
+    bus = EventBus()
+    host = PluginHost(event_bus=bus, playback=None, music=None)
+    got: list[tuple] = []
+
+    class Receiver(QObject):
+        def on(self, title, message, kind):
+            got.append((title, message, kind, QThread.currentThread()))
+
+    receiver = Receiver()
+    bus.notification_requested.connect(receiver.on)
+    worker = threading.Thread(target=lambda: host.notify("T", "m", "weird"))
+    worker.start()
+    worker.join()
+    for _ in range(50):
+        qapp.processEvents()
+        if got:
+            break
+    assert got and got[0][:3] == ("T", "m", "info")  # неизвестный kind → info
+    assert got[0][3] is qapp.thread()
+
+
+def test_notification_exposes_title(qapp):
+    item = Notification("Discord", "текст")
+    assert item.title == "Discord"
+    assert item.message == "текст"

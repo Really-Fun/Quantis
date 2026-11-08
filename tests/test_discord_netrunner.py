@@ -200,3 +200,82 @@ def test_seek_uses_position_from_event():
     payload = jobs[-1]()
     assert payload["end"] - payload["start"] == 200_000
     assert abs((time.time() * 1000 - payload["start"]) - 120_000) < 2_000
+
+
+def test_status_offline_then_connected():
+    log: list = []
+    statuses: list[str] = []
+    discord_up = threading.Event()
+
+    def factory():
+        return FakeRpc(log, fail_connect=not discord_up.is_set())
+
+    w = _worker(factory, on_status=statuses.append)
+    try:
+        w.submit(lambda: {"details": "a"})
+        assert _wait_for(lambda: statuses == ["offline"])
+        time.sleep(0.15)  # повторные неудачи не спамят
+        assert statuses == ["offline"]
+        discord_up.set()
+        assert _wait_for(lambda: statuses == ["offline", "connected"])
+    finally:
+        w.stop()
+
+
+def test_status_silent_on_first_successful_connect():
+    log: list = []
+    statuses: list[str] = []
+    w = _worker(lambda: FakeRpc(log), on_status=statuses.append)
+    try:
+        w.submit(lambda: {"details": "a"})
+        assert _wait_for(lambda: _updates(log))
+        assert statuses == []
+    finally:
+        w.stop()
+
+
+def test_status_lost_then_connected_without_offline():
+    log: list = []
+    statuses: list[str] = []
+    rpcs: list[FakeRpc] = []
+    discord_up = threading.Event()
+    discord_up.set()
+
+    def factory():
+        # первый «умирает» на update, затем Discord какое-то время недоступен
+        if rpcs and not discord_up.is_set():
+            return FakeRpc(log, fail_connect=True)
+        rpc = FakeRpc(log, fail_update=not rpcs)
+        rpcs.append(rpc)
+        if len(rpcs) == 1:
+            discord_up.clear()
+        return rpc
+
+    w = _worker(factory, on_status=statuses.append)
+    try:
+        w.submit(lambda: {"details": "a"})
+        assert _wait_for(lambda: statuses == ["lost"])
+        time.sleep(0.15)
+        assert statuses == ["lost"]  # без «offline» поверх «lost»
+        discord_up.set()
+        assert _wait_for(lambda: statuses == ["lost", "connected"])
+        assert _wait_for(lambda: _updates(log) == [{"details": "a"}])
+    finally:
+        w.stop()
+
+
+def test_plugin_maps_status_to_host_notify():
+    p = _plugin()
+    calls = []
+    p.host = SimpleNamespace(notify=lambda *a: calls.append(a))
+    p._on_rpc_status("lost")
+    p._on_rpc_status("connected")
+    p._on_rpc_status("unknown")
+    assert [c[0] for c in calls] == ["Discord", "Discord"]
+    assert [c[2] for c in calls] == ["error", "success"]
+
+
+def test_plugin_status_without_host_notify_is_noop():
+    p = _plugin()
+    p.host = SimpleNamespace()
+    p._on_rpc_status("offline")

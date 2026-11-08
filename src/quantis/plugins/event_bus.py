@@ -31,6 +31,9 @@ class EventBus(QObject):
     plugin_loaded = Signal(str)  # Передает plugin_id
     plugin_unloaded = Signal(str)  # Передает plugin_id
     error_occurred = Signal(str)  # Передает текст ошибки для показа в UI
+    # Уведомление в углу окна: заголовок, текст, вид ("info"/"success"/"error").
+    # Можно слать из любого потока — UI получит его в главном.
+    notification_requested = Signal(str, str, str)
 
     def __init__(self) -> None:
         super().__init__()

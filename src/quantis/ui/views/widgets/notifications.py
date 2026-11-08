@@ -154,6 +154,10 @@ class Notification(QFrame):
         return self._kind
 
     @property
+    def title(self) -> str:
+        return self._title.text()
+
+    @property
     def message(self) -> str:
         return self._message.text()
 
