@@ -133,3 +133,4 @@ mobile/socks.py
 
 # graphify knowledge graph output
 graphify-out/
+.superpowers/
