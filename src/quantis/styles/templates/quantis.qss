@@ -118,6 +118,13 @@ QLabel#notificationText {
     background: transparent;
 }
 
+QLabel#notificationPercent {
+    color: ${text_dim};
+    font-size: 12px;
+    font-weight: 600;
+    background: transparent;
+}
+
 QToolButton#notificationClose {
     background: transparent;
     border: none;

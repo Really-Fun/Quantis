@@ -28,17 +28,15 @@ class MusicService:
 
             self._downloader = AsyncDownloader()
             for listener in self._download_listeners:
-                self._downloader.add_finished_listener(listener)
+                self._downloader.add_listener(listener)
         return self._downloader
 
     def add_download_listener(self, listener) -> None:
-        """``listener(track, ok)`` после скачивания трека; загрузчик при этом
+        """Подписчик на скачивание (``DownloadListener``); загрузчик при этом
         не создаётся раньше времени."""
         self._download_listeners.append(listener)
-        if self._downloader is not None and hasattr(
-            self._downloader, "add_finished_listener"
-        ):
-            self._downloader.add_finished_listener(listener)
+        if self._downloader is not None and hasattr(self._downloader, "add_listener"):
+            self._downloader.add_listener(listener)
 
     @property
     def finder(self):

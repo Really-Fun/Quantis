@@ -1,8 +1,10 @@
 """Всплывающие уведомления в правом верхнем углу окна.
 
 ``Notification`` — базовая карточка: заголовок, текст, крестик, автоскрытие
-(пауза, пока курсор над карточкой), плавное появление. Наследники добавляют
-свою картинку слева через ``build_leading()`` и задают ``kind``.
+(пауза, пока курсор над карточкой), плавное появление и полоска прогресса
+(``set_progress``: доля 0..1 или None — «идёт, сколько осталось неизвестно»).
+Наследники добавляют свою картинку слева через ``build_leading()`` и задают
+``kind``.
 
 ``NotificationCenter`` держит стопку карточек над содержимым окна: новые
 сверху, не больше ``MAX_VISIBLE``, сдвигаются при закрытии соседей.
@@ -78,13 +80,20 @@ class Notification(QFrame):
         self._remaining_ms = self._timeout_ms
         self._elapsed = QElapsedTimer()
         self._closing = False
+        self._progress: float | None = None
+        self._has_progress = False
+        self._busy_clock = QElapsedTimer()
+        self._busy_timer = QTimer(self)
+        self._busy_timer.setInterval(33)
+        self._busy_timer.timeout.connect(self.update)
 
         self._timer = QTimer(self)
         self._timer.setSingleShot(True)
         self._timer.timeout.connect(self.dismiss)
 
         row = QHBoxLayout(self)
-        row.setContentsMargins(self.M + 14, self.M + 12, self.M + 8, self.M + 12)
+        self._row = row
+        row.setContentsMargins(*self._margins())
         row.setSpacing(12)
 
         leading = self.build_leading()
@@ -94,10 +103,18 @@ class Notification(QFrame):
         texts = QVBoxLayout()
         texts.setContentsMargins(0, 0, 0, 0)
         texts.setSpacing(2)
+        head = QHBoxLayout()
+        head.setContentsMargins(0, 0, 0, 0)
+        head.setSpacing(8)
         self._title = QLabel(title)
         self._title.setObjectName("notificationTitle")
         self._title.setWordWrap(True)
-        texts.addWidget(self._title)
+        head.addWidget(self._title, stretch=1)
+        self._percent = QLabel()
+        self._percent.setObjectName("notificationPercent")
+        self._percent.hide()
+        head.addWidget(self._percent, 0, Qt.AlignmentFlag.AlignVCenter)
+        texts.addLayout(head)
         self._message = QLabel(message)
         self._message.setObjectName("notificationText")
         self._message.setWordWrap(True)
@@ -147,6 +164,56 @@ class Notification(QFrame):
         self._message.setText(text)
         self._message.setVisible(bool(text))
 
+    def set_kind(self, kind: NotificationKind) -> None:
+        self._kind = kind
+        self.update()
+
+    @property
+    def progress(self) -> float | None:
+        return self._progress if self._has_progress else None
+
+    def set_progress(self, fraction: float | None) -> None:
+        """Полоска прогресса внизу карточки: доля 0..1 с процентами справа от
+        заголовка; None — бегущая полоска без процентов."""
+        if not self._has_progress:
+            self._has_progress = True
+            self._row.setContentsMargins(*self._margins())
+            self.adjustSize()
+        if fraction is None:
+            self._progress = None
+            self._percent.hide()
+            if not self._busy_timer.isActive():
+                self._busy_clock.start()
+                self._busy_timer.start()
+        else:
+            self._progress = max(0.0, min(1.0, fraction))
+            self._busy_timer.stop()
+            self._percent.setText(f"{round(self._progress * 100)}%")
+            self._percent.show()
+        self.update()
+
+    def clear_progress(self) -> None:
+        if not self._has_progress:
+            return
+        self._has_progress = False
+        self._progress = None
+        self._busy_timer.stop()
+        self._percent.hide()
+        self._row.setContentsMargins(*self._margins())
+        self.adjustSize()
+        self.update()
+
+    def set_timeout(self, timeout_ms: int) -> None:
+        """Новый срок автоскрытия с этого момента; 0 — висит, пока не закроют."""
+        self._timer.stop()
+        self._timeout_ms = self._remaining_ms = timeout_ms
+        if self.isVisible():
+            self._start_timer()
+
+    def _margins(self) -> tuple[int, int, int, int]:
+        bottom = self.M + 12 + (10 if getattr(self, "_has_progress", False) else 0)
+        return self.M + 14, self.M + 12, self.M + 8, bottom
+
     def theme(self) -> ThemeSpec:
         found = compositor_for(self)
         if found is not None:
@@ -172,6 +239,7 @@ class Notification(QFrame):
             return
         self._closing = True
         self._timer.stop()
+        self._busy_timer.stop()
         self._animate_opacity(0.0, on_done=self._finish)
 
     def _finish(self) -> None:
@@ -257,12 +325,35 @@ class Notification(QFrame):
         painter.fillRect(QRectF(card.left(), card.top(), 3, card.height()), accent)
         painter.restore()
 
+        if self._has_progress:
+            self._paint_progress(painter, card, accent)
+
         ink = qcolor(theme.colors.ink_rgb)
         ink.setAlpha(36)
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.setPen(QPen(ink, 1))
         painter.drawPath(path)
         painter.end()
+
+    def _paint_progress(self, painter: QPainter, card: QRectF, accent: QColor) -> None:
+        track = QRectF(card.left() + 14, card.bottom() - 14, card.width() - 28, 4)
+        groove = qcolor(self.theme().colors.ink_rgb)
+        groove.setAlpha(34)
+        painter.setPen(Qt.PenStyle.NoPen)
+        painter.setBrush(groove)
+        painter.drawRoundedRect(track, 2, 2)
+        if self._progress is None:
+            # Бегущий отрезок в треть ширины, круг за 1,4 с.
+            phase = (self._busy_clock.elapsed() % 1400) / 1400
+            width = track.width() / 3
+            left = track.left() - width + (track.width() + width) * phase
+            fill = QRectF(left, track.top(), width, track.height()).intersected(track)
+        else:
+            fill = QRectF(track)
+            fill.setWidth(track.width() * self._progress)
+        if fill.width() > 0:
+            painter.setBrush(accent)
+            painter.drawRoundedRect(fill, 2, 2)
 
 
 class CoverThumb(QWidget):
@@ -272,12 +363,19 @@ class CoverThumb(QWidget):
         super().__init__(parent)
         self.setFixedSize(size, size)
         self._image = QImage()
-        if path and Path(path).is_file():
-            image = QImage(path)
-            if not image.isNull():
-                ratio = self.devicePixelRatioF() or 1.0
-                self._image = fill_crop(image, QSize(size, size) * ratio)
-                self._image.setDevicePixelRatio(ratio)
+        self.set_path(path)
+
+    def set_path(self, path: str | None) -> None:
+        """Обложка из файла; нет файла — остаётся прежняя (или заглушка)."""
+        if not path or not Path(path).is_file():
+            return
+        image = QImage(path)
+        if image.isNull():
+            return
+        ratio = self.devicePixelRatioF() or 1.0
+        self._image = fill_crop(image, self.size() * ratio)
+        self._image.setDevicePixelRatio(ratio)
+        self.update()
 
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
@@ -295,29 +393,61 @@ class CoverThumb(QWidget):
 
 
 class DownloadNotification(Notification):
-    """«Трек скачан» / «Не удалось скачать» с обложкой трека."""
+    """Скачивание трека: «Скачивание… 42%» с полоской, затем «Трек скачан»
+    или «Не удалось скачать» — в той же карточке."""
+
+    ERROR_TIMEOUT_MS = 7000
 
     def __init__(
         self,
         track: Track,
-        ok: bool,
         cover_path: str | None = None,
         parent: QWidget | None = None,
     ) -> None:
         self._cover_path = cover_path
-        artist = (track.author or "").strip()
-        name = (track.title or "").strip() or "Без названия"
+        self._thumb: CoverThumb | None = None
         super().__init__(
-            "Трек скачан" if ok else "Не удалось скачать",
-            f"{artist} — {name}" if artist else name,
-            kind="success" if ok else "error",
-            timeout_ms=None if ok else 7000,
+            "Скачивание…",
+            track_caption(track),
+            kind="info",
+            timeout_ms=0,  # висит, пока качается
             parent=parent,
         )
         self.track = track
+        self.done = False
+        self.set_progress(None)
+
+    @classmethod
+    def finished(
+        cls, track: Track, ok: bool, cover_path: str | None = None
+    ) -> DownloadNotification:
+        """Сразу итог — когда начало скачивания карточку не показало."""
+        item = cls(track, cover_path)
+        item.finish(ok, cover_path)
+        return item
 
     def build_leading(self) -> QWidget | None:
-        return CoverThumb(self._cover_path)
+        self._thumb = CoverThumb(self._cover_path)
+        return self._thumb
+
+    def set_fraction(self, fraction: float | None) -> None:
+        if not self.done:
+            self.set_progress(fraction)
+
+    def finish(self, ok: bool, cover_path: str | None = None) -> None:
+        self.done = True
+        self.clear_progress()
+        if cover_path and self._thumb is not None:
+            self._thumb.set_path(cover_path)  # обложка докачалась вместе с треком
+        self.set_title("Трек скачан" if ok else "Не удалось скачать")
+        self.set_kind("success" if ok else "error")
+        self.set_timeout(self.DEFAULT_TIMEOUT_MS if ok else self.ERROR_TIMEOUT_MS)
+
+
+def track_caption(track: Track) -> str:
+    artist = (track.author or "").strip()
+    name = (track.title or "").strip() or "Без названия"
+    return f"{artist} — {name}" if artist else name
 
 
 class NotificationCenter(QObject):
@@ -340,6 +470,7 @@ class NotificationCenter(QObject):
         self._host = host
         self._top_offset = top_offset or (lambda: 0)
         self._items: list[Notification] = []
+        self._laying_out = False
         host.installEventFilter(self)
 
     @property
@@ -348,6 +479,7 @@ class NotificationCenter(QObject):
 
     def push(self, notification: Notification) -> Notification:
         notification.setParent(self._host)
+        notification.installEventFilter(self)  # высота меняется — сдвинуть соседей
         notification.closed.connect(lambda n=notification: self._remove(n))
         self._items.insert(0, notification)
         while len(self._items) > self.MAX_VISIBLE:
@@ -367,6 +499,15 @@ class NotificationCenter(QObject):
         self._layout()
 
     def _layout(self) -> None:
+        if self._laying_out:
+            return  # adjustSize ниже сам шлёт Resize
+        self._laying_out = True
+        try:
+            self._place_items()
+        finally:
+            self._laying_out = False
+
+    def _place_items(self) -> None:
         y = self._top_offset()
         for item in self._items:
             item.adjustSize()
@@ -376,6 +517,8 @@ class NotificationCenter(QObject):
             y += item.height() + self.GAP
 
     def eventFilter(self, watched: QObject, event: QEvent) -> bool:
-        if watched is self._host and event.type() == QEvent.Type.Resize:
+        if event.type() == QEvent.Type.Resize and (
+            watched is self._host or watched in self._items
+        ):
             self._layout()
         return False

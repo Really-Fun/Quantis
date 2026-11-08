@@ -352,6 +352,9 @@ class QuantisMainWindow(QMainWindow):
         bind_playlist_event_bus(bundle.event_bus)
         bundle.event_bus.queue_extended.connect(self._on_queue_extended)
         bundle.event_bus.error_occurred.connect(self._show_error)
+        self._download_toasts: dict[tuple[str, str], DownloadNotification] = {}
+        bundle.event_bus.track_download_started.connect(self._on_download_started)
+        bundle.event_bus.track_download_progress.connect(self._on_download_progress)
         bundle.event_bus.track_downloaded.connect(self._on_track_downloaded)
         self._search_vm.download_finished.connect(
             lambda: self._home_vm.refresh_downloaded(self._bridge)
@@ -1252,9 +1255,37 @@ class QuantisMainWindow(QMainWindow):
             return 0
         return header.mapTo(self._shell, QPoint(0, header.height())).y() - 6
 
+    @staticmethod
+    def _download_key(track) -> tuple[str, str]:
+        return str(track.source), str(track.track_id)
+
+    def _on_download_started(self, track) -> None:
+        key = self._download_key(track)
+        if key in self._download_toasts:
+            return
+        cover = self._bundle.music.provider.get_cover_path(track)
+        toast = DownloadNotification(track, cover)
+        # Закрыли крестиком — итог придёт новой карточкой.
+        toast.closed.connect(lambda: self._forget_download_toast(key, toast))
+        self._download_toasts[key] = toast
+        self._notifications.push(toast)
+
+    def _forget_download_toast(self, key, toast) -> None:
+        if self._download_toasts.get(key) is toast:
+            del self._download_toasts[key]
+
+    def _on_download_progress(self, track, fraction) -> None:
+        toast = self._download_toasts.get(self._download_key(track))
+        if toast is not None:
+            toast.set_fraction(fraction)
+
     def _on_track_downloaded(self, track, ok: bool) -> None:
         cover = self._bundle.music.provider.get_cover_path(track)
-        self._notifications.push(DownloadNotification(track, ok, cover))
+        toast = self._download_toasts.pop(self._download_key(track), None)
+        if toast is not None and not toast.done:
+            toast.finish(ok, cover)
+        else:
+            self._notifications.push(DownloadNotification.finished(track, ok, cover))
 
     def _show_error(self, message: str) -> None:
         import logging

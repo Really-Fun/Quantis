@@ -374,31 +374,72 @@ async def test_tag_and_rename_reports_rename_failure(index, music, monkeypatch):
     assert outcome.complete and outcome.path == music / "A - T.mp3"
 
 
+class _Recorder:
+    def __init__(self):
+        self.events = []
+
+    def download_started(self, track):
+        self.events.append(("start", track.track_id))
+
+    def download_progress(self, track, fraction):
+        self.events.append(("progress", fraction))
+
+    def download_finished(self, track, ok):
+        self.events.append(("done", track.track_id, ok))
+
+
 @pytest.mark.asyncio
-async def test_finished_listener_reports_real_downloads_only(index, music):
+async def test_listener_reports_real_downloads_only(index, music):
     dl = make_downloader(index, music)
-    events = []
-    dl.add_finished_listener(lambda track, ok: events.append((track.track_id, ok)))
-    track = make_track()
-    assert await dl.download_full(track) is True
-    assert events == [("1", True)]
-    # Файл уже в индексе — повторного «скачан» нет.
+    rec = _Recorder()
+    dl.add_listener(rec)
     assert await dl.download_full(make_track()) is True
-    assert events == [("1", True)]
+    assert rec.events == [("start", "1"), ("done", "1", True)]
+    # Файл уже в индексе — повторных событий нет.
+    assert await dl.download_full(make_track()) is True
+    assert rec.events == [("start", "1"), ("done", "1", True)]
 
 
 @pytest.mark.asyncio
-async def test_finished_listener_reports_failure(index, music):
+async def test_listener_reports_failure(index, music):
     dl = make_downloader(index, music)
 
     async def failing(track):
         return None
 
     dl.download_track = failing
-    events = []
-    dl.add_finished_listener(lambda track, ok: events.append(ok))
+    rec = _Recorder()
+    dl.add_listener(rec)
     assert await dl.download_full(make_track("2")) is False
-    assert events == [False]
+    assert rec.events == [("start", "2"), ("done", "2", False)]
+
+
+@pytest.mark.asyncio
+async def test_progress_is_forwarded_once_per_percent(index, music):
+    dl = make_downloader(index, music)
+    track = make_track("3")
+    plain = dl.download_track
+
+    async def with_progress(t):
+        for fraction in (None, None, 0.001, 0.004, 0.5, 0.501, 1.0):
+            dl._youtube_downloader._report_progress(t, fraction)
+        return await plain(t)
+
+    dl.download_track = with_progress
+    rec = _Recorder()
+    dl.add_listener(rec)
+    assert await dl.download_full(track) is True
+    progress = [e[1] for e in rec.events if e[0] == "progress"]
+    assert progress == [None, 0.001, 0.5, 1.0]
+
+
+def test_ydl_progress_hook_reports_fraction():
+    seen = []
+    hook = ad._ydl_progress_hook(make_track(), lambda t, f: seen.append(f))
+    hook({"status": "downloading", "downloaded_bytes": 25, "total_bytes": 100})
+    hook({"status": "downloading", "downloaded_bytes": 5})
+    hook({"status": "finished"})
+    assert seen == [0.25, None]
 
 
 def test_music_service_attaches_listener_to_lazy_downloader(monkeypatch):
@@ -411,12 +452,12 @@ def test_music_service_attaches_listener_to_lazy_downloader(monkeypatch):
             self.listeners = []
             created.append(self)
 
-        def add_finished_listener(self, listener):
+        def add_listener(self, listener):
             self.listeners.append(listener)
 
     monkeypatch.setattr(ad, "AsyncDownloader", FakeDownloader)
     service = MusicService()
-    listener = lambda track, ok: None  # noqa: E731
+    listener = _Recorder()
     service.add_download_listener(listener)
     assert created == []  # загрузчик не создан раньше времени
     assert service.downloader.listeners == [listener]

@@ -34,6 +34,23 @@ class ApplicationBundle:
     plugin_host: PluginHost
 
 
+class _BusDownloadListener:
+    """События загрузчика — в шину. Сигналы шины живут в UI-потоке: из потока
+    asyncio или пула yt-dlp они доходят до окна очередью."""
+
+    def __init__(self, event_bus: EventBus) -> None:
+        self._bus = event_bus
+
+    def download_started(self, track) -> None:
+        self._bus.track_download_started.emit(track)
+
+    def download_progress(self, track, fraction) -> None:
+        self._bus.track_download_progress.emit(track, fraction)
+
+    def download_finished(self, track, ok: bool) -> None:
+        self._bus.track_downloaded.emit(track, ok)
+
+
 def build_application(bridge: AsyncBridge) -> ApplicationBundle:
     from quantis.providers import PathProvider
     from quantis.utils import app_paths
@@ -62,8 +79,7 @@ def build_application(bridge: AsyncBridge) -> ApplicationBundle:
         async_bridge=bridge,
     )
 
-    # Сигнал шины живёт в UI-потоке: из потока asyncio он дойдёт очередью.
-    music.add_download_listener(event_bus.track_downloaded.emit)
+    music.add_download_listener(_BusDownloadListener(event_bus))
     wire_player_events(player, event_bus, playback, bridge)
     wire_event_bus_navigation(event_bus, playback, bridge)
     history_watcher = PlaybackHistoryWatcher(player, history, event_bus, bridge)

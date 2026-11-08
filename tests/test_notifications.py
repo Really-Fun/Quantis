@@ -42,12 +42,36 @@ def test_max_visible_and_dismiss_removes(qapp):
     assert top not in center.notifications
 
 
-def test_download_notification_texts(qapp):
+def test_download_notification_goes_from_progress_to_done(qapp):
     track = YandexTrack(track_id="1", title="Песня", author="Группа")
-    ok = DownloadNotification(track, True, cover_path=None)
-    assert ok.kind == "success"
-    assert ok._title.text() == "Трек скачан"
-    assert ok._message.text() == "Группа — Песня"
-    failed = DownloadNotification(track, False)
+    toast = DownloadNotification(track)
+    assert toast._title.text() == "Скачивание…"
+    assert toast._message.text() == "Группа — Песня"
+    assert toast._has_progress and toast.progress is None  # бегущая полоска
+    toast.set_fraction(0.42)
+    assert toast.progress == 0.42
+    assert toast._percent.text() == "42%"
+    toast.finish(True)
+    assert toast.kind == "success"
+    assert toast._title.text() == "Трек скачан"
+    assert not toast._has_progress
+    toast.set_fraction(0.9)  # поздний прогресс после итога не возвращает полоску
+    assert not toast._has_progress
+
+
+def test_download_notification_finished_failure(qapp):
+    track = YandexTrack(track_id="1", title="Песня", author="Группа")
+    failed = DownloadNotification.finished(track, False)
     assert failed.kind == "error"
     assert failed._title.text() == "Не удалось скачать"
+
+
+def test_progress_grows_card_and_restacks(qapp):
+    host = _host(qapp)
+    center = NotificationCenter(host)
+    lower = center.push(Notification("Нижнее"))
+    upper = center.push(Notification("Верхнее"))
+    before = lower.y()
+    upper.set_progress(0.5)
+    QApplication.processEvents()
+    assert lower.y() > before
