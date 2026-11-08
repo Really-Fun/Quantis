@@ -30,6 +30,15 @@ Item {
         }
     }
 
+    // Строку выдачи компилируем заранее, в фоне, пока поиском не пользуются:
+    // иначе первый поиск за сеанс ждал компиляции TrackRow (до 0,7 с).
+    property var _rowComponent: null
+    Timer {
+        interval: 4000
+        running: true
+        onTriggered: page._rowComponent = Qt.createComponent("TrackRow.qml", Component.Asynchronous)
+    }
+
     // Поиск снаружи (недавний запрос на главной).
     function runQuery(text) {
         query.text = text
@@ -62,9 +71,14 @@ Item {
             inputMethodHints: Qt.ImhNoPredictiveText
             EnterKey.type: Qt.EnterKeySearch
             // Enter с русской клавиатуры на Android доходил не всегда, и поиск
-            // молчал: ищем и по мере ввода, через 0,7 с после последней буквы.
+            // молчал: ищем и по мере ввода, через 0,9 с после последней буквы.
             // displayText — с текстом, который клавиатура ещё не зафиксировала.
-            onDisplayTextChanged: typing.restart()
+            // Печатают дальше — ответ на прежний запрос уже не нужен: применять
+            // его (перестройка выдачи) значит подвесить ввод под пальцами.
+            onDisplayTextChanged: {
+                typing.restart()
+                app.searchStale()
+            }
             onAccepted: {
                 typing.stop()
                 Qt.inputMethod.commit()
@@ -73,7 +87,7 @@ Item {
             Accessible.name: "Поиск музыки"
             Timer {
                 id: typing
-                interval: 700
+                interval: 900
                 onTriggered: if (query.displayText.trim().length >= 2) app.searchAsYouType(query.displayText)
             }
         }
@@ -124,7 +138,8 @@ Item {
             Flickable {
                 id: richView
                 anchors.fill: parent
-                visible: page.rich && !app.searching
+                // старая выдача остаётся на месте, пока ищется новая — без мигания
+                visible: page.rich
                 clip: true
                 contentHeight: richColumn.implicitHeight + 24
                 // Только вертикаль: без contentWidth ширину считали по детям, и шире
@@ -146,7 +161,7 @@ Item {
                         readonly property var best: app.searchBest
                         readonly property var item: best.item || ({})
                         readonly property bool isTrack: best.type === "track"
-                        readonly property string label: isTrack ? (list.count > 0 ? app.results.titleAt(0) : "")
+                        readonly property string label: isTrack ? (app.results.count > 0 ? app.results.titleAt(0) : "")
                                                        : (item.name || item.title || "")
                         visible: !!best.type && label.length > 0
                         Layout.fillWidth: true
@@ -169,7 +184,7 @@ Item {
                                 Layout.preferredHeight: 88
                                 radius: bestCard.best.type === "artist" ? 44 : 12
                                 seed: bestCard.label
-                                cover: bestCard.isTrack ? (list.count > 0 ? app.results.coverAt(0) : "")
+                                cover: bestCard.isTrack ? (app.results.count > 0 ? app.results.coverAt(0) : "")
                                        : (bestCard.item.cover ? encodeURIComponent(bestCard.item.cover) : "")
                             }
                             ColumnLayout {
@@ -196,7 +211,7 @@ Item {
                                 Text {
                                     Layout.fillWidth: true
                                     visible: text.length > 0
-                                    text: bestCard.isTrack ? (list.count > 0 ? app.results.artistAt(0) : "")
+                                    text: bestCard.isTrack ? (app.results.count > 0 ? app.results.artistAt(0) : "")
                                           : (bestCard.item.subtitle || bestCard.item.owner || "")
                                     color: theme.textDim
                                     font.family: theme.ui
@@ -216,7 +231,7 @@ Item {
                     // Треки: первые пять, остальные — «Все».
                     ColumnLayout {
                         Layout.fillWidth: true
-                        visible: list.count > 0
+                        visible: app.results.count > 0
                         spacing: 4
                         RowLayout {
                             Layout.fillWidth: true
@@ -231,40 +246,72 @@ Item {
                                 font.weight: Font.DemiBold
                             }
                             PillButton {
-                                visible: list.count > 5
+                                visible: app.results.count > 5
                                 text: "Все"
                                 variant: "text"
                                 compact: true
                                 onClicked: page.StackView.view.push(allTracksPage)
                             }
                         }
-                        Repeater {
-                            model: app.results
+                        // Пять первых треков. ListView, а не Repeater: Repeater создавал
+                        // строки на всю выдачу (20), хотя видно пять.
+                        ListView {
+                            id: richTracks
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: Math.min(count, 5) * 72
+                            interactive: false
+                            model: page.rich ? app.results : null
                             delegate: TrackRow {
                                 listName: "results"
-                                visible: index < 5
-                                Layout.fillWidth: true
-                                Layout.preferredHeight: visible ? 72 : 0
+                                lazyContent: true
                                 current: app.hasTrack && title === app.title && artist === app.artist
                             }
                         }
                     }
-                    CoverRibbon {
-                        title: "Исполнители"
-                        round: true
-                        tile: 112
-                        model: app.searchArtists
-                        onPicked: function (item) { page.open("artist", item.id, item.name) }
+                    // Ленты собираются в фоне: плитки с обложками — не в одном кадре.
+                    Loader {
+                        Layout.fillWidth: true
+                        asynchronous: true
+                        active: page.rich
+                        // по данным ленты, а не item.visible: тот зависит от самого Loader
+                        visible: item !== null && (item.shown.length > 0 || item.loading)
+                        sourceComponent: Component {
+                            CoverRibbon {
+                                title: "Исполнители"
+                                round: true
+                                tile: 112
+                                model: app.searchArtists
+                                onPicked: function (item) { page.open("artist", item.id, item.name) }
+                            }
+                        }
                     }
-                    CoverRibbon {
-                        title: "Альбомы"
-                        model: app.searchAlbums
-                        onPicked: function (item) { page.open("album", item.id, item.title) }
+                    Loader {
+                        Layout.fillWidth: true
+                        asynchronous: true
+                        active: page.rich
+                        // по данным ленты, а не item.visible: тот зависит от самого Loader
+                        visible: item !== null && (item.shown.length > 0 || item.loading)
+                        sourceComponent: Component {
+                            CoverRibbon {
+                                title: "Альбомы"
+                                model: app.searchAlbums
+                                onPicked: function (item) { page.open("album", item.id, item.title) }
+                            }
+                        }
                     }
-                    CoverRibbon {
-                        title: "Плейлисты"
-                        model: app.searchPlaylists
-                        onPicked: function (item) { page.open("playlist", item.uid + ":" + item.kind, item.title) }
+                    Loader {
+                        Layout.fillWidth: true
+                        asynchronous: true
+                        active: page.rich
+                        // по данным ленты, а не item.visible: тот зависит от самого Loader
+                        visible: item !== null && (item.shown.length > 0 || item.loading)
+                        sourceComponent: Component {
+                            CoverRibbon {
+                                title: "Плейлисты"
+                                model: app.searchPlaylists
+                                onPicked: function (item) { page.open("playlist", item.uid + ":" + item.kind, item.title) }
+                            }
+                        }
                     }
                 }
             }
@@ -275,25 +322,38 @@ Item {
                 anchors.fill: parent
                 visible: !page.rich
                 clip: true
-                model: app.results
+                // скрытый список не держит модель: иначе строки для него
+                // создавались на каждый поиск зря
+                model: page.rich ? null : app.results
                 boundsBehavior: Flickable.DragOverBounds
                 delegate: TrackRow {
                     listName: "results"
+                    lazyContent: true
                     current: app.hasTrack && title === app.title && artist === app.artist
                 }
                 ScrollIndicator.vertical: ScrollIndicator {}
             }
 
+            // Большая крутилка — только когда показать нечего; при выдаче на
+            // экране — тонкая полоска сверху.
             BusyIndicator {
                 anchors.centerIn: parent
-                running: app.searching
+                running: app.searching && app.results.count === 0 && !page.rich
                 visible: running
+            }
+            ProgressBar {
+                anchors.top: parent.top
+                anchors.left: parent.left
+                anchors.right: parent.right
+                indeterminate: true
+                visible: app.searching && (app.results.count > 0 || page.rich)
+                Material.accent: theme.accent
             }
 
             ColumnLayout {
                 anchors.centerIn: parent
                 width: parent.width - 2 * theme.gutter
-                visible: !app.searching && list.count === 0 && !page.rich && app.status.length === 0
+                visible: !app.searching && app.results.count === 0 && !page.rich && app.status.length === 0
                 spacing: 8
                 Image {
                     Layout.alignment: Qt.AlignHCenter

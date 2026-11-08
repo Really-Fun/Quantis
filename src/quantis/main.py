@@ -8,15 +8,12 @@ from PySide6.QtWidgets import QApplication
 from quantis.core.async_bridge import AsyncBridge
 from quantis.core.bootstrap import build_application, shutdown_application
 from quantis.ui import Quantis
+from quantis.utils.log_setup import setup_logging
 from quantis.version import __version__
 
 
 def main() -> None:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
-        handlers=[logging.StreamHandler(sys.stdout)],
-    )
+    log_file = setup_logging()
     logger = logging.getLogger(__name__)
     logger.info(
         """
@@ -26,6 +23,8 @@ def main() -> None:
         """,
         __version__,
     )
+    if log_file is not None:
+        logger.info("Лог пишется в %s", log_file)
 
     app = QApplication(sys.argv)
     app.setApplicationName("Quantis")

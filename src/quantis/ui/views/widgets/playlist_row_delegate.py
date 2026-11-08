@@ -7,6 +7,7 @@ from PySide6.QtGui import QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QStyle, QStyledItemDelegate
 
 from quantis.models.playlist import Playlist
+from quantis.ui.corners import corner
 from quantis.ui.models.playlist_list_model import PlaylistListModel
 from quantis.ui.preferences import UiPreferences
 from quantis.ui.views.widgets.cover_art import CoverDecoder, playlist_cover_path
@@ -59,7 +60,7 @@ class PlaylistRowDelegate(QStyledItemDelegate):
 
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         path = QPainterPath()
-        path.addRoundedRect(rect, 12, 12)
+        path.addRoundedRect(rect, corner(12), corner(12))
         painter.fillPath(
             path, colors.bg_hover if hovered or selected else colors.bg_idle
         )
@@ -79,7 +80,7 @@ class PlaylistRowDelegate(QStyledItemDelegate):
         )
         painter.save()
         clip = QPainterPath()
-        clip.addRoundedRect(cover, 8, 8)
+        clip.addRoundedRect(cover, corner(8), corner(8))
         painter.setClipPath(clip)
         if pixmap is not None and not pixmap.isNull():
             painter.drawPixmap(cover, pixmap)

@@ -26,6 +26,8 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import QApplication, QSizePolicy, QWidget
 
 from quantis.services.async_wave import WAVE_ACTIVITIES, WAVE_MOODS, WaveMood
+from quantis.ui.corners import corner
+from quantis.ui.preferences import UiPreferences
 from quantis.ui.wave_art import WaveArtStore, mood_color, paint_wave_art
 
 
@@ -109,7 +111,9 @@ def node_shape(node: FieldNode, rect: QRectF) -> QPainterPath:
     if node.kind == "mood":
         path.addEllipse(rect)
     else:
-        path.addRoundedRect(rect, rect.width() * 0.3, rect.width() * 0.3)
+        path.addRoundedRect(
+            rect, corner(rect.width() * 0.3), corner(rect.width() * 0.3)
+        )
     return path
 
 
@@ -286,7 +290,8 @@ class MoodField(QWidget):
 
     def _background(self) -> QPixmap:
         dpr = self.devicePixelRatioF()
-        key = (self.width(), self.height(), dpr)
+        # тема в ключе: шрифт подписей и углы у тем разные
+        key = (self.width(), self.height(), dpr, UiPreferences().ui_theme)
         if self._bg is not None and self._bg_key == key:
             return self._bg
         pixmap = QPixmap(round(self.width() * dpr), round(self.height() * dpr))
@@ -296,7 +301,7 @@ class MoodField(QWidget):
         p.setRenderHint(QPainter.RenderHint.Antialiasing)
         rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
         frame = QPainterPath()
-        frame.addRoundedRect(rect, _RADIUS, _RADIUS)
+        frame.addRoundedRect(rect, corner(_RADIUS), corner(_RADIUS))
         p.setClipPath(frame)
         p.fillRect(rect, QColor(9, 10, 17, 236))
         w, h = rect.width(), rect.height()
@@ -350,7 +355,7 @@ class MoodField(QWidget):
                 box = QRectF(cx - tw / 2, rect.bottom() - 34, tw, 22)
             p.setPen(Qt.PenStyle.NoPen)
             p.setBrush(QColor(9, 10, 17, 190))
-            p.drawRoundedRect(box, 11, 11)
+            p.drawRoundedRect(box, corner(11), corner(11))
             p.setPen(QColor(255, 255, 255, 140))
             p.drawText(box, Qt.AlignmentFlag.AlignCenter, text)
 
@@ -365,7 +370,7 @@ class MoodField(QWidget):
     def _orb(self, node: FieldNode, selected: bool) -> QPixmap:
         """Узел с артом, кольцом и подписью — в кэше на (узел, выбран, dpr)."""
         dpr = self.devicePixelRatioF()
-        key = (node.seed, selected, dpr)
+        key = (node.seed, selected, dpr, UiPreferences().ui_theme)
         cached = self._orbs.get(key)
         if cached is not None:
             return cached
@@ -400,7 +405,7 @@ class MoodField(QWidget):
         pill = QRectF(size / 2 - tw / 2, 20 + d + 7, tw, 20)
         p.setPen(Qt.PenStyle.NoPen)
         p.setBrush(_alpha(color, 235) if selected else QColor(9, 10, 17, 200))
-        p.drawRoundedRect(pill, 10, 10)
+        p.drawRoundedRect(pill, corner(10), corner(10))
         p.setPen(QColor(10, 10, 14) if selected else QColor(255, 255, 255, 225))
         p.drawText(pill, Qt.AlignmentFlag.AlignCenter, node.short)
         p.end()
@@ -488,4 +493,4 @@ class MoodField(QWidget):
                 painter.drawEllipse(center, r, r)
             else:
                 rect = QRectF(center.x() - r, center.y() - r, 2 * r, 2 * r)
-                painter.drawRoundedRect(rect, r * 0.6, r * 0.6)
+                painter.drawRoundedRect(rect, corner(r * 0.6), corner(r * 0.6))

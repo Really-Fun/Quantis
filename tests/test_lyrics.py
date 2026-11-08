@@ -145,3 +145,60 @@ def test_yandex_uses_async_lyrics_download(monkeypatch) -> None:
         LyricsService()._from_yandex(YandexTrack(track_id=1, title="t", author="a"))
     )
     assert found is not None and found.source == "Яндекс Музыка" and found.synced
+
+
+def test_base_title_drops_version_tails() -> None:
+    from quantis.services.lyrics import base_title
+
+    assert base_title("What Is Love (remix)") == "What Is Love"
+    assert base_title("What Is Love [Lynx & Pico Remix]") == "What Is Love"
+    assert base_title("What Is Love - Extended Mix") == "What Is Love"
+    assert base_title("Ват из лав (feat. Кто-то) (Sped Up)") == "Ват из лав"
+    assert base_title("Song ft. Someone") == "Song"
+    assert base_title("Группа крови") == "Группа крови"  # нечего срезать
+
+
+def test_pick_loose_gives_plain_text_when_length_differs() -> None:
+    """Ремикс длиннее оригинала: текст подходит, а тайминги — нет."""
+    items = [{"duration": 270, "syncedLyrics": "[00:01]What is love\n[00:05]Baby"}]
+    assert pick_search_result(items, 200) is None
+    found = pick_search_result(items, 200, loose=True)
+    assert found is not None and not found.synced
+    assert [line.text for line in found.lines] == ["What is love", "Baby"]
+    assert all(line.t == -1 for line in found.lines)
+    close = pick_search_result(items, 271, loose=True)
+    assert close is not None and close.synced  # длина совпала — синхронный
+
+
+def test_remix_falls_back_to_original_lyrics(cache_dir, monkeypatch) -> None:
+    asked: list[tuple[str, str]] = []
+
+    async def get(self, http, artist, title, duration):
+        return None  # точной записи нет ни для ремикса, ни для оригинала
+
+    async def search(self, http, artist, title):
+        asked.append((artist, title))
+        if "remix" in title.lower():
+            return []
+        return [{"duration": 270, "syncedLyrics": "[00:01]What is love"}]
+
+    monkeypatch.setattr(LyricsService, "_lrclib_get", get)
+    monkeypatch.setattr(LyricsService, "_lrclib_search", search)
+    track = YandexTrack(
+        track_id=7, title="What Is Love (remix)", author="Haddaway", duration_ms=200_000
+    )
+    found = asyncio.run(LyricsService().fetch(track))
+    assert [line.text for line in found.lines] == ["What is love"]
+    assert not found.synced
+    assert asked == [("Haddaway", "What Is Love (remix)"), ("Haddaway", "What Is Love")]
+
+
+def test_old_cached_miss_is_retried(cache_dir) -> None:
+    """«Не нашлось» из старой версии поиска не держим вечно."""
+    track = YoutubeTrack(track_id="old", title="t", author="a")
+    lyrics_mod._cache_path(track).write_text(
+        '{"lines": [], "synced": false, "source": ""}', encoding="utf-8"
+    )
+    assert lyrics_mod.cached(track) is None
+    lyrics_mod._store(track, Lyrics())
+    assert lyrics_mod.cached(track) is not None  # новая запись — из кэша

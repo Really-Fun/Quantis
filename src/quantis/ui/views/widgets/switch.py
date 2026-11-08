@@ -8,6 +8,7 @@ from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import QPainter, QPaintEvent
 from PySide6.QtWidgets import QAbstractButton, QWidget
 
+from quantis.ui.corners import corner
 from quantis.ui.themes.spec import ThemeSpec, qcolor
 
 
@@ -50,15 +51,17 @@ class Switch(QAbstractButton):
             ink = qcolor(theme.colors.ink_rgb)
             ink.setAlpha(46)
             painter.setBrush(ink)
-        painter.drawRoundedRect(track, track.height() / 2, track.height() / 2)
+        painter.drawRoundedRect(
+            track, corner(track.height() / 2), corner(track.height() / 2)
+        )
         if self.hasFocus():
             ring = qcolor(theme.colors.tint)
             painter.setPen(ring)
             painter.setBrush(Qt.BrushStyle.NoBrush)
             painter.drawRoundedRect(
                 track.adjusted(-0.5, -0.5, 0.5, 0.5),
-                track.height() / 2,
-                track.height() / 2,
+                corner(track.height() / 2),
+                corner(track.height() / 2),
             )
             painter.setPen(Qt.PenStyle.NoPen)
         knob = track.height() - 6

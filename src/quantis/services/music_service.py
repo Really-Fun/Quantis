@@ -19,6 +19,7 @@ class MusicService:
         self._provider = provider or PathProvider()
         self._recommendation = None
         self._wave = None
+        self._download_listeners: list = []
 
     @property
     def downloader(self):
@@ -26,7 +27,16 @@ class MusicService:
             from quantis.services.async_downloader import AsyncDownloader
 
             self._downloader = AsyncDownloader()
+            for listener in self._download_listeners:
+                self._downloader.add_listener(listener)
         return self._downloader
+
+    def add_download_listener(self, listener) -> None:
+        """Подписчик на скачивание (``DownloadListener``); загрузчик при этом
+        не создаётся раньше времени."""
+        self._download_listeners.append(listener)
+        if self._downloader is not None and hasattr(self._downloader, "add_listener"):
+            self._downloader.add_listener(listener)
 
     @property
     def finder(self):

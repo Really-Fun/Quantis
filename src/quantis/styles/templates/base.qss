@@ -6,7 +6,7 @@ QInputDialog {
     background-color: ${popup_bg};
     color: rgb(${ink_rgb});
     border: ${popup_border};
-    border-radius: 14px;
+    border-radius: ${r14};
 }
 
 QMessageBox QLabel,
@@ -19,7 +19,7 @@ QMessageBox QPushButton,
 QInputDialog QPushButton {
     background-color: rgba(${hl_rgb}, 30);
     border: 1px solid rgba(${hl_rgb}, 150);
-    border-radius: 8px;
+    border-radius: ${r8};
     color: rgb(${ink_rgb});
     padding: 6px 16px;
     min-width: 80px;
@@ -35,7 +35,7 @@ QInputDialog QPushButton:hover {
 QInputDialog QComboBox {
     background-color: ${field_bg};
     border: 1px solid rgba(${hl_rgb}, 120);
-    border-radius: 8px;
+    border-radius: ${r8};
     color: rgb(${ink_rgb});
     padding: 6px 12px;
     font-size: 14px;
@@ -138,7 +138,7 @@ QInputDialog QComboBox QAbstractItemView {
     border: none;
     background: transparent;
     color: ${text};
-    border-radius: 20px;
+    border-radius: ${r20};
     padding: 0;
     margin: 0;
 }
@@ -147,7 +147,7 @@ QInputDialog QComboBox QAbstractItemView {
     outline: none;
     background: transparent;
     border: none;
-    border-radius: 18px;
+    border-radius: ${r18};
     padding: 0;
     margin: 0;
 }
@@ -174,7 +174,7 @@ QInputDialog QComboBox QAbstractItemView {
     font-weight: 700;
     background: rgb(${hl_rgb});
     border: none;
-    border-radius: 18px;
+    border-radius: ${r18};
     padding: 9px 22px;
     min-width: 116px;
 }
@@ -185,7 +185,7 @@ QInputDialog QComboBox QAbstractItemView {
     font-weight: 600;
     background: rgba(${ink_rgb}, 0.06);
     border: 1px solid rgba(${ink_rgb}, 0.1);
-    border-radius: 18px;
+    border-radius: ${r18};
     padding: 9px 22px;
     min-width: 132px;
 }
@@ -204,7 +204,7 @@ QInputDialog QComboBox QAbstractItemView {
     font-weight: 700;
     background: rgba(${ink_rgb}, 0.05);
     border: 1px solid rgba(${ink_rgb}, 0.08);
-    border-radius: 20px;
+    border-radius: ${r20};
 }
 
 #backButton:hover {
@@ -216,7 +216,7 @@ QInputDialog QComboBox QAbstractItemView {
 #volSlider::groove:horizontal {
     background: rgba(${ink_rgb}, 0.1);
     height: 4px;
-    border-radius: 2px;
+    border-radius: ${r2};
 }
 
 #seekSlider::handle:horizontal {
@@ -224,7 +224,7 @@ QInputDialog QComboBox QAbstractItemView {
     width: 12px;
     height: 12px;
     margin: -5px 0;
-    border-radius: 6px;
+    border-radius: ${r6};
     border: 2px solid rgb(${accent_fallback_rgb});
 }
 
@@ -233,7 +233,7 @@ QInputDialog QComboBox QAbstractItemView {
     width: 10px;
     height: 10px;
     margin: -4px 0;
-    border-radius: 5px;
+    border-radius: ${r5};
 }
 
 #seekSlider::handle:horizontal:hover {
@@ -242,12 +242,12 @@ QInputDialog QComboBox QAbstractItemView {
 
 #seekSlider::sub-page:horizontal {
     background: ${accent_fallback};
-    border-radius: 2px;
+    border-radius: ${r2};
 }
 
 #volSlider::sub-page:horizontal {
     background: rgba(${tint_rgb}, 0.55);
-    border-radius: 2px;
+    border-radius: ${r2};
 }
 
 QScrollArea,
@@ -269,7 +269,7 @@ QScrollBar:vertical {
 
 QScrollBar::handle:vertical {
     min-height: 40px;
-    border-radius: 3px;
+    border-radius: ${r3};
 }
 
 #trackListView QScrollBar::handle:vertical {
@@ -293,7 +293,7 @@ QScrollBar::sub-line:vertical {
     max-width: 52px;
     min-height: 52px;
     max-height: 52px;
-    border-radius: 14px;
+    border-radius: ${r14};
     background: transparent;
 }
 
@@ -301,7 +301,7 @@ QScrollBar::sub-line:vertical {
     color: rgb(${ink_rgb});
     background: ${field_bg};
     border: 1px solid rgba(${hl_rgb}, 80);
-    border-radius: 8px;
+    border-radius: ${r8};
     padding: 6px;
 }
 

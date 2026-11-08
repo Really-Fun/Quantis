@@ -49,12 +49,18 @@ from PySide6.QtWidgets import (
 
 from quantis.models import Track
 from quantis.ui.accent import AccentStyles
+from quantis.ui.corners import corner
 from quantis.ui.cover_accent import CoverPalette
 from quantis.ui.image_fx import blur_image
 from quantis.ui.live_palette import LivePalette
 from quantis.ui.preferences import UiPreferences
 from quantis.ui.themes.spec import ThemeSpec, qcolor
-from quantis.ui.views.widgets.cover_art import load_track_cover, screen_dpr
+from quantis.ui.views.widgets.cover_art import (
+    CoverEvents,
+    is_track_cover,
+    load_track_cover,
+    screen_dpr,
+)
 from quantis.ui.views.widgets.elided_label import ElidedLabel
 from quantis.ui.views.widgets.glass import paint_glass
 from quantis.ui.views.widgets.source_badge import source_badge_color
@@ -156,10 +162,12 @@ class Spectrum(QWidget):
             bh = max(3.0, base * v)
             x = i * step
             painter.setOpacity(1.0)
-            painter.drawRoundedRect(QRectF(x, base - bh, bar, bh), bar / 2, bar / 2)
+            painter.drawRoundedRect(
+                QRectF(x, base - bh, bar, bh), corner(bar / 2), corner(bar / 2)
+            )
             painter.setOpacity(0.16)
             painter.drawRoundedRect(
-                QRectF(x, base + 3, bar, bh * 0.3), bar / 2, bar / 2
+                QRectF(x, base + 3, bar, bh * 0.3), corner(bar / 2), corner(bar / 2)
             )
 
 
@@ -206,6 +214,7 @@ class NowPlayingStage(QWidget):
         self._timer = QTimer(self)
         self._timer.setInterval(FRAME_MS)
         self._timer.timeout.connect(self._tick)
+        CoverEvents.instance().cover_ready.connect(self._on_cover_ready)
 
         row = QHBoxLayout(self)
         self._row = row
@@ -328,6 +337,12 @@ class NowPlayingStage(QWidget):
         self._apply_mode()
         self.update()
 
+    def _on_cover_ready(self, path: str) -> None:
+        """Обложка докачалась уже после смены трека."""
+        if self._track is not None and is_track_cover(self._track, path):
+            self._cover = load_track_cover(self._track, self.COVER)
+            self.update()
+
     def set_greeting(self, greeting: str) -> None:
         self._greeting = greeting
         if self._mode == "empty":
@@ -443,7 +458,9 @@ class NowPlayingStage(QWidget):
         painter.setBrush(QColor(0, 0, 0, 60 if light else 150))
         inset = size * 0.04
         painter.drawRoundedRect(
-            QRectF(pad + inset, pad + inset, size - 2 * inset, size - 2 * inset), 24, 24
+            QRectF(pad + inset, pad + inset, size - 2 * inset, size - 2 * inset),
+            corner(24),
+            corner(24),
         )
         painter.end()
         shadow = QPixmap.fromImage(blur_image(image, 0.18))
@@ -551,7 +568,7 @@ class NowPlayingStage(QWidget):
             shadow,
         )
         path = QPainterPath()
-        path.addRoundedRect(cover, 22, 22)
+        path.addRoundedRect(cover, corner(22), corner(22))
         if self._cover is not None and not self._cover.isNull():
             painter.save()
             painter.setClipPath(path)
@@ -566,7 +583,9 @@ class NowPlayingStage(QWidget):
         painter.setBrush(Qt.BrushStyle.NoBrush)
         painter.setPen(QPen(QColor(255, 255, 255, 30), 1))
         inner = QPainterPath()
-        inner.addRoundedRect(cover.adjusted(0.5, 0.5, -0.5, -0.5), 22, 22)
+        inner.addRoundedRect(
+            cover.adjusted(0.5, 0.5, -0.5, -0.5), corner(22), corner(22)
+        )
         painter.drawPath(inner)
 
     def _paint_placeholder(
@@ -634,6 +653,7 @@ class UpNextPanel(QWidget):
         self._palette = LivePalette.instance().current
         self._hover = -1
         LivePalette.instance().palette_changed.connect(self._on_palette)
+        CoverEvents.instance().cover_ready.connect(self._on_cover_ready)
 
     @classmethod
     def height_for(cls, rows: int) -> int:
@@ -665,6 +685,15 @@ class UpNextPanel(QWidget):
 
     def items(self) -> list[UpNextItem]:
         return list(self._items)
+
+    def _on_cover_ready(self, path: str) -> None:
+        hit = False
+        for row, item in enumerate(self._items):
+            if is_track_cover(item.track, path):
+                self._covers[row] = load_track_cover(item.track, 44)
+                hit = True
+        if hit:
+            self.update()
 
     def _on_palette(self, palette: CoverPalette) -> None:
         self._palette = palette
@@ -712,7 +741,7 @@ class UpNextPanel(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
         path = QPainterPath()
-        path.addRoundedRect(rect, 22, 22)
+        path.addRoundedRect(rect, corner(22), corner(22))
         if not paint_glass(self, painter, path):
             painter.fillPath(path, qcolor(theme.colors.surface))
         painter.setPen(QPen(_alpha(qcolor(theme.colors.ink_rgb), 26), 1))
@@ -783,11 +812,11 @@ class UpNextPanel(QWidget):
             if row == self._hover:
                 painter.setPen(Qt.PenStyle.NoPen)
                 painter.setBrush(_alpha(qcolor(colors.ink_rgb), 14))
-                painter.drawRoundedRect(cell, 12, 12)
+                painter.drawRoundedRect(cell, corner(12), corner(12))
             x, y, right = cell.x() + 10, cell.y() + 6, cell.right() - 10
             box = QRectF(x, y, 44, 44)
             clip = QPainterPath()
-            clip.addRoundedRect(box, 9, 9)
+            clip.addRoundedRect(box, corner(9), corner(9))
             if cover is not None and not cover.isNull():
                 painter.save()
                 painter.setClipPath(clip)

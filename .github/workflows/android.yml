@@ -1,0 +1,142 @@
+name: Android APK
+
+# Сборка беты Quantis Mobile (mobile/) тем же mobile/build_apk.sh, что и
+# локально. APK — артефактом сборки (Actions → запуск → Artifacts).
+
+on:
+  # Любой push, который трогает мобильное приложение (в любой ветке, в том
+  # числе в ветке PR), и вручную из вкладки Actions.
+  push:
+    paths:
+      - "mobile/**"
+      - ".github/workflows/android.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  PYSIDE_VERSION: "6.12.0"
+  # Путь кэша зашит в pyside6-android-deploy (NDK качается сюда же).
+  CACHE: /home/runner/.pyside6_android_deploy
+
+jobs:
+  apk:
+    name: APK (arm64)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+
+      # Что нужно python-for-android для рецептов из исходников (libffi —
+      # autoreconf с макросами libtool и т. д.), список из документации buildozer.
+      - name: System packages for python-for-android
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            autoconf automake libtool libltdl-dev pkg-config m4 \
+            zip unzip cmake zlib1g-dev libncurses-dev libffi-dev libssl-dev
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: astral-sh/setup-uv@v7
+
+      # NDK, SDK, колёса PySide6 для Android и окружение инструмента —
+      # меняются только с версией PySide6.
+      - name: Cache toolchain
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.CACHE }}/android-ndk
+            ${{ env.CACHE }}/android-sdk
+            ${{ env.CACHE }}/wheels
+            ${{ env.CACHE }}/tool-venv
+          key: android-toolchain-${{ env.PYSIDE_VERSION }}-v1
+
+      # Собранный python-for-android (Python, OpenSSL, рецепты): с ним
+      # повторная сборка — перепаковка за минуту. build_apk.sh сам начнёт
+      # с нуля, если поменялось то, из чего собраны рецепты.
+      - name: Cache p4a build
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.CACHE }}/build-aarch64
+          key: android-p4a-${{ hashFiles('mobile/deploy_android.py', 'mobile/slim_wheel.py', 'mobile/qml/**') }}
+          restore-keys: android-p4a-
+
+      - name: Tool environment and PySide6 wheels
+        run: |
+          mkdir -p "$CACHE/wheels"
+          if [ ! -x "$CACHE/tool-venv/bin/python" ]; then
+            # --seed: с pip — инструмент сам зовёт pip freeze / pip install
+            uv venv --seed --python 3.14 "$CACHE/tool-venv"
+            VIRTUAL_ENV="$CACHE/tool-venv" uv pip install "pyside6==$PYSIDE_VERSION"
+            REQS="$("$CACHE/tool-venv/bin/python" -c 'import PySide6, pathlib; print(pathlib.Path(PySide6.__file__).parent / "scripts" / "requirements-android.txt")')"
+            VIRTUAL_ENV="$CACHE/tool-venv" uv pip install -r "$REQS"
+          fi
+          cd "$CACHE/wheels"
+          for p in pyside6 shiboken6; do
+            f="$p-$PYSIDE_VERSION-$PYSIDE_VERSION-cp310-abi3-android_aarch64.whl"
+            [ -f "$f" ] || curl -fsSLO "https://download.qt.io/official_releases/QtForPython/$p/$f"
+          done
+
+      # NDK заранее: build_apk.sh берёт из него llvm-readelf (урезать колесо
+      # PySide6) ещё до того, как инструмент скачал бы NDK сам.
+      - name: Android NDK r28c
+        run: |
+          NDK="$CACHE/android-ndk/android-ndk-r28c"
+          if [ ! -d "$NDK" ]; then
+            mkdir -p "$CACHE/android-ndk"
+            curl -fsSL -o /tmp/ndk.zip https://dl.google.com/android/repository/android-ndk-r28c-linux.zip
+            unzip -q /tmp/ndk.zip -d "$CACHE/android-ndk"
+            rm /tmp/ndk.zip
+          fi
+          test -x "$NDK/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf"
+
+      # build_apk.sh берёт чистые Python-зависимости (yt-dlp, yandex-music…)
+      # из .venv проекта: ставим только их, версиями из poetry.lock.
+      - name: Project .venv with vendored packages
+        run: |
+          python -m venv .venv
+          .venv/bin/python - <<'PY'
+          import subprocess, sys, tomllib
+          wanted = {"yt-dlp", "yandex-music", "requests", "urllib3", "idna",
+                    "typing-extensions", "pysocks", "certifi"}
+          lock = tomllib.load(open("poetry.lock", "rb"))
+          pins = [f"{p['name']}=={p['version']}" for p in lock["package"]
+                  if p["name"] in wanted]
+          missing = wanted - {p.split("==")[0] for p in pins}
+          if missing:
+              sys.exit(f"нет в poetry.lock: {sorted(missing)}")
+          subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", *pins])
+          PY
+
+      - name: Build APK
+        env:
+          ANDROID_SDK: ${{ env.CACHE }}/android-sdk
+        run: |
+          # андроидный SDK инструмент докачивает сам; android.jar для AAR —
+          # из того же SDK, но он появляется только после первой сборки:
+          # до неё берём платформу из SDK раннера.
+          if [ ! -f "$ANDROID_SDK/platforms/android-35/android.jar" ]; then
+            export ANDROID_SDK="$ANDROID_HOME"
+          fi
+          bash mobile/build_apk.sh
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: QuantisMobile-${{ github.sha }}
+          path: mobile/QuantisMobile*.apk
+          if-no-files-found: error
+          retention-days: 30

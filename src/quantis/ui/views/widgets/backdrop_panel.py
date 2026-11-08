@@ -35,6 +35,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from quantis.ui.corners import corner
 from quantis.ui.image_fx import fill_crop
 from quantis.ui.preferences import BackdropMode, UiPreferences
 from quantis.ui.themes.spec import ThemeSpec, qcolor
@@ -134,7 +135,7 @@ class BackdropTiles(QWidget):
         theme = self._compositor.theme
         comp = self._compositor
         path = QPainterPath()
-        path.addRoundedRect(rect, 14, 14)
+        path.addRoundedRect(rect, corner(14), corner(14))
         painter.save()
         painter.setClipPath(path)
         painter.fillRect(rect, qcolor(theme.colors.bg))
@@ -155,7 +156,7 @@ class BackdropTiles(QWidget):
             if not raw.isNull():
                 box = QRectF(rect.center().x() - 23, rect.center().y() - 23, 46, 46)
                 clip = QPainterPath()
-                clip.addRoundedRect(box, 9, 9)
+                clip.addRoundedRect(box, corner(9), corner(9))
                 painter.setClipPath(clip, Qt.ClipOperation.IntersectClip)
                 painter.drawImage(box, raw)
         else:
@@ -173,7 +174,7 @@ class BackdropTiles(QWidget):
                 badge = QRectF(rect.right() - 34, rect.y() + 8, 26, 18)
                 painter.setPen(Qt.PenStyle.NoPen)
                 painter.setBrush(QColor(0, 0, 0, 130))
-                painter.drawRoundedRect(badge, 6, 6)
+                painter.drawRoundedRect(badge, corner(6), corner(6))
                 painter.setBrush(QColor(255, 255, 255))
                 c = badge.center()
                 painter.drawPolygon(
@@ -196,7 +197,9 @@ class BackdropTiles(QWidget):
             painter.setBrush(Qt.BrushStyle.NoBrush)
             if on:
                 painter.setPen(QPen(text, 2))
-                painter.drawRoundedRect(rect.adjusted(1, 1, -1, -1), 13, 13)
+                painter.drawRoundedRect(
+                    rect.adjusted(1, 1, -1, -1), corner(13), corner(13)
+                )
                 center = QPointF(rect.x() + 16, rect.y() + 16)
                 painter.setPen(Qt.PenStyle.NoPen)
                 painter.setBrush(text)
@@ -213,7 +216,9 @@ class BackdropTiles(QWidget):
                 )
             else:
                 painter.setPen(QPen(_ink(theme, 30), 1))
-                painter.drawRoundedRect(rect.adjusted(0.5, 0.5, -0.5, -0.5), 14, 14)
+                painter.drawRoundedRect(
+                    rect.adjusted(0.5, 0.5, -0.5, -0.5), corner(14), corner(14)
+                )
             weight = QFont.Weight.DemiBold if on else QFont.Weight.Medium
             painter.setFont(_font(13, weight))
             painter.setPen(text if on else dim)
@@ -425,10 +430,12 @@ class BackdropPanel(QFrame):
         for i in range(10):  # мягкая тень без QGraphicsDropShadowEffect
             painter.setBrush(QColor(0, 0, 0, 10))
             painter.drawRoundedRect(
-                card.adjusted(-i * 2, -i * 1.2 + 6, i * 2, i * 2 + 10), 24 + i, 24 + i
+                card.adjusted(-i * 2, -i * 1.2 + 6, i * 2, i * 2 + 10),
+                corner(24 + i),
+                corner(24 + i),
             )
         path = QPainterPath()
-        path.addRoundedRect(card, 24, 24)
+        path.addRoundedRect(card, corner(24), corner(24))
         tint = qcolor(theme.colors.popup_bg)
         tint.setAlpha(max(tint.alpha(), 190))
         if not paint_glass(self, painter, path, tint):

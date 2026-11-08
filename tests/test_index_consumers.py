@@ -262,7 +262,8 @@ async def test_search_vm_marks_downloaded_only_on_success(qapp, ok: bool) -> Non
     assert downloader.calls == [track]
     assert track.downloaded is ok
     assert bool(finished) is ok
-    assert bool(errors) is (not ok)
+    # Ошибку скачивания показывает уведомление окна, не модель.
+    assert errors == []
     assert loading[-1] is False
     bridge.close()
 
@@ -286,7 +287,8 @@ async def test_home_vm_marks_downloaded_only_on_success(qapp, ok: bool) -> None:
 
     assert downloader.calls == [track]
     assert track.downloaded is ok
-    assert bool(errors) is (not ok)
+    # Ошибку скачивания показывает уведомление окна, не модель.
+    assert errors == []
     assert loading[-1] is False
     # «Скачанные» перечитываются только после успешной загрузки.
     assert bool(bridge.scheduled) is ok

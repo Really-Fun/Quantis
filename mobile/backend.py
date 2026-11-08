@@ -1493,6 +1493,19 @@ class AppController(QObject):
         """Поиск по Enter или смене источника: запрос — в недавние."""
         self._search(query, remember=True)
 
+    @Slot()
+    def searchStale(self) -> None:
+        """Текст в поле изменился: ответ на прежний запрос не применяем.
+
+        Перестройка выдачи занимает на телефоне 0,2–0,3 с главного потока —
+        если она приходится на набор, буквы залипают. Старая выдача остаётся
+        на экране, новая придёт по паузе в наборе."""
+        self._search_gen += 1
+        self._shown_query = ""
+        if self._searching:
+            self._searching = False
+            self.searchingChanged.emit()
+
     @Slot(str)
     def searchAsYouType(self, query: str) -> None:
         """Поиск по мере ввода: в недавние попадёт, только если из выдачи что-то включат."""
@@ -1558,9 +1571,11 @@ class AppController(QObject):
         if isinstance(results, dict):  # Яндекс: поиск по всему
             extras = {k: v for k, v in results.items() if k != "tracks"}
             results = results["tracks"]
-        self._results.set_items(results)
+        # Сначала блоки Яндекса: от них зависит, какой список на экране
+        # (обычный или «по всему») — строки создаёт только видимый.
         self._search_extras = extras
         self.searchExtrasChanged.emit()
+        self._results.set_items(results)
         empty = not results and not any(extras.get(k) for k in ("artists", "albums", "playlists"))
         self._set_status("Ничего не нашлось" if empty else "")
 

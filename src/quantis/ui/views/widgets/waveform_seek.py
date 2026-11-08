@@ -7,6 +7,7 @@ from PySide6.QtCore import QRectF, Qt
 from PySide6.QtGui import QBrush, QLinearGradient, QPainter, QPaintEvent, QPixmap
 from PySide6.QtWidgets import QSlider, QStyle, QStyleOptionSlider, QWidget
 
+from quantis.ui.corners import corner
 from quantis.ui.cover_accent import CoverPalette
 from quantis.ui.live_palette import LivePalette
 from quantis.ui.preferences import UiPreferences
@@ -141,9 +142,9 @@ class WaveformSeekSlider(QSlider):
             x = left + i * self.STEP
             painter.setBrush(played if x < head else rest)
             painter.drawRoundedRect(
-                QRectF(x, (h - bar_h) / 2, self.BAR, bar_h), 1.2, 1.2
+                QRectF(x, (h - bar_h) / 2, self.BAR, bar_h), corner(1.2), corner(1.2)
             )
         if self._idle:
             return
         painter.setBrush(self._handle)
-        painter.drawRoundedRect(QRectF(head - 1, 0, 2, h), 1, 1)
+        painter.drawRoundedRect(QRectF(head - 1, 0, 2, h), corner(1), corner(1))

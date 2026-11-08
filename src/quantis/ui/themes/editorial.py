@@ -1,4 +1,8 @@
-"""Редакционная — журнальная вёрстка: засечки, моноширинные метки, прямые углы."""
+"""Редакционная — журнальная вёрстка: засечки, моноширинные метки, прямые углы.
+
+Один акцент — красная «плашка» (#E63B2E) на чёрном и «бумажном» тексте:
+цвет обложки интерфейс не перекрашивает, свечений и градиентов нет.
+"""
 
 from quantis.ui.themes.neon import DARK_DEPTH
 from quantis.ui.themes.spec import BackdropSpec, ThemeColors, ThemeFonts, ThemeSpec
@@ -14,7 +18,7 @@ QScrollBar:vertical {
 }
 
 QScrollBar::handle:vertical {
-    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #00e5ff, stop:1 ${tint});
+    background: rgba(${mist_rgb}, 0.35);
 }
 
 QFrame#appHeader {
@@ -30,7 +34,7 @@ QFrame#appHeader {
 #sectionTitle {
     font-size: 10px;
     font-weight: 500;
-    color: #00e5ff;
+    color: ${tint};
     letter-spacing: 2px;
 }
 
@@ -55,22 +59,22 @@ QFrame#glassPanel {
 }
 
 #seekSlider::handle:horizontal:hover {
-    background: rgb(0, 220, 255);
+    background: ${tint_hover};
 }
 
 #volSlider::sub-page:horizontal {
-    background: rgba(0, 220, 255, 220);
+    background: ${tint};
 }
 
 #searchInput {
     border: none;
     border-radius: 0;
-    selection-background-color: rgba(0, 220, 255, 120);
+    selection-background-color: rgba(${tint_rgb}, 0.45);
 }
 
 QFrame#PlayMenu {
     border-radius: 0;
-    border-top: 2px solid rgba(0, 229, 255, 0.45);
+    border-top: 2px solid ${tint};
 }
 
 QLabel#homeSectionTitle {
@@ -115,15 +119,15 @@ THEME = ThemeSpec(
         tint_rgb="230, 59, 46",
         tint_hover="#f04a3d",
         on_tint="#ffffff",
-        hl_rgb="46, 230, 255",
-        accent_fallback="#6C5CE7",
+        hl_rgb="230, 59, 46",
+        accent_fallback="#E63B2E",
         surface="transparent",
         chip_bg="rgba(255, 255, 255, 0.04)",
         field_bg="rgba(0, 0, 0, 0.4)",
         handle="#f2f0eb",
-        popup_bg="rgba(10, 12, 20, 220)",
-        popup_border="2px solid rgba(0, 220, 255, 150)",
-        list_bg="#0b0d16",
+        popup_bg="rgba(12, 12, 14, 245)",
+        popup_border="1px solid rgba(242, 240, 235, 0.22)",
+        list_bg="#0A0A0C",
     ),
     fonts=ThemeFonts(ui=SERIF, display=SERIF, mono=MONO, label=MONO),
     backdrop=BackdropSpec(depth=DARK_DEPTH, vignette=None, glow=None),
@@ -131,5 +135,6 @@ THEME = ThemeSpec(
     glass_blur=0,  # журнальные панели: сплошные, без стекла
     radius_control=0,
     card_style="magazine",
+    fixed_accent=True,
     extra_qss=EXTRA_QSS,
 )

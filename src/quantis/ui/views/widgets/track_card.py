@@ -5,7 +5,6 @@ from typing import Callable
 from PySide6.QtCore import QEvent, QRect, QSize, Qt
 from PySide6.QtGui import (
     QColor,
-    QLinearGradient,
     QPainter,
     QPainterPath,
     QPen,
@@ -13,6 +12,7 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import QStyle, QStyledItemDelegate
 
 from quantis.models import Track
+from quantis.ui.corners import corner
 from quantis.ui.models import TrackListModel
 from quantis.ui.preferences import UiPreferences
 from quantis.ui.views.widgets.cover_art import (
@@ -156,12 +156,14 @@ class TrackCardDelegate(QStyledItemDelegate):
         else:
             painter.setBrush(colors.bg_idle)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.drawRoundedRect(rect, self.CARD_RADIUS, self.CARD_RADIUS)
+        painter.drawRoundedRect(
+            rect, corner(self.CARD_RADIUS), corner(self.CARD_RADIUS)
+        )
 
         if is_playing:
             bar = QRect(rect.left() + 2, rect.top() + 10, 3, rect.height() - 20)
             painter.setBrush(colors.accent)
-            painter.drawRoundedRect(bar, 2, 2)
+            painter.drawRoundedRect(bar, corner(2), corner(2))
 
         cover_rect = QRect(
             rect.left() + 12,
@@ -181,7 +183,7 @@ class TrackCardDelegate(QStyledItemDelegate):
 
         if hovered and not is_playing:
             overlay = QPainterPath()
-            overlay.addRoundedRect(cover_rect, 8, 8)
+            overlay.addRoundedRect(cover_rect, corner(8), corner(8))
             painter.fillPath(overlay, QColor(0, 0, 0, 118))
             painter.setPen(QColor(255, 255, 255))
             painter.setFont(fonts.cover)
@@ -229,31 +231,12 @@ class TrackCardDelegate(QStyledItemDelegate):
         inner = rect.adjusted(1, 1, -1, -1)
         painter.fillRect(inner, self._C_EDITORIAL_BG)
         fonts = paint_fonts(self._prefs.theme)
+        tint = QColor(self._prefs.theme.colors.tint)
 
-        if is_playing:
-            glow = QLinearGradient(inner.topLeft(), inner.bottomRight())
-            glow.setColorAt(0.0, QColor(0, 229, 255, 20))
-            glow.setColorAt(0.5, QColor(230, 59, 46, 16))
-            glow.setColorAt(1.0, QColor(255, 42, 127, 8))
-            painter.fillRect(inner, glow)
-        elif hovered or selected:
+        if hovered or selected or is_playing:
             painter.fillRect(inner, self._C_EDITORIAL_HOVER)
-
-        if is_playing:
-            painter.fillRect(
-                inner.left(),
-                inner.top() + 8,
-                3,
-                inner.height() - 16,
-                QColor(0, 229, 255, 220),
-            )
-            painter.fillRect(
-                inner.left() + 3,
-                inner.top() + 8,
-                2,
-                inner.height() - 16,
-                QColor(230, 59, 46, 200),
-            )
+        if is_playing:  # журнальная метка: красная плашка слева
+            painter.fillRect(inner.left(), inner.top(), 3, inner.height(), tint)
 
         painter.setFont(fonts.editorial_index)
         painter.setPen(self._C_EDITORIAL_IDX)
@@ -263,18 +246,35 @@ class TrackCardDelegate(QStyledItemDelegate):
             f"{row + 1:02d}",
         )
 
+        cover_rect = QRect(
+            inner.left() + 12,
+            inner.top() + (inner.height() - self.COVER_SIZE) // 2,
+            self.COVER_SIZE,
+            self.COVER_SIZE,
+        )
+        paint_rounded_cover(
+            painter,
+            cover_rect,
+            label=track.title or "?",
+            pixmap=request_track_cover(track, self.COVER_SIZE),
+            source_key=str(track.source),
+            radius=0,
+            with_badge=False,
+        )
+        if hovered and not is_playing:
+            painter.fillRect(cover_rect, QColor(0, 0, 0, 118))
+            painter.setPen(QColor(255, 255, 255))
+            painter.setFont(fonts.cover)
+            painter.drawText(cover_rect, Qt.AlignmentFlag.AlignCenter, "▶")
+
         action_w = self.ACTION_SIZE + 16 if self._on_download else 8
-        text_left = inner.left() + 16
+        text_left = cover_rect.right() + 14
         text_right = inner.right() - action_w
         text_w = max(0, text_right - text_left)
         title_rect = QRect(text_left, inner.top() + 10, text_w, 22)
         author_rect = QRect(text_left, inner.top() + 30, text_w, 16)
 
-        painter.setPen(
-            paint_colors(self._prefs.theme).title_playing
-            if is_playing
-            else self._C_EDITORIAL_TITLE
-        )
+        painter.setPen(tint if is_playing else self._C_EDITORIAL_TITLE)
         painter.setFont(fonts.editorial_title)
         painter.drawText(
             title_rect,

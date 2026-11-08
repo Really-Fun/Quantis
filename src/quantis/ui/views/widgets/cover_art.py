@@ -23,6 +23,7 @@ from PySide6.QtGui import (
 from quantis.models.track import Track
 from quantis.providers.path_provider import PathProvider
 from quantis.services.cover_validate import cover_file_ok
+from quantis.ui.corners import corner
 from quantis.ui.design_tokens import BADGE_SOUNDCLOUD, BADGE_YANDEX, BADGE_YOUTUBE
 from quantis.ui.fonts import app_font
 
@@ -66,6 +67,32 @@ def invalidate_cover_path(path: str | Path | None) -> None:
     dead = [key for key in _cover_lru if key.startswith(prefix)]
     for key in dead:
         _cover_lru.pop(key, None)
+
+
+class CoverEvents(QObject):
+    """Обложка легла на диск. Виджеты, читающие её один раз при смене трека
+    (сцена, «Дальше», фон), иначе так и остались бы с заглушкой."""
+
+    cover_ready = Signal(str)
+    """Путь файла, как его отдаёт ``track_cover_file``."""
+    _instance: CoverEvents | None = None
+
+    @classmethod
+    def instance(cls) -> CoverEvents:
+        if cls._instance is None:
+            cls._instance = CoverEvents()
+        return cls._instance
+
+
+def notify_cover_ready(path: str | Path) -> None:
+    """Обложка скачалась: забыть промах в кэше и сообщить подписчикам.
+    Звать из главного потока."""
+    invalidate_cover_path(path)
+    CoverEvents.instance().cover_ready.emit(str(path))
+
+
+def is_track_cover(track: Track, path: str) -> bool:
+    return str(track_cover_file(track)) == path
 
 
 def playlist_cover_path(playlist) -> str | None:
@@ -305,7 +332,7 @@ def paint_rounded_cover(
 
     if pixmap is not None and not pixmap.isNull():
         path = QPainterPath()
-        path.addRoundedRect(rect, radius, radius)
+        path.addRoundedRect(rect, corner(radius), corner(radius))
         painter.setClipPath(path)
         painter.drawPixmap(rect, pixmap)
         painter.setClipping(False)
@@ -324,7 +351,7 @@ def paint_rounded_cover(
         grad.setColorAt(1.0, c2)
         painter.setBrush(grad)
         painter.setPen(Qt.PenStyle.NoPen)
-        painter.drawRoundedRect(rect, radius, radius)
+        painter.drawRoundedRect(rect, corner(radius), corner(radius))
         initial = (label[:1] or "?").upper()
         painter.setPen(QColor(255, 255, 255, 230))
         painter.setFont(app_font(max(9, rect.width() // 4), QFont.Weight.Bold))

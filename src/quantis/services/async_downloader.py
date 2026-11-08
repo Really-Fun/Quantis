@@ -8,9 +8,10 @@ import logging
 import random
 from abc import ABC, abstractmethod
 from asyncio import Semaphore, get_running_loop
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Optional, Protocol
 
 import aiofiles
 import aiohttp
@@ -214,6 +215,31 @@ def _ydl_not_found(exc: BaseException) -> bool:
     return any(marker in text for marker in _YDL_NOT_FOUND)
 
 
+_YDL_NETWORK = (
+    "got error",
+    "ssl",
+    "eof occurred",
+    "timed out",
+    "connection reset",
+    "connection aborted",
+    "remote end closed",
+    "incompleteread",
+    "temporary failure in name resolution",
+)
+"""Обрыв сети посреди загрузки: та же попытка обычно проходит со второго раза."""
+_YDL_NETWORK_RETRY_DELAY = 2.0
+
+
+def _ydl_network_error(exc: BaseException) -> bool:
+    text = str(exc).casefold()
+    return any(marker in text for marker in _YDL_NETWORK)
+
+
+def _ydl_http_retry_sleep(attempt: int) -> float:
+    """Пауза yt-dlp перед повтором куска: 1, 2, 4, 4… с."""
+    return float(min(2**attempt, 4))
+
+
 async def _backoff_sleep(delay: float) -> None:
     """Пауза перед повтором при лимите Яндекса (в тестах подменяется)."""
     await asyncio.sleep(delay)
@@ -262,8 +288,38 @@ async def _write_cover_file(path: str, data: bytes) -> bool:
     return True
 
 
+ProgressCallback = Callable[[Track, "float | None"], None]
+"""``(track, доля 0..1)``; None — сколько осталось, неизвестно."""
+
+
+def _ydl_progress_hook(
+    track: Track, report: ProgressCallback
+) -> Callable[[dict], None]:
+    """progress_hooks для yt-dlp: доля скачанного звука."""
+
+    def hook(status: dict) -> None:
+        if status.get("status") != "downloading":
+            return
+        total = status.get("total_bytes") or status.get("total_bytes_estimate")
+        done = status.get("downloaded_bytes")
+        if total and done is not None:
+            report(track, min(1.0, done / total))
+        else:
+            report(track, None)
+
+    return hook
+
+
 class AsyncDownloaderInterface(ABC):
     """Абстрактный класс для Downloader'ов"""
+
+    on_progress: ProgressCallback | None = None
+    """Ставит AsyncDownloader: прогресс скачивания звука. Может вызываться
+    из потока пула (yt-dlp)."""
+
+    def _report_progress(self, track: Track, fraction: float | None) -> None:
+        if self.on_progress is not None:
+            self.on_progress(track, fraction)
 
     @abstractmethod
     async def download_track(
@@ -360,18 +416,58 @@ class AsyncYandexDownloader(AsyncDownloaderInterface):
             file_path = self.path_provider.get_track_path(track)
 
             is_authorized = bool(getattr(self.client, "token", None))
-
-            if is_authorized:
-                # Полный битрейт — не preview
-                await current_track.download_async(file_path, bitrate_in_kbps=320)
-            else:
-                await current_track.download_async(file_path, bitrate_in_kbps=192)
+            # Полный битрейт — не preview
+            bitrate = 320 if is_authorized else 192
+            if not await self._download_with_progress(
+                track, current_track, file_path, bitrate
+            ):
+                self._report_progress(track, None)
+                await current_track.download_async(file_path, bitrate_in_kbps=bitrate)
             return DownloadedAudio(
                 path=Path(file_path), meta=meta_from_yandex(track, current_track)
             )
         except Exception:
             logger.exception("Не удалось скачать трек с Яндекс.Музыки: %s", track)
             return None
+
+    async def _download_with_progress(
+        self, track: Track, yandex_track, file_path: str, bitrate: int
+    ) -> bool:
+        """Файл по прямой ссылке кусками — с прогрессом. False — не вышло
+        (тогда качаем библиотекой целиком, без процентов)."""
+        dest = Path(file_path)
+        part = dest.with_name(dest.name + ".part")
+        try:
+            info = await yandex_track.get_specific_download_info_async("mp3", bitrate)
+            if info is None:
+                return False
+            link = await info.get_direct_link_async()
+            proxy = getattr(getattr(self.client, "request", None), "proxy_url", None)
+            timeout = aiohttp.ClientTimeout(total=None, sock_read=60)
+            async with aiohttp.ClientSession(timeout=timeout) as session:
+                async with session.get(link, proxy=proxy) as response:
+                    response.raise_for_status()
+                    total = response.content_length or 0
+                    done = 0
+                    self._report_progress(track, 0.0 if total else None)
+                    async with aiofiles.open(part, "wb") as file:
+                        async for chunk in response.content.iter_chunked(64 * 1024):
+                            await file.write(chunk)
+                            done += len(chunk)
+                            if total:
+                                self._report_progress(track, min(1.0, done / total))
+            if total and done < total:
+                raise OSError(f"оборвалось на {done} из {total} байт")
+            part.replace(dest)
+            return True
+        except Exception:
+            logger.info(
+                "Яндекс: загрузка с прогрессом не удалась, качаем целиком: %s",
+                track,
+                exc_info=True,
+            )
+            part.unlink(missing_ok=True)
+            return False
 
     async def download_cover(self, track: Track | YandexTrack | YoutubeTrack) -> None:
         """Скачивает обложку трека с платформы Яндекс. Асинхронное скачивание
@@ -406,6 +502,11 @@ class AsyncYoutubeDownloader(AsyncDownloaderInterface):
             "extract_flat": False,
             "no_warnings": True,
             "postprocessors": [],
+            # googlevideo рвёт длинные открытые запросы (SSL EOF посреди файла):
+            # качаем кусками по 10 МБ и повторяем оборвавшийся кусок с паузой.
+            "http_chunk_size": 10 * 1024 * 1024,
+            "retries": 5,
+            "retry_sleep_functions": {"http": _ydl_http_retry_sleep},
         }
         self.path_provider = PathProvider()
         from quantis.core.worker_pool import get_worker_pool
@@ -414,6 +515,27 @@ class AsyncYoutubeDownloader(AsyncDownloaderInterface):
         self._owns_executor = False
         self._session: Optional[aiohttp.ClientSession] = None
         self._semaphore = Semaphore(value=8)
+
+    def _attempt_opts(self, outtmpl: str, *, video: bool = False) -> list[dict]:
+        """Порядок попыток как у стримера: клиенты yt-dlp по умолчанию без
+        cookies (сейчас только они стабильно отдают itag 140), потом android,
+        потом cookies. Один android часто отвечает SABR без ссылок, а с
+        cookies yt-dlp берёт web-клиенты, которым нужен JS-решатель."""
+        return [
+            self._ydl_opts_default(outtmpl, video=video),
+            self._ydl_opts(outtmpl, video=video),
+            self._ydl_opts_fallback(outtmpl, video=video),
+        ]
+
+    def _ydl_opts_default(self, outtmpl: str, *, video: bool = False) -> dict:
+        opts = {
+            **self._base_opts,
+            "outtmpl": outtmpl,
+            "format": self._video_format() if video else _AUDIO_FORMAT,
+        }
+        if video:
+            opts["match_filter"] = wallpaper_duration_filter
+        return opts
 
     def _ydl_opts(self, outtmpl: str, *, video: bool = False) -> dict:
         opts = {
@@ -460,31 +582,43 @@ class AsyncYoutubeDownloader(AsyncDownloaderInterface):
         self, track: Track | YoutubeTrack
     ) -> DownloadedAudio | None:
         outtmpl = self._audio_outtmpl(track)
-        for opts in (
-            self._ydl_opts(outtmpl, video=False),
-            self._ydl_opts_fallback(outtmpl, video=False),
-        ):
-            try:
-                info = await get_running_loop().run_in_executor(
-                    self._executor, self.sync_download, opts, track.track_id
-                )
-                return _downloaded_from_info(track, info)
-            except Exception:
-                logger.debug(
-                    "YouTube audio download attempt failed for %s",
-                    track.track_id,
-                    exc_info=True,
-                )
+        errors: list[str] = []
+        hook = _ydl_progress_hook(track, self._report_progress)
+        for opts in self._attempt_opts(outtmpl, video=False):
+            opts = {**opts, "progress_hooks": [hook]}
+            for retry in (True, False):
+                try:
+                    info = await get_running_loop().run_in_executor(
+                        self._executor, self.sync_download, opts, track.track_id
+                    )
+                    return _downloaded_from_info(track, info)
+                except Exception as exc:
+                    errors.append(f"{type(exc).__name__}: {exc}")
+                    logger.debug(
+                        "YouTube audio download attempt failed for %s",
+                        track.track_id,
+                        exc_info=True,
+                    )
+                    if not (retry and _ydl_network_error(exc)):
+                        break
+                    # Формат нашёлся, оборвалась сеть: эта попытка верная —
+                    # повторяем её (докачает .part), а не берём заведомо худшие.
+                    logger.info(
+                        "YouTube %s: обрыв сети, повтор загрузки", track.track_id
+                    )
+                    await _backoff_sleep(_YDL_NETWORK_RETRY_DELAY)
+        logger.warning(
+            "YouTube %s: все попытки скачать звук не удались:\n  %s",
+            track.track_id,
+            "\n  ".join(errors),
+        )
         return None
 
     async def lookup_meta(self, track: Track | YandexTrack | YoutubeTrack):
         """Метаданные без скачивания. None — видео нет; иные сбои бросаются."""
         outtmpl = self._audio_outtmpl(track)
         error: Exception | None = None
-        for opts in (
-            self._ydl_opts(outtmpl, video=False),
-            self._ydl_opts_fallback(outtmpl, video=False),
-        ):
+        for opts in self._attempt_opts(outtmpl, video=False):
             try:
                 info = await get_running_loop().run_in_executor(
                     self._executor, self.sync_extract, opts, track.track_id
@@ -502,10 +636,7 @@ class AsyncYoutubeDownloader(AsyncDownloaderInterface):
 
     async def _download_video_cache(self, track: Track | YoutubeTrack) -> None:
         outtmpl = self.path_provider.get_video_cache_path(track, extension="%(ext)s")
-        for opts in (
-            self._ydl_opts(outtmpl, video=True),
-            self._ydl_opts_fallback(outtmpl, video=True),
-        ):
+        for opts in self._attempt_opts(outtmpl, video=True):
             try:
                 await get_running_loop().run_in_executor(
                     self._executor, self.sync_download, opts, track.track_id
@@ -642,10 +773,14 @@ class AsyncSoundCloudDownloader(AsyncDownloaderInterface):
         try:
             outtmpl = self.path_provider.get_track_path(track, extension="%(ext)s")
             PathProvider.ensure_storage_dirs()
+            opts = {
+                **self._ydl_opts(outtmpl),
+                "progress_hooks": [_ydl_progress_hook(track, self._report_progress)],
+            }
             info = await get_running_loop().run_in_executor(
                 self._executor,
                 self.sync_download,
-                self._ydl_opts(outtmpl),
+                opts,
                 watch_url(track.track_id),
             )
         except Exception:
@@ -744,6 +879,16 @@ class TagOutcome:
         return self.verified and self.renamed
 
 
+class DownloadListener(Protocol):
+    """Подписчик на скачивание треков (см. ``AsyncDownloader.add_listener``)."""
+
+    def download_started(self, track: Track) -> None: ...
+
+    def download_progress(self, track: Track, fraction: float | None) -> None: ...
+
+    def download_finished(self, track: Track, ok: bool) -> None: ...
+
+
 class AsyncDownloader(AsyncDownloaderInterface):
     def __init__(self, index: "LibraryIndex | None" = None) -> None:
         self._index = index
@@ -760,6 +905,42 @@ class AsyncDownloader(AsyncDownloaderInterface):
         # Обложку трека на старте просят сразу плеер и палитра: одна загрузка
         # на двоих, иначе лишний запрос каталога упирается в лимит Яндекса.
         self._cover_tasks: dict[str, asyncio.Future[None]] = {}
+        self._listeners: list[DownloadListener] = []
+        self._last_percent: dict[str, int] = {}
+        for source in (
+            self._yandex_downloader,
+            self._youtube_downloader,
+            self._soundcloud_downloader,
+        ):
+            source.on_progress = self._on_progress
+
+    def add_listener(self, listener: "DownloadListener") -> None:
+        """События настоящего скачивания трека (не когда файл уже был).
+        Вызываются в потоке asyncio или пула yt-dlp."""
+        if listener not in self._listeners:
+            self._listeners.append(listener)
+
+    def _emit(self, method: str, *args) -> None:
+        for listener in list(self._listeners):
+            try:
+                getattr(listener, method)(*args)
+            except Exception:
+                logger.exception("Слушатель скачивания упал")
+
+    def _on_progress(self, track: Track, fraction: float | None) -> None:
+        # yt-dlp зовёт хук на каждый кусок — наружу не чаще, чем на 1 %.
+        key = self._guard_key(str(track.source), str(track.track_id))
+        percent = -1 if fraction is None else int(fraction * 100)
+        if self._last_percent.get(key) == percent:
+            return
+        self._last_percent[key] = percent
+        self._emit("download_progress", track, fraction)
+
+    def _notify_finished(self, track: Track, ok: bool) -> None:
+        self._last_percent.pop(
+            self._guard_key(str(track.source), str(track.track_id)), None
+        )
+        self._emit("download_finished", track, ok)
 
     def _for(self, track: Track):
         match track.source:
@@ -895,11 +1076,20 @@ class AsyncDownloader(AsyncDownloaderInterface):
             await self._safe_cover(track)
             track.downloaded = True
             return True
-        audio = await self.download_track(track)
-        if audio is None:
-            return False
-        await self.tag_and_rename(audio.path, audio.meta, track)
+        self._emit("download_started", track)
+        try:
+            audio = await self.download_track(track)
+            if audio is None:
+                self._notify_finished(track, False)
+                return False
+            await self.tag_and_rename(audio.path, audio.meta, track)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            self._notify_finished(track, False)
+            raise
         track.downloaded = True
+        self._notify_finished(track, True)
         return True
 
     async def tag_and_rename(

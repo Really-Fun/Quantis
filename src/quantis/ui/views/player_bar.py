@@ -32,6 +32,7 @@ from quantis.services.liked_tracks import LikedTracksService
 from quantis.services.music_service import MusicService
 from quantis.ui import resources
 from quantis.ui.accent import AccentStyles
+from quantis.ui.corners import corner
 from quantis.ui.cover_accent import CoverPalette
 from quantis.ui.cover_prefetch import schedule_cover_prefetch
 from quantis.ui.live_palette import LivePalette
@@ -80,7 +81,7 @@ class _PlayerCover(QLabel):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing, True)
         rect = self.rect()
         path = QPainterPath()
-        path.addRoundedRect(rect, 12, 12)
+        path.addRoundedRect(rect, corner(12), corner(12))
         painter.setClipPath(path)
         if not self._pixmap.isNull():
             painter.drawPixmap(rect, self._pixmap)
@@ -627,6 +628,8 @@ class PlayerBar(QFrame):
 
     def _paint_capsule(self, painter: QPainter, path: QPainterPath) -> None:
         """Поверх стекла капсулы: отсвет акцента слева и ореол вокруг Play."""
+        if UiPreferences().theme.card_style == "magazine":
+            return  # журнальная вёрстка: без свечений, акцент — плашкой
         accent = self._palette.accent
         bounds = path.boundingRect()
         painter.save()

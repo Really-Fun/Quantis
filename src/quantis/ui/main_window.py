@@ -44,6 +44,7 @@ from quantis.ui.cover_accent import (
     palette_from_accent,
     palette_from_image,
 )
+from quantis.ui.cover_prefetch import schedule_cover_prefetch
 from quantis.ui.fonts import register_bundled_fonts, theme_font
 from quantis.ui.live_palette import LivePalette
 from quantis.ui.playlist_actions import bind_event_bus as bind_playlist_event_bus
@@ -79,6 +80,12 @@ from quantis.ui.views.widgets.backdrop_panel import (
     backdrop_kind,
 )
 from quantis.ui.views.widgets.background_frame import BackgroundFrame
+from quantis.ui.views.widgets.cover_art import CoverEvents, is_track_cover
+from quantis.ui.views.widgets.notifications import (
+    DownloadNotification,
+    Notification,
+    NotificationCenter,
+)
 from quantis.ui.views.widgets.now_playing_fullscreen import NowPlayingFullscreen
 from quantis.ui.views.widgets.now_playing_stage import upcoming
 from quantis.ui.views.widgets.resize_grips import WindowResizeGrips
@@ -172,6 +179,8 @@ class QuantisMainWindow(QMainWindow):
         self._plugin_page_ids: dict[str, int] = {}
         self._eco = EcoMode(self)
         self._eco.set_pref_enabled(self._ui_prefs.background_eco_enabled)
+        # Трек сменился в эко — фон и палитра догонят его при выходе из эко.
+        self._palette_stale = False
 
         shell = BackgroundFrame(
             resources.wallpaper_path(),
@@ -219,6 +228,9 @@ class QuantisMainWindow(QMainWindow):
             lambda: self._nav.set_playlists(self._home_vm.snapshot.quick_playlists)
         )
         self._header.set_nav_expanded(self._ui_prefs.nav_expanded)
+        self._header.set_maximized(
+            self.isMaximized()
+        )  # окно могло открыться развёрнутым
 
         # Content column
         content_host = QWidget()
@@ -324,6 +336,7 @@ class QuantisMainWindow(QMainWindow):
         body.addWidget(columns_host, stretch=1)
         root.addWidget(self._body_shell, stretch=1)
 
+        self._notifications = NotificationCenter(self._shell, self._notifications_top)
         for view_model in (
             self._player_vm,
             self._search_vm,
@@ -339,6 +352,10 @@ class QuantisMainWindow(QMainWindow):
         bind_playlist_event_bus(bundle.event_bus)
         bundle.event_bus.queue_extended.connect(self._on_queue_extended)
         bundle.event_bus.error_occurred.connect(self._show_error)
+        self._download_toasts: dict[tuple[str, str], DownloadNotification] = {}
+        bundle.event_bus.track_download_started.connect(self._on_download_started)
+        bundle.event_bus.track_download_progress.connect(self._on_download_progress)
+        bundle.event_bus.track_downloaded.connect(self._on_track_downloaded)
         self._search_vm.download_finished.connect(
             lambda: self._home_vm.refresh_downloaded(self._bridge)
         )
@@ -373,6 +390,7 @@ class QuantisMainWindow(QMainWindow):
             parent=self,
         )
         self._eco.subscribe(self._apply_eco)
+        CoverEvents.instance().cover_ready.connect(self._on_cover_ready)
         app = QApplication.instance()
         if app is not None:
             app.applicationStateChanged.connect(self._on_app_state_changed)
@@ -430,6 +448,8 @@ class QuantisMainWindow(QMainWindow):
         self._bundle.music.streamer.set_eco(active)
         self._dynamic_wallpaper.set_eco(active)
         self._body_shell.backdrop.set_file_loop_paused(active)
+        if not active and self._palette_stale:
+            self._update_palette_from_track(self._bundle.playback.current_track)
         for widget in getattr(self, "_mounted_layers", {}).values():
             setter = getattr(widget, "set_eco", None)
             if callable(setter):
@@ -894,9 +914,16 @@ class QuantisMainWindow(QMainWindow):
         cycle = playlist.tracks
         current = self._bundle.playback.current_track
         index = getattr(cycle, "_index", 0)
-        self._home_page.set_up_next(upcoming(cycle.values, current, index))
-        self._side_panel.set_queue(
-            upcoming(cycle.values, current, index, count=SidePanel.QUEUE_COUNT)
+        queue = upcoming(cycle.values, current, index, count=SidePanel.QUEUE_COUNT)
+        self._home_page.set_up_next(queue[:4])
+        self._side_panel.set_queue(queue)
+        # Обложки очереди (волна, только что открытый плейлист) ещё не скачаны:
+        # докачанные подхватят «Дальше» и очередь в панели.
+        schedule_cover_prefetch(
+            [item.track for item in queue],
+            self._bundle.music.downloader,
+            self._bridge,
+            limit=len(queue),
         )
 
     def _play_up_next(self, index: int) -> None:
@@ -921,16 +948,34 @@ class QuantisMainWindow(QMainWindow):
         self._np_fullscreen.update()
         self._np_fullscreen.setFocus(Qt.FocusReason.ActiveWindowFocusReason)
 
+    def _on_cover_ready(self, path: str) -> None:
+        """Обложка играющего трека докачалась: фон, палитра, панели."""
+        track = self._bundle.playback.current_track
+        if track is None or not is_track_cover(track, path):
+            return
+        self._side_panel.set_track(track)
+        if self._np_fullscreen.isVisible():
+            self._np_fullscreen.set_track(track)
+        self._update_palette_from_track(track)
+
     def _update_palette_from_track(self, track) -> None:
         if self._eco.active:
+            self._palette_stale = True
+            return
+        self._palette_stale = False
+        if track is None:
             return
         path = Path(self._bundle.music.provider.get_cover_path(track))
         cover = load_cover_image(path if path.is_file() else None)
         self._cover_palette = palette_from_image(cover)
         self._shell.compositor.set_cover(cover)
-        self.apply_palette(
-            self._cover_palette or fallback_palette(registry.get(self._applied_theme))
-        )
+        self.apply_palette(self._palette_for(registry.get(self._applied_theme)))
+
+    def _palette_for(self, theme) -> CoverPalette:  # type: ignore[no-untyped-def]
+        """Цвет обложки, если тема его берёт; иначе — свой акцент темы."""
+        if theme.fixed_accent or self._cover_palette is None:
+            return fallback_palette(theme)
+        return self._cover_palette
 
     def apply_palette(self, palette: CoverPalette, *, animate: bool = True) -> None:
         """Палитра трека. Виджеты со stylesheet получают итоговый акцент сразу и
@@ -1103,8 +1148,8 @@ class QuantisMainWindow(QMainWindow):
         self._applied_theme = theme_id
         theme = registry.get(theme_id)
         QApplication.setFont(theme_font(theme, "ui", 10))
-        if self._cover_palette is None:
-            self.apply_palette(fallback_palette(theme), animate=False)
+        # Тема могла сменить правило акцента (своя / из обложки) — пересчитать.
+        self.apply_palette(self._palette_for(theme), animate=False)
         self.setStyleSheet(resources.load_stylesheet(theme_id, accent=self._accent))
         self._shell.set_theme(theme)
         self._body_shell.set_theme(theme)
@@ -1170,7 +1215,9 @@ class QuantisMainWindow(QMainWindow):
         app = QApplication.instance()
         if app is not None:
             app.removeEventFilter(self)
-        if not (self.isMaximized() or self.isMinimized() or self.isFullScreen()):
+        # Развёрнутое окно тоже сохраняем: saveGeometry() хранит обычный размер
+        # и флаг «развёрнуто», иначе окно каждый раз открывается не на весь экран.
+        if not (self.isMinimized() or self.isFullScreen()):
             self._ui_prefs.set_window_geometry(self.saveGeometry())
         super().closeEvent(event)
 
@@ -1182,6 +1229,10 @@ class QuantisMainWindow(QMainWindow):
 
     def changeEvent(self, event) -> None:
         super().changeEvent(event)
+        # restoreGeometry() в __init__ разворачивает окно до того, как созданы
+        # шапка и эко-режим: состояние им отдаётся, когда они появятся.
+        if not hasattr(self, "_header"):
+            return
         if event.type() == QEvent.Type.WindowStateChange:
             self._header.set_maximized(self.isMaximized())
             self._resize_grips.update_geometry()
@@ -1197,10 +1248,59 @@ class QuantisMainWindow(QMainWindow):
         if self._backdrop_panel.isVisible():
             self._backdrop_panel.refresh()  # держится у кнопки «Фон»
 
+    def _notifications_top(self) -> int:
+        """Уведомления — сразу под шапкой (или от верха, если шапка скрыта)."""
+        header = self._header
+        if not header.isVisible():
+            return 0
+        return header.mapTo(self._shell, QPoint(0, header.height())).y() - 6
+
+    @staticmethod
+    def _download_key(track) -> tuple[str, str]:
+        return str(track.source), str(track.track_id)
+
+    def _on_download_started(self, track) -> None:
+        key = self._download_key(track)
+        if key in self._download_toasts:
+            return
+        cover = self._bundle.music.provider.get_cover_path(track)
+        toast = DownloadNotification(track, cover)
+        # Закрыли крестиком — итог придёт новой карточкой.
+        toast.closed.connect(lambda: self._forget_download_toast(key, toast))
+        self._download_toasts[key] = toast
+        self._notifications.push(toast)
+
+    def _forget_download_toast(self, key, toast) -> None:
+        if self._download_toasts.get(key) is toast:
+            del self._download_toasts[key]
+
+    def _on_download_progress(self, track, fraction) -> None:
+        toast = self._download_toasts.get(self._download_key(track))
+        if toast is not None:
+            toast.set_fraction(fraction)
+
+    def _on_track_downloaded(self, track, ok: bool) -> None:
+        cover = self._bundle.music.provider.get_cover_path(track)
+        toast = self._download_toasts.pop(self._download_key(track), None)
+        if toast is not None and not toast.done:
+            toast.finish(ok, cover)
+        else:
+            self._notifications.push(DownloadNotification.finished(track, ok, cover))
+
     def _show_error(self, message: str) -> None:
         import logging
 
         logging.getLogger(__name__).warning("Quantis: %s", message)
+        message = (message or "").strip()
+        if not message:
+            return
+        # Та же ошибка уже на экране — второй карточки не нужно.
+        for shown in self._notifications.notifications:
+            if shown.kind == "error" and shown.message == message:
+                return
+        self._notifications.push(
+            Notification("Ошибка", message, kind="error", timeout_ms=7000)
+        )
 
     def _maybe_check_for_update(self) -> None:
         import time

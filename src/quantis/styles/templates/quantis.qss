@@ -40,8 +40,8 @@ QListView#trackList::item:selected {
 }
 
 QFrame#appHeader {
-    border-top-left-radius: 12px;
-    border-top-right-radius: 12px;
+    border-top-left-radius: ${r12};
+    border-top-right-radius: ${r12};
     min-height: 52px;
     border: none;
     border-bottom: 1px solid rgba(${ink_rgb}, 0.05);
@@ -75,7 +75,7 @@ QToolButton#windowMaxBtn,
 QToolButton#windowCloseBtn {
     background: transparent;
     border: none;
-    border-radius: 10px;
+    border-radius: ${r10};
     padding: 0;
     margin: 0;
 }
@@ -102,6 +102,38 @@ QLabel#headerBrandMark {
 
 QFrame#sideNavRail QToolButton#navIconButton {
     outline: none;
+}
+
+/* Всплывающие уведомления (правый верхний угол) */
+QLabel#notificationTitle {
+    color: ${title};
+    font-size: 13px;
+    font-weight: 700;
+    background: transparent;
+}
+
+QLabel#notificationText {
+    color: ${text_dim};
+    font-size: 12px;
+    background: transparent;
+}
+
+QLabel#notificationPercent {
+    color: ${text_dim};
+    font-size: 12px;
+    font-weight: 600;
+    background: transparent;
+}
+
+QToolButton#notificationClose {
+    background: transparent;
+    border: none;
+    border-radius: ${r10};
+    padding: 0;
+}
+
+QToolButton#notificationClose:hover {
+    background: rgba(${ink_rgb}, 0.10);
 }
 
 /* Панель «Фон» (поповер под кнопкой в шапке) */
@@ -141,12 +173,12 @@ QLabel#backdropPanelLabel {
 
 QSlider#backdropSlider::groove:horizontal {
     height: 4px;
-    border-radius: 2px;
+    border-radius: ${r2};
     background: rgba(${ink_rgb}, 0.16);
 }
 
 QSlider#backdropSlider::sub-page:horizontal {
-    border-radius: 2px;
+    border-radius: ${r2};
     background: ${text};
 }
 
@@ -154,6 +186,6 @@ QSlider#backdropSlider::handle:horizontal {
     width: 14px;
     height: 14px;
     margin: -5px 0;
-    border-radius: 7px;
+    border-radius: ${r7};
     background: ${handle};
 }

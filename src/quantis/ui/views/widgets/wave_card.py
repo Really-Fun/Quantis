@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 )
 
 from quantis.services.async_wave import WaveMood
+from quantis.ui.corners import corner
 from quantis.ui.preferences import UiPreferences
 from quantis.ui.themes.spec import qcolor
 from quantis.ui.views.widgets.glass import paint_glass
@@ -160,7 +161,7 @@ class WaveCard(QWidget):
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
         rect = QRectF(self.rect()).adjusted(0.5, 0.5, -0.5, -0.5)
         path = QPainterPath()
-        path.addRoundedRect(rect, 22, 22)
+        path.addRoundedRect(rect, corner(22), corner(22))
         if not paint_glass(self, painter, path):
             painter.fillPath(path, qcolor(theme.colors.surface))
         border = qcolor(theme.colors.ink_rgb)

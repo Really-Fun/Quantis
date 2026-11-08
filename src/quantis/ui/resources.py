@@ -102,8 +102,9 @@ def wallpaper_path() -> str:
     return resolve_wallpaper_path(prefs.wallpaper_path or None)
 
 
-def dynamic_accent_qss(accent: QColor | None = None) -> str:
+def dynamic_accent_qss(accent: QColor | None = None, *, rounded: bool = True) -> str:
     """Runtime-фрагмент QSS с динамическим акцентом из обложки."""
+    play_radius, bar_radius = ("20px", "2px") if rounded else ("0", "0")
     if accent is None or not accent.isValid():
         accent = QColor(ACCENT_FALLBACK)
     rgb = f"rgb({accent.red()}, {accent.green()}, {accent.blue()})"
@@ -111,7 +112,7 @@ def dynamic_accent_qss(accent: QColor | None = None) -> str:
     return f"""
 #controlButton[accent=true] {{
     background: {rgb};
-    border-radius: 20px;
+    border-radius: {play_radius};
 }}
 #controlButton[accent=true]:hover {{
     background: {rgba40};
@@ -120,7 +121,7 @@ def dynamic_accent_qss(accent: QColor | None = None) -> str:
 #nowPlayingAccent {{ color: {rgb}; }}
 #seekSlider::sub-page:horizontal {{
     background: {rgb};
-    border-radius: 2px;
+    border-radius: {bar_radius};
 }}
 #seekSlider::handle:horizontal {{
     border: 2px solid {rgb};
@@ -143,10 +144,11 @@ def load_stylesheet(
     """QSS темы; ``accent`` — акцент обложки для правил dynamic_accent_qss."""
     from quantis.ui.themes import qss, registry
 
-    sheet = qss.render(registry.get(ui_theme))
+    theme = registry.get(ui_theme)
+    sheet = qss.render(theme)
     if accent is None:
         return sheet
-    return qss.merge(sheet, dynamic_accent_qss(accent))
+    return qss.merge(sheet, dynamic_accent_qss(accent, rounded=theme.rounded))
 
 
 def format_ms(ms: int) -> str:

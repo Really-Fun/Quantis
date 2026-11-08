@@ -457,3 +457,61 @@ async def test_youtube_lookup_meta_not_found_vs_error() -> None:
         with pytest.raises(RuntimeError):
             await downloader.lookup_meta(track)
         assert await downloader.fetch_meta(track) is None
+
+
+def test_audio_attempts_start_with_default_clients_without_cookies(
+    monkeypatch,
+) -> None:
+    """android сейчас отвечает SABR без ссылок, а с cookies yt-dlp берёт
+    web-клиенты с JS-челленджем — первой идёт попытка как у стримера."""
+    from quantis.config import credentials
+
+    monkeypatch.setattr(credentials, "youtube_yt_dlp_cookiefile", lambda: "c.txt")
+    attempts = AsyncYoutubeDownloader()._attempt_opts("/tmp/%(ext)s")
+    first = attempts[0]
+    assert "extractor_args" not in first
+    assert "cookiefile" not in first
+    assert attempts[1]["extractor_args"]["youtube"]["player_client"] == ["android"]
+    assert attempts[-1]["cookiefile"] == "c.txt"
+
+
+@pytest.mark.asyncio
+async def test_audio_retries_same_attempt_after_network_drop(monkeypatch) -> None:
+    """SSL EOF посреди файла — та же попытка ещё раз, до android и cookies."""
+    from quantis.services import async_downloader as ad
+
+    async def no_sleep(delay):
+        return None
+
+    monkeypatch.setattr(ad, "_backoff_sleep", no_sleep)
+    downloader = AsyncYoutubeDownloader()
+    calls = []
+
+    def fake_download(opts, track_id):
+        calls.append(opts.get("extractor_args"))
+        if len(calls) == 1:
+            raise RuntimeError(
+                "ERROR: [download] Got error: [SSL: UNEXPECTED_EOF_WHILE_READING]"
+            )
+        return {"requested_downloads": [{"filepath": "/tmp/x.m4a"}], "ext": "m4a"}
+
+    monkeypatch.setattr(downloader, "sync_download", fake_download)
+    monkeypatch.setattr(ad, "_downloaded_from_info", lambda track, info: "ok")
+    track = YoutubeTrack(track_id="CcdHhIwTKcQ", title="T", author="A")
+    assert await downloader._download_audio(track) == "ok"
+    assert calls == [None, None]  # дважды попытка по умолчанию
+
+
+@pytest.mark.asyncio
+async def test_audio_does_not_retry_missing_format(monkeypatch) -> None:
+    downloader = AsyncYoutubeDownloader()
+    calls = []
+
+    def fake_download(opts, track_id):
+        calls.append(1)
+        raise RuntimeError("Requested format is not available")
+
+    monkeypatch.setattr(downloader, "sync_download", fake_download)
+    track = YoutubeTrack(track_id="CcdHhIwTKcQ", title="T", author="A")
+    assert await downloader._download_audio(track) is None
+    assert len(calls) == 3  # по одному разу на каждую попытку

@@ -34,7 +34,7 @@ QComboBox#themeCombo,
 QLineEdit#settingLineEdit {
     background: ${field_bg};
     border: 1px solid rgba(${ink_rgb}, 0.1);
-    border-radius: 12px;
+    border-radius: ${r12};
     padding: 10px 12px;
     color: ${title};
     font-size: 13px;
@@ -68,7 +68,7 @@ QWidget#settingsPanel {
 QFrame#settingsGroup {
     background: ${surface};
     border: 1px solid rgba(${ink_rgb}, 0.06);
-    border-radius: 16px;
+    border-radius: ${r16};
 }
 
 QFrame#settingsDivider {
@@ -85,7 +85,7 @@ QFrame#settingsRow {
 QCheckBox#settingsCheck::indicator {
     width: 18px;
     height: 18px;
-    border-radius: 6px;
+    border-radius: ${r6};
     border: 1px solid rgba(${ink_rgb}, 0.28);
     background: ${field_bg};
 }
@@ -98,7 +98,7 @@ QCheckBox#settingsCheck::indicator:checked {
 QSpinBox#settingSpin {
     background: ${field_bg};
     border: 1px solid rgba(${ink_rgb}, 0.12);
-    border-radius: 12px;
+    border-radius: ${r12};
     padding: 10px 12px;
     color: ${title};
     font-size: 13px;
@@ -119,7 +119,7 @@ QComboBox#themeCombo::drop-down {
 QPushButton#settingsButton {
     background: rgba(${ink_rgb}, 0.05);
     border: 1px solid rgba(${ink_rgb}, 0.14);
-    border-radius: 12px;
+    border-radius: ${r12};
     padding: 8px 14px;
     color: ${text_soft};
     font-size: 12px;
@@ -152,7 +152,7 @@ QLabel#updateBannerText {
 QPushButton#updateBannerButton {
     background: rgba(${ink_rgb}, 0.06);
     border: 1px solid rgba(${ink_rgb}, 0.14);
-    border-radius: 10px;
+    border-radius: ${r10};
     padding: 6px 12px;
     color: ${text_soft};
     font-size: 12px;
@@ -184,7 +184,7 @@ QLabel#memberSubtitle {
 QFrame#memberCard {
     background: rgba(${ink_rgb}, 0.035);
     border: 1px solid rgba(${ink_rgb}, 0.08);
-    border-radius: 18px;
+    border-radius: ${r18};
 }
 
 QFrame#memberDivider {
@@ -203,7 +203,7 @@ QLabel#memberService {
 }
 
 QLabel#memberDot {
-    border-radius: 5px;
+    border-radius: ${r5};
     min-width: 10px;
     max-width: 10px;
     min-height: 10px;
@@ -219,7 +219,7 @@ QLabel#memberDot[source="youtube"] {
 }
 
 QLabel#memberChip {
-    border-radius: 11px;
+    border-radius: ${r11};
     padding: 4px 10px;
     font-size: 12px;
     font-weight: 650;
@@ -286,7 +286,7 @@ QLabel#memberFeedback[state="error"] {
 QPlainTextEdit#memberCookieEdit {
     background: ${field_bg};
     border: 1px solid rgba(${ink_rgb}, 0.1);
-    border-radius: 12px;
+    border-radius: ${r12};
     padding: 8px 10px;
     color: ${title};
     font-size: 12px;
@@ -312,7 +312,7 @@ QToolButton#memberGuideToggle:hover {
 
 QLabel#memberGuide {
     background: rgba(${ink_rgb}, 0.04);
-    border-radius: 12px;
+    border-radius: ${r12};
     padding: 12px 14px;
     color: ${text_soft};
     font-size: 12px;
@@ -321,7 +321,7 @@ QLabel#memberGuide {
 QPushButton#memberDanger {
     background: transparent;
     border: 1px solid rgba(${bad_rgb}, 0.35);
-    border-radius: 12px;
+    border-radius: ${r12};
     padding: 8px 14px;
     color: rgb(${bad_rgb});
     font-size: 12px;

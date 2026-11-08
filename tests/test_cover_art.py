@@ -104,3 +104,20 @@ def test_decoder_missing_file_is_cached_as_none(qapp, tmp_path: Path) -> None:
     assert not decoder._pending
     assert decoder.request(missing, 40) is None
     assert not decoder._pending  # второй раз — из кэша, без новой задачи
+
+
+def test_cover_ready_drops_cached_miss_and_signals(qapp, tmp_path: Path) -> None:
+    """Обложка докачалась: промах из кэша забыт, подписчики узнают путь."""
+    from quantis.ui.views.widgets.cover_art import CoverEvents, notify_cover_ready
+
+    clear_cover_cache()
+    path = tmp_path / "late.jpg"
+    assert load_cover_pixmap(path, 40) is None  # файла ещё нет — промах в кэше
+    _write_banded_jpeg(path)
+    heard: list[str] = []
+    CoverEvents.instance().cover_ready.connect(heard.append)
+
+    notify_cover_ready(path)
+
+    assert heard == [str(path)]
+    assert load_cover_pixmap(path, 40) is not None

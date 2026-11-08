@@ -14,7 +14,6 @@ from quantis.ui.models import TrackListModel
 from quantis.ui.viewmodels.base_viewmodel import BaseViewModel
 
 logger = logging.getLogger(__name__)
-_DOWNLOAD_FAILED = "Не удалось скачать трек"
 
 _SOURCE_FILTERS = ("all", "yandex", "youtube", "soundcloud")
 _SOURCE_LABELS = {
@@ -288,8 +287,7 @@ class SearchViewModel(BaseViewModel):
         try:
             ok = await downloader.download_full(track)
             if not ok:
-                bridge.invoke_main(lambda: self.emit_error(_DOWNLOAD_FAILED))
-                return
+                return  # уведомление «Не удалось скачать» покажет окно
 
             def refresh() -> None:
                 model_index = self._model.index(index, 0)
@@ -297,10 +295,9 @@ class SearchViewModel(BaseViewModel):
                 self.download_finished.emit()
 
             bridge.invoke_main(refresh)
-        except Exception as exc:
+        except Exception:
+            # Уведомление «Не удалось скачать» покажет окно, подробности — в логе.
             logger.exception("Ошибка скачивания")
-            message = str(exc)
-            bridge.invoke_main(lambda: self.emit_error(message))
         finally:
             bridge.invoke_main(lambda: self.set_loading(False))
 
