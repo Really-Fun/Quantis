@@ -228,6 +228,9 @@ class QuantisMainWindow(QMainWindow):
             lambda: self._nav.set_playlists(self._home_vm.snapshot.quick_playlists)
         )
         self._header.set_nav_expanded(self._ui_prefs.nav_expanded)
+        self._header.set_maximized(
+            self.isMaximized()
+        )  # окно могло открыться развёрнутым
 
         # Content column
         content_host = QWidget()
@@ -1223,6 +1226,10 @@ class QuantisMainWindow(QMainWindow):
 
     def changeEvent(self, event) -> None:
         super().changeEvent(event)
+        # restoreGeometry() в __init__ разворачивает окно до того, как созданы
+        # шапка и эко-режим: состояние им отдаётся, когда они появятся.
+        if not hasattr(self, "_header"):
+            return
         if event.type() == QEvent.Type.WindowStateChange:
             self._header.set_maximized(self.isMaximized())
             self._resize_grips.update_geometry()
