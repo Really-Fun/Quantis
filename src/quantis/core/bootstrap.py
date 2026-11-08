@@ -62,6 +62,8 @@ def build_application(bridge: AsyncBridge) -> ApplicationBundle:
         async_bridge=bridge,
     )
 
+    # Сигнал шины живёт в UI-потоке: из потока asyncio он дойдёт очередью.
+    music.add_download_listener(event_bus.track_downloaded.emit)
     wire_player_events(player, event_bus, playback, bridge)
     wire_event_bus_navigation(event_bus, playback, bridge)
     history_watcher = PlaybackHistoryWatcher(player, history, event_bus, bridge)

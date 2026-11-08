@@ -8,6 +8,7 @@ import logging
 import random
 from abc import ABC, abstractmethod
 from asyncio import Semaphore, get_running_loop
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional
@@ -760,6 +761,20 @@ class AsyncDownloader(AsyncDownloaderInterface):
         # Обложку трека на старте просят сразу плеер и палитра: одна загрузка
         # на двоих, иначе лишний запрос каталога упирается в лимит Яндекса.
         self._cover_tasks: dict[str, asyncio.Future[None]] = {}
+        self._finished_listeners: list[Callable[[Track, bool], None]] = []
+
+    def add_finished_listener(self, listener: Callable[[Track, bool], None]) -> None:
+        """``listener(track, ok)`` — после настоящего скачивания трека (не когда
+        файл уже был). Вызывается в потоке asyncio."""
+        if listener not in self._finished_listeners:
+            self._finished_listeners.append(listener)
+
+    def _notify_finished(self, track: Track, ok: bool) -> None:
+        for listener in list(self._finished_listeners):
+            try:
+                listener(track, ok)
+            except Exception:
+                logger.exception("Слушатель скачивания упал")
 
     def _for(self, track: Track):
         match track.source:
@@ -895,11 +910,19 @@ class AsyncDownloader(AsyncDownloaderInterface):
             await self._safe_cover(track)
             track.downloaded = True
             return True
-        audio = await self.download_track(track)
-        if audio is None:
-            return False
-        await self.tag_and_rename(audio.path, audio.meta, track)
+        try:
+            audio = await self.download_track(track)
+            if audio is None:
+                self._notify_finished(track, False)
+                return False
+            await self.tag_and_rename(audio.path, audio.meta, track)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            self._notify_finished(track, False)
+            raise
         track.downloaded = True
+        self._notify_finished(track, True)
         return True
 
     async def tag_and_rename(

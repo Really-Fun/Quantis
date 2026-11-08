@@ -372,3 +372,51 @@ async def test_tag_and_rename_reports_rename_failure(index, music, monkeypatch):
     monkeypatch.setattr(Path, "replace", real_replace)
     outcome = await dl.tag_and_rename(path, meta, make_track())
     assert outcome.complete and outcome.path == music / "A - T.mp3"
+
+
+@pytest.mark.asyncio
+async def test_finished_listener_reports_real_downloads_only(index, music):
+    dl = make_downloader(index, music)
+    events = []
+    dl.add_finished_listener(lambda track, ok: events.append((track.track_id, ok)))
+    track = make_track()
+    assert await dl.download_full(track) is True
+    assert events == [("1", True)]
+    # Файл уже в индексе — повторного «скачан» нет.
+    assert await dl.download_full(make_track()) is True
+    assert events == [("1", True)]
+
+
+@pytest.mark.asyncio
+async def test_finished_listener_reports_failure(index, music):
+    dl = make_downloader(index, music)
+
+    async def failing(track):
+        return None
+
+    dl.download_track = failing
+    events = []
+    dl.add_finished_listener(lambda track, ok: events.append(ok))
+    assert await dl.download_full(make_track("2")) is False
+    assert events == [False]
+
+
+def test_music_service_attaches_listener_to_lazy_downloader(monkeypatch):
+    from quantis.services.music_service import MusicService
+
+    created = []
+
+    class FakeDownloader:
+        def __init__(self):
+            self.listeners = []
+            created.append(self)
+
+        def add_finished_listener(self, listener):
+            self.listeners.append(listener)
+
+    monkeypatch.setattr(ad, "AsyncDownloader", FakeDownloader)
+    service = MusicService()
+    listener = lambda track, ok: None  # noqa: E731
+    service.add_download_listener(listener)
+    assert created == []  # загрузчик не создан раньше времени
+    assert service.downloader.listeners == [listener]

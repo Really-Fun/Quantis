@@ -104,6 +104,31 @@ QFrame#sideNavRail QToolButton#navIconButton {
     outline: none;
 }
 
+/* Всплывающие уведомления (правый верхний угол) */
+QLabel#notificationTitle {
+    color: ${title};
+    font-size: 13px;
+    font-weight: 700;
+    background: transparent;
+}
+
+QLabel#notificationText {
+    color: ${text_dim};
+    font-size: 12px;
+    background: transparent;
+}
+
+QToolButton#notificationClose {
+    background: transparent;
+    border: none;
+    border-radius: ${r10};
+    padding: 0;
+}
+
+QToolButton#notificationClose:hover {
+    background: rgba(${ink_rgb}, 0.10);
+}
+
 /* Панель «Фон» (поповер под кнопкой в шапке) */
 QLabel#backdropPanelTitle {
     color: ${title};

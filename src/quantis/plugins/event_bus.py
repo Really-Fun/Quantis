@@ -20,6 +20,7 @@ class EventBus(QObject):
     playback_seeked = Signal(int)  # Позиция в мс после перемотки
     track_finished = Signal()
     queue_extended = Signal(object)  # Очередь радио/рекомендаций выросла
+    track_downloaded = Signal(object, bool)  # Track, успешно ли скачан
 
     next_requested = Signal()
     previous_requested = Signal()

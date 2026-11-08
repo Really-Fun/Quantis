@@ -81,6 +81,10 @@ from quantis.ui.views.widgets.backdrop_panel import (
 )
 from quantis.ui.views.widgets.background_frame import BackgroundFrame
 from quantis.ui.views.widgets.cover_art import CoverEvents, is_track_cover
+from quantis.ui.views.widgets.notifications import (
+    DownloadNotification,
+    NotificationCenter,
+)
 from quantis.ui.views.widgets.now_playing_fullscreen import NowPlayingFullscreen
 from quantis.ui.views.widgets.now_playing_stage import upcoming
 from quantis.ui.views.widgets.resize_grips import WindowResizeGrips
@@ -343,6 +347,8 @@ class QuantisMainWindow(QMainWindow):
         bind_playlist_event_bus(bundle.event_bus)
         bundle.event_bus.queue_extended.connect(self._on_queue_extended)
         bundle.event_bus.error_occurred.connect(self._show_error)
+        self._notifications = NotificationCenter(self._shell, self._notifications_top)
+        bundle.event_bus.track_downloaded.connect(self._on_track_downloaded)
         self._search_vm.download_finished.connect(
             lambda: self._home_vm.refresh_downloaded(self._bridge)
         )
@@ -1202,7 +1208,9 @@ class QuantisMainWindow(QMainWindow):
         app = QApplication.instance()
         if app is not None:
             app.removeEventFilter(self)
-        if not (self.isMaximized() or self.isMinimized() or self.isFullScreen()):
+        # Развёрнутое окно тоже сохраняем: saveGeometry() хранит обычный размер
+        # и флаг «развёрнуто», иначе окно каждый раз открывается не на весь экран.
+        if not (self.isMinimized() or self.isFullScreen()):
             self._ui_prefs.set_window_geometry(self.saveGeometry())
         super().closeEvent(event)
 
@@ -1228,6 +1236,17 @@ class QuantisMainWindow(QMainWindow):
             self._np_fullscreen.setGeometry(self._shell.rect())
         if self._backdrop_panel.isVisible():
             self._backdrop_panel.refresh()  # держится у кнопки «Фон»
+
+    def _notifications_top(self) -> int:
+        """Уведомления — сразу под шапкой (или от верха, если шапка скрыта)."""
+        header = self._header
+        if not header.isVisible():
+            return 0
+        return header.mapTo(self._shell, QPoint(0, header.height())).y() - 6
+
+    def _on_track_downloaded(self, track, ok: bool) -> None:
+        cover = self._bundle.music.provider.get_cover_path(track)
+        self._notifications.push(DownloadNotification(track, ok, cover))
 
     def _show_error(self, message: str) -> None:
         import logging
