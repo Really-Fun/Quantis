@@ -83,6 +83,7 @@ from quantis.ui.views.widgets.background_frame import BackgroundFrame
 from quantis.ui.views.widgets.cover_art import CoverEvents, is_track_cover
 from quantis.ui.views.widgets.notifications import (
     DownloadNotification,
+    Notification,
     NotificationCenter,
 )
 from quantis.ui.views.widgets.now_playing_fullscreen import NowPlayingFullscreen
@@ -332,6 +333,7 @@ class QuantisMainWindow(QMainWindow):
         body.addWidget(columns_host, stretch=1)
         root.addWidget(self._body_shell, stretch=1)
 
+        self._notifications = NotificationCenter(self._shell, self._notifications_top)
         for view_model in (
             self._player_vm,
             self._search_vm,
@@ -347,7 +349,6 @@ class QuantisMainWindow(QMainWindow):
         bind_playlist_event_bus(bundle.event_bus)
         bundle.event_bus.queue_extended.connect(self._on_queue_extended)
         bundle.event_bus.error_occurred.connect(self._show_error)
-        self._notifications = NotificationCenter(self._shell, self._notifications_top)
         bundle.event_bus.track_downloaded.connect(self._on_track_downloaded)
         self._search_vm.download_finished.connect(
             lambda: self._home_vm.refresh_downloaded(self._bridge)
@@ -1252,6 +1253,16 @@ class QuantisMainWindow(QMainWindow):
         import logging
 
         logging.getLogger(__name__).warning("Quantis: %s", message)
+        message = (message or "").strip()
+        if not message:
+            return
+        # Та же ошибка уже на экране — второй карточки не нужно.
+        for shown in self._notifications.notifications:
+            if shown.kind == "error" and shown.message == message:
+                return
+        self._notifications.push(
+            Notification("Ошибка", message, kind="error", timeout_ms=7000)
+        )
 
     def _maybe_check_for_update(self) -> None:
         import time

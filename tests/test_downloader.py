@@ -457,3 +457,19 @@ async def test_youtube_lookup_meta_not_found_vs_error() -> None:
         with pytest.raises(RuntimeError):
             await downloader.lookup_meta(track)
         assert await downloader.fetch_meta(track) is None
+
+
+def test_audio_attempts_start_with_default_clients_without_cookies(
+    monkeypatch,
+) -> None:
+    """android сейчас отвечает SABR без ссылок, а с cookies yt-dlp берёт
+    web-клиенты с JS-челленджем — первой идёт попытка как у стримера."""
+    from quantis.config import credentials
+
+    monkeypatch.setattr(credentials, "youtube_yt_dlp_cookiefile", lambda: "c.txt")
+    attempts = AsyncYoutubeDownloader()._attempt_opts("/tmp/%(ext)s")
+    first = attempts[0]
+    assert "extractor_args" not in first
+    assert "cookiefile" not in first
+    assert attempts[1]["extractor_args"]["youtube"]["player_client"] == ["android"]
+    assert attempts[-1]["cookiefile"] == "c.txt"

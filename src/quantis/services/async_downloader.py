@@ -416,6 +416,27 @@ class AsyncYoutubeDownloader(AsyncDownloaderInterface):
         self._session: Optional[aiohttp.ClientSession] = None
         self._semaphore = Semaphore(value=8)
 
+    def _attempt_opts(self, outtmpl: str, *, video: bool = False) -> list[dict]:
+        """Порядок попыток как у стримера: клиенты yt-dlp по умолчанию без
+        cookies (сейчас только они стабильно отдают itag 140), потом android,
+        потом cookies. Один android часто отвечает SABR без ссылок, а с
+        cookies yt-dlp берёт web-клиенты, которым нужен JS-решатель."""
+        return [
+            self._ydl_opts_default(outtmpl, video=video),
+            self._ydl_opts(outtmpl, video=video),
+            self._ydl_opts_fallback(outtmpl, video=video),
+        ]
+
+    def _ydl_opts_default(self, outtmpl: str, *, video: bool = False) -> dict:
+        opts = {
+            **self._base_opts,
+            "outtmpl": outtmpl,
+            "format": self._video_format() if video else _AUDIO_FORMAT,
+        }
+        if video:
+            opts["match_filter"] = wallpaper_duration_filter
+        return opts
+
     def _ydl_opts(self, outtmpl: str, *, video: bool = False) -> dict:
         opts = {
             **self._base_opts,
@@ -461,31 +482,32 @@ class AsyncYoutubeDownloader(AsyncDownloaderInterface):
         self, track: Track | YoutubeTrack
     ) -> DownloadedAudio | None:
         outtmpl = self._audio_outtmpl(track)
-        for opts in (
-            self._ydl_opts(outtmpl, video=False),
-            self._ydl_opts_fallback(outtmpl, video=False),
-        ):
+        errors: list[str] = []
+        for opts in self._attempt_opts(outtmpl, video=False):
             try:
                 info = await get_running_loop().run_in_executor(
                     self._executor, self.sync_download, opts, track.track_id
                 )
                 return _downloaded_from_info(track, info)
-            except Exception:
+            except Exception as exc:
+                errors.append(f"{type(exc).__name__}: {exc}")
                 logger.debug(
                     "YouTube audio download attempt failed for %s",
                     track.track_id,
                     exc_info=True,
                 )
+        logger.warning(
+            "YouTube %s: все попытки скачать звук не удались:\n  %s",
+            track.track_id,
+            "\n  ".join(errors),
+        )
         return None
 
     async def lookup_meta(self, track: Track | YandexTrack | YoutubeTrack):
         """Метаданные без скачивания. None — видео нет; иные сбои бросаются."""
         outtmpl = self._audio_outtmpl(track)
         error: Exception | None = None
-        for opts in (
-            self._ydl_opts(outtmpl, video=False),
-            self._ydl_opts_fallback(outtmpl, video=False),
-        ):
+        for opts in self._attempt_opts(outtmpl, video=False):
             try:
                 info = await get_running_loop().run_in_executor(
                     self._executor, self.sync_extract, opts, track.track_id
@@ -503,10 +525,7 @@ class AsyncYoutubeDownloader(AsyncDownloaderInterface):
 
     async def _download_video_cache(self, track: Track | YoutubeTrack) -> None:
         outtmpl = self.path_provider.get_video_cache_path(track, extension="%(ext)s")
-        for opts in (
-            self._ydl_opts(outtmpl, video=True),
-            self._ydl_opts_fallback(outtmpl, video=True),
-        ):
+        for opts in self._attempt_opts(outtmpl, video=True):
             try:
                 await get_running_loop().run_in_executor(
                     self._executor, self.sync_download, opts, track.track_id

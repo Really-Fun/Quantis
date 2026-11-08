@@ -35,7 +35,6 @@ from quantis.ui.viewmodels.base_viewmodel import BaseViewModel
 from quantis.utils import get_asset_path
 
 logger = logging.getLogger(__name__)
-_DOWNLOAD_FAILED = "Не удалось скачать трек"
 
 
 class _CountedShell(Playlist):
@@ -907,8 +906,7 @@ class HomeViewModel(BaseViewModel):
         try:
             ok = await downloader.download_full(track)
             if not ok:
-                bridge.invoke_main(lambda: self.emit_error(_DOWNLOAD_FAILED))
-                return
+                return  # уведомление «Не удалось скачать» покажет окно
 
             def refresh() -> None:
                 model_index = self._recent_model.index(index, 0)
@@ -917,10 +915,9 @@ class HomeViewModel(BaseViewModel):
 
             bridge.invoke_main(refresh)
             self.refresh_downloaded(bridge)
-        except Exception as exc:
+        except Exception:
+            # Уведомление «Не удалось скачать» покажет окно, подробности — в логе.
             logger.exception("Ошибка скачивания")
-            message = str(exc)
-            bridge.invoke_main(lambda: self.emit_error(message))
         finally:
             bridge.invoke_main(lambda: self.set_loading(False))
 
