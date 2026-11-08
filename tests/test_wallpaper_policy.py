@@ -11,6 +11,7 @@ from quantis.services.wallpaper_policy import (
     wallpaper_decode_max_side,
     wallpaper_duration_filter,
     wallpaper_format_quality,
+    wallpaper_local_heights,
     wallpaper_muxed_height,
     wallpaper_seek_target,
     wallpaper_source_has_video,
@@ -29,7 +30,8 @@ def test_remote_wallpaper_waits_for_audio() -> None:
 
 def test_local_short_clip_is_used() -> None:
     assert should_play_local_wallpaper(5 * 1024 * 1024)
-    assert not should_play_local_wallpaper(80 * 1024 * 1024)
+    assert should_play_local_wallpaper(150 * 1024 * 1024)  # 1080p клип
+    assert not should_play_local_wallpaper(2 * 1024 * 1024 * 1024)
     assert not should_play_local_wallpaper(0)
 
 
@@ -112,3 +114,16 @@ def test_wallpaper_stream_conflicts_on_same_itag() -> None:
     assert not wallpaper_source_meets_quality(
         "https://rr1.googlevideo.com/videoplayback?id=abc&itag=22", 1080
     )
+
+
+def test_cache_format_is_video_only_at_requested_height() -> None:
+    """Совмещённый mp4 у YouTube только 360p — кэш качаем видео без звука."""
+    fmt = wallpaper_cache_format(1080)
+    assert fmt.startswith("bestvideo[height<=1080]")
+
+
+def test_local_clip_must_match_quality() -> None:
+    assert wallpaper_local_heights(1080) == (1080,)
+    assert wallpaper_local_heights(720) == (720, 1080)
+    # Старый кэш без пометки качества — это 360p.
+    assert wallpaper_local_heights(360) == (360, 480, 720, 1080, None)

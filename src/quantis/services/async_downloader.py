@@ -34,6 +34,7 @@ from quantis.services.track_tags import (
     write_tags,
 )
 from quantis.services.wallpaper_policy import (
+    clamp_wallpaper_quality,
     wallpaper_cache_format,
     wallpaper_duration_filter,
 )
@@ -564,10 +565,14 @@ class AsyncYoutubeDownloader(AsyncDownloaderInterface):
         return opts
 
     @staticmethod
-    def _video_format() -> str:
+    def _video_quality() -> int:
         from quantis.ui.preferences import UiPreferences
 
-        return wallpaper_cache_format(UiPreferences().dynamic_wallpaper_quality)
+        return clamp_wallpaper_quality(UiPreferences().dynamic_wallpaper_quality)
+
+    @classmethod
+    def _video_format(cls) -> str:
+        return wallpaper_cache_format(cls._video_quality())
 
     @staticmethod
     def _video_wallpaper_enabled() -> bool:
@@ -635,7 +640,9 @@ class AsyncYoutubeDownloader(AsyncDownloaderInterface):
         return None
 
     async def _download_video_cache(self, track: Track | YoutubeTrack) -> None:
-        outtmpl = self.path_provider.get_video_cache_path(track, extension="%(ext)s")
+        outtmpl = self.path_provider.get_video_cache_path(
+            track, extension="%(ext)s", height=self._video_quality()
+        )
         for opts in self._attempt_opts(outtmpl, video=True):
             try:
                 await get_running_loop().run_in_executor(

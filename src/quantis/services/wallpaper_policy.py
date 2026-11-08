@@ -4,7 +4,8 @@ from __future__ import annotations
 
 # Часовой mp4 в кэш не качаем: это сотни МБ, стрима хватает.
 WALLPAPER_CACHE_MAX_SEC = 15 * 60
-WALLPAPER_MAX_LOCAL_BYTES = 40 * 1024 * 1024
+# Клип в 1080p без звука — ~100 МБ на 4 минуты; длину режет CACHE_MAX_SEC.
+WALLPAPER_MAX_LOCAL_BYTES = 600 * 1024 * 1024
 WALLPAPER_QUALITY_CHOICES = (360, 480, 720, 1080)
 WALLPAPER_FPS_CHOICES = (5, 10, 15, 24, 30, 60)
 WALLPAPER_DEFAULT_QUALITY = 360
@@ -212,9 +213,22 @@ def wallpaper_stream_conflicts(audio_url: str | None, video_url: str | None) -> 
 
 
 def wallpaper_cache_format(height: int) -> str:
+    """Видео без звука: совмещённый mp4 у YouTube есть только в 360p (itag 18),
+    а звук фону не нужен — он беззвучный."""
     h = clamp_wallpaper_quality(height)
     return (
-        f"best[ext=mp4][vcodec!=none][height<={h}]/"
-        f"best[ext=mp4][height<={h}]/"
-        f"18/best[height<={h}]"
+        f"bestvideo[height<={h}][vcodec^=avc1][ext=mp4]/"
+        f"bestvideo[height<={h}][ext=mp4]/"
+        f"bestvideo[height<={h}]/"
+        f"best[height<={h}]/18"
     )
+
+
+def wallpaper_local_heights(quality: int) -> tuple[int | None, ...]:
+    """Какие локальные клипы годятся под качество: не хуже выбранного, ближайший
+    первым. None — старый кэш без пометки качества (он всегда 360p)."""
+    q = clamp_wallpaper_quality(quality)
+    heights: list[int | None] = [h for h in WALLPAPER_QUALITY_CHOICES if h >= q]
+    if q <= 360:
+        heights.append(None)
+    return tuple(heights)

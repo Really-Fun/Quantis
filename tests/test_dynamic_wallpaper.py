@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import os
 
 import pytest
@@ -182,3 +183,72 @@ def test_upcoming_ignored_when_wallpaper_off(controller) -> None:
     ctrl._prefs.dynamic_wallpaper_enabled = False
     ctrl._on_upcoming_track(YandexTrack(track_id="7", title="Next", author="A"))
     assert "DynamicWallpaperController._prefetch_video" not in bridge.scheduled
+
+
+def test_eco_pauses_own_stream_and_resumes_sync(controller) -> None:
+    """Эко не сбрасывает свой поток фона, а после эко синхронизация оживает.
+
+    Раньше эко звал follow_media_player(None): тот останавливал видеоплеер и
+    стирал источник, а выход из эко ничего не перезапускал — фон замирал на
+    последнем кадре, пока играла музыка.
+    """
+    ctrl, _bridge = controller
+    calls: list[str] = []
+    backdrop = ctrl._backdrop
+    backdrop.follow_media_player = lambda player: calls.append(f"follow:{player}")
+    backdrop.pause_video = lambda: calls.append("pause")
+    backdrop.resume_video = lambda: calls.append("play")
+    state = VideoState(position_ms=41_000, duration_ms=240_000, playing=False)
+    backdrop.video_state = lambda: state
+    track = _Track()
+    ctrl._on_track_changed(track)
+    ctrl._sync.start()
+    calls.clear()
+
+    ctrl.set_eco(True)
+    assert calls == ["pause"]
+    assert not ctrl._sync_timer.isActive()
+
+    calls.clear()
+    ctrl.set_eco(False)
+    assert ctrl._sync_timer.isActive()
+    assert "play" in calls
+    assert not any(c.startswith("follow") for c in calls)
+
+
+def test_local_clip_follows_track_position(
+    controller, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Скачанный клип ведём по позиции трека, а не петлёй: иначе перемотка
+    трека видео не двигает."""
+    ctrl, _bridge = controller
+    monkeypatch.setattr(ctrl, "_local_video_path", lambda t: "/tmp/clip.mp4")
+    played = []
+    monkeypatch.setattr(
+        ctrl,
+        "_play_stream",
+        lambda key, url, *, loop, upstream=None: played.append(loop),
+    )
+    track = _Track()
+    ctrl._on_track_changed(track)
+    asyncio.run(ctrl._load_video_once(track, dynamic_wallpaper._track_key(track)))
+    assert played == [False]
+
+
+def test_local_clip_lookup_skips_lower_quality(
+    controller, monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    ctrl, _bridge = controller
+    monkeypatch.undo()  # вернуть настоящий _local_video_path
+
+    class _Paths:
+        def get_video_cache_path(self, track, extension="mp4", height=None):
+            stem = f"id.{height}p" if height else "id"
+            return str(tmp_path / f"{stem}.{extension}")
+
+    monkeypatch.setattr(dynamic_wallpaper, "PathProvider", _Paths)
+    (tmp_path / "id.mp4").write_bytes(b"x")  # старый кэш 360p
+    ctrl._prefs.dynamic_wallpaper_quality = 1080
+    assert ctrl._local_video_path(_Track()) is None
+    (tmp_path / "id.1080p.mp4").write_bytes(b"x")
+    assert ctrl._local_video_path(_Track()) == str(tmp_path / "id.1080p.mp4")

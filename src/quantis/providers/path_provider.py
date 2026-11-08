@@ -257,9 +257,17 @@ class PathProvider:
         ext = self._sanitize_extension(extension)
         return path.join(self.covers_folder(), f"{self.storage_id(track)}.{ext}")
 
-    def get_video_cache_path(self, track: Track, extension: str = "mp4") -> str:
-        """Кэш видео для динамических обоев (не путать с аудио в music/)."""
+    def get_video_cache_path(
+        self, track: Track, extension: str = "mp4", height: int | None = None
+    ) -> str:
+        """Кэш видео для динамических обоев (не путать с аудио в music/).
+
+        height — качество, под которое клип скачан: «id.1080p.mp4». Без него —
+        старое имя «id.mp4» (такие файлы качались в 360p)."""
         video_dir = path.join(self.music_folder(), ".video")
         Path(video_dir).mkdir(parents=True, exist_ok=True)
         ext = self._sanitize_extension(extension)
-        return path.join(video_dir, f"{self.storage_id(track)}.{ext}")
+        stem = self.storage_id(track)
+        if height:
+            stem = f"{stem}.{int(height)}p"
+        return path.join(video_dir, f"{stem}.{ext}")

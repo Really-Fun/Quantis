@@ -23,6 +23,7 @@ from quantis.services.wallpaper_policy import (
     should_fetch_wallpaper_now,
     should_play_local_wallpaper,
     wallpaper_decode_max_side,
+    wallpaper_local_heights,
     wallpaper_source_has_video,
     wallpaper_source_meets_quality,
     wallpaper_stream_conflicts,
@@ -78,7 +79,7 @@ class DynamicWallpaperController(QObject):
         self._shown_key: str | None = None
         self._track: Track | None = None
         self._eco = False
-        self._paused_for_eco = False
+        self._eco_detached_host = False
         self._reload_pending = False
         self._reload_fails = 0
         self._last_reload_at = 0.0
@@ -128,14 +129,40 @@ class DynamicWallpaperController(QObject):
         if enabled:
             # Ядро не гасим: после эко таймер поднимется и видео догонит звук.
             self._sync_timer.stop()
-            self._backdrop.follow_media_player(None)
-            if self._backdrop.is_video_playing():
+            self._eco_detached_host = self._backdrop.is_following_audio_player()
+            if self._eco_detached_host:
+                self._backdrop.follow_media_player(None)
+            else:
+                # Свой поток только ставим на паузу. follow_media_player(None)
+                # сбросил бы его источник, и после эко фон замирал на кадре.
                 self._backdrop.pause_video()
-                self._paused_for_eco = True
-        elif self._paused_for_eco:
-            self._paused_for_eco = False
-            if self._track is not None and self._video_should_play():
-                self._on_track_changed(self._track)
+            return
+        self._resume_after_eco()
+
+    def _resume_after_eco(self) -> None:
+        detached_host = self._eco_detached_host
+        self._eco_detached_host = False
+        track = self._current_track()
+        if track is None:
+            return
+        if _track_key(track) != self._pending_track_key:
+            # Трек сменился, пока окно было в эко, — грузим его фон.
+            self._on_track_changed(track)
+            return
+        self._track = track
+        if detached_host:
+            if not self._try_follow_audio(track, require_quality=False):
+                self._on_track_changed(track, force=True)
+            return
+        if self._sync.active:
+            # Пауза в эко могла быть долгой: старая перемотка и бэкофф устарели.
+            self._sync.audio_jumped()
+            self._sync_timer.start()
+            self._tick()
+
+    def _current_track(self) -> Track | None:
+        current = getattr(self._playback, "current_track", None)
+        return current if current is not None else self._track
 
     def _on_preferences_changed(self) -> None:
         self._apply_enabled()
@@ -177,7 +204,7 @@ class DynamicWallpaperController(QObject):
             self._pending_track_key = None
             self._shown_key = None
             self._track = None
-            self._paused_for_eco = False
+            self._eco_detached_host = False
             self._video_armed = False
             self._stop_sync()
 
@@ -439,7 +466,9 @@ class DynamicWallpaperController(QObject):
             local_path = self._local_video_path(track)
             if local_path is not None:
                 logger.info("Динамические обои: локальный файл %s", local_path)
-                self._play_stream(track_key, local_path, loop=True)
+                # Это тот же клип, что и звук: ведём его по позиции трека
+                # (перемотка, пауза), а не крутим петлёй с нуля.
+                self._play_stream(track_key, local_path, loop=False)
                 return
 
             url, upstream, duration = await self._music.streamer.open_video(
@@ -616,11 +645,16 @@ class DynamicWallpaperController(QObject):
         return None
 
     def _local_video_path(self, track: Track) -> str | None:
-        for ext in ("mp4", "webm", "mkv"):
-            path = Path(PathProvider().get_video_cache_path(track, extension=ext))
-            if not path.is_file():
-                continue
-            size = path.stat().st_size
-            if should_play_local_wallpaper(size):
-                return str(path.resolve())
+        """Скачанный клип не хуже выбранного качества; иначе — стрим."""
+        provider = PathProvider()
+        quality = self._prefs.dynamic_wallpaper_quality
+        for height in wallpaper_local_heights(quality):
+            for ext in ("mp4", "webm", "mkv"):
+                path = Path(
+                    provider.get_video_cache_path(track, extension=ext, height=height)
+                )
+                if not path.is_file():
+                    continue
+                if should_play_local_wallpaper(path.stat().st_size):
+                    return str(path.resolve())
         return None
