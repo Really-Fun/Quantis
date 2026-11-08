@@ -215,6 +215,31 @@ def _ydl_not_found(exc: BaseException) -> bool:
     return any(marker in text for marker in _YDL_NOT_FOUND)
 
 
+_YDL_NETWORK = (
+    "got error",
+    "ssl",
+    "eof occurred",
+    "timed out",
+    "connection reset",
+    "connection aborted",
+    "remote end closed",
+    "incompleteread",
+    "temporary failure in name resolution",
+)
+"""Обрыв сети посреди загрузки: та же попытка обычно проходит со второго раза."""
+_YDL_NETWORK_RETRY_DELAY = 2.0
+
+
+def _ydl_network_error(exc: BaseException) -> bool:
+    text = str(exc).casefold()
+    return any(marker in text for marker in _YDL_NETWORK)
+
+
+def _ydl_http_retry_sleep(attempt: int) -> float:
+    """Пауза yt-dlp перед повтором куска: 1, 2, 4, 4… с."""
+    return float(min(2**attempt, 4))
+
+
 async def _backoff_sleep(delay: float) -> None:
     """Пауза перед повтором при лимите Яндекса (в тестах подменяется)."""
     await asyncio.sleep(delay)
@@ -477,6 +502,11 @@ class AsyncYoutubeDownloader(AsyncDownloaderInterface):
             "extract_flat": False,
             "no_warnings": True,
             "postprocessors": [],
+            # googlevideo рвёт длинные открытые запросы (SSL EOF посреди файла):
+            # качаем кусками по 10 МБ и повторяем оборвавшийся кусок с паузой.
+            "http_chunk_size": 10 * 1024 * 1024,
+            "retries": 5,
+            "retry_sleep_functions": {"http": _ydl_http_retry_sleep},
         }
         self.path_provider = PathProvider()
         from quantis.core.worker_pool import get_worker_pool
@@ -556,18 +586,27 @@ class AsyncYoutubeDownloader(AsyncDownloaderInterface):
         hook = _ydl_progress_hook(track, self._report_progress)
         for opts in self._attempt_opts(outtmpl, video=False):
             opts = {**opts, "progress_hooks": [hook]}
-            try:
-                info = await get_running_loop().run_in_executor(
-                    self._executor, self.sync_download, opts, track.track_id
-                )
-                return _downloaded_from_info(track, info)
-            except Exception as exc:
-                errors.append(f"{type(exc).__name__}: {exc}")
-                logger.debug(
-                    "YouTube audio download attempt failed for %s",
-                    track.track_id,
-                    exc_info=True,
-                )
+            for retry in (True, False):
+                try:
+                    info = await get_running_loop().run_in_executor(
+                        self._executor, self.sync_download, opts, track.track_id
+                    )
+                    return _downloaded_from_info(track, info)
+                except Exception as exc:
+                    errors.append(f"{type(exc).__name__}: {exc}")
+                    logger.debug(
+                        "YouTube audio download attempt failed for %s",
+                        track.track_id,
+                        exc_info=True,
+                    )
+                    if not (retry and _ydl_network_error(exc)):
+                        break
+                    # Формат нашёлся, оборвалась сеть: эта попытка верная —
+                    # повторяем её (докачает .part), а не берём заведомо худшие.
+                    logger.info(
+                        "YouTube %s: обрыв сети, повтор загрузки", track.track_id
+                    )
+                    await _backoff_sleep(_YDL_NETWORK_RETRY_DELAY)
         logger.warning(
             "YouTube %s: все попытки скачать звук не удались:\n  %s",
             track.track_id,
