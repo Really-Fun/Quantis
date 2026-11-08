@@ -279,3 +279,22 @@ def test_plugin_status_without_host_notify_is_noop():
     p = _plugin()
     p.host = SimpleNamespace()
     p._on_rpc_status("offline")
+
+
+def test_keepalive_detects_drop_without_new_events():
+    log: list = []
+    rpcs: list[FakeRpc] = []
+    statuses: list[str] = []
+
+    def factory():
+        rpcs.append(FakeRpc(log))
+        return rpcs[-1]
+
+    w = _worker(factory, keepalive=0.05, on_status=statuses.append)
+    try:
+        w.submit(lambda: {"details": "a"})
+        assert _wait_for(lambda: _updates(log))
+        rpcs[0].fail_update = True  # Discord закрыли, событий плеера нет
+        assert _wait_for(lambda: "lost" in statuses)
+    finally:
+        w.stop()
