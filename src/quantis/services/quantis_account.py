@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import logging
+from urllib.parse import urlparse
 
 import aiohttp
 from keyring.errors import KeyringError
@@ -20,6 +21,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_SERVER = "https://212-87-190-34.nip.io"
 REQUEST_TIMEOUT_S = 15
 
+_LOCAL_HOSTS = {"127.0.0.1", "localhost", "::1"}  # сайт разработчика — можно http
 _KEY_USERNAME = "account/username"
 _KEY_SERVER = "account/server"
 
@@ -81,6 +83,9 @@ class QuantisAccount(QObject):
         username = username.strip()
         if not username or not password:
             raise AccountError("Введите логин и пароль")
+        parsed = urlparse(self.server_url)
+        if parsed.scheme != "https" and parsed.hostname not in _LOCAL_HOSTS:
+            raise AccountError("Адрес сервера должен начинаться с https://")
         try:
             async with aiohttp.ClientSession(timeout=self._timeout()) as session:
                 async with session.post(

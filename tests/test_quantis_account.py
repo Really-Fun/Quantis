@@ -233,3 +233,11 @@ def test_plugin_host_exposes_account_and_opens_accounts(vault, settings) -> None
     host.open_accounts()
     assert host.account is account
     assert opened == [True]
+
+
+@pytest.mark.asyncio
+async def test_login_refuses_plain_http_to_remote_host(vault, settings) -> None:
+    """Пароль не уходит открытым текстом на чужой сервер; локальный сайт — можно."""
+    account = _account(settings, "http://example.org")
+    with pytest.raises(AccountError, match="https"):
+        await account.login("u", "secret")
