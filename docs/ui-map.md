@@ -10,7 +10,7 @@
 | 1 | Поиск | `SearchViewModel` | `ui/views/search_page.py` |
 | 2 | Библиотека | `HomeViewModel` | `ui/views/library_page.py` |
 | 3 | Статистика | `StatsViewModel` | `ui/views/stats_page.py` |
-| 4 | Плагины | — | `ui/views/plugins_page.py` |
+| 4 | Менеджер плагинов (Установленные / Магазин) | `PluginUpdates` | `ui/views/plugins_page.py` |
 | 5 | Member | — | `ui/views/member_page.py` |
 | 6 | Настройки | — | `ui/views/settings_page.py` |
 | 7 | Плейлист (деталь) | `PlaylistViewModel` | `ui/views/playlist_page.py` |
