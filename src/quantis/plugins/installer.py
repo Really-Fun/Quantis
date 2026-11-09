@@ -1,4 +1,4 @@
-"""Установка плагинов из zip / URL."""
+"""Установка плагинов из zip (магазин или импорт из файла)."""
 
 from __future__ import annotations
 
@@ -9,11 +9,8 @@ import shutil
 import tempfile
 import zipfile
 from pathlib import Path
-from urllib.parse import urlparse
-from urllib.request import Request, urlopen
 
 from quantis.plugins.loader import resolve_plugins_dir
-from quantis.utils import app_paths
 
 logger = logging.getLogger(__name__)
 
@@ -33,16 +30,6 @@ def _safe_plugin_id(name: str) -> str:
     if not cleaned or not _SAFE_ID.match(cleaned):
         raise PluginInstallError(f"Недопустимое имя плагина: {name!r}")
     return cleaned
-
-
-def _require_https_url(url: str) -> None:
-    parsed = urlparse(url.strip())
-    if parsed.scheme != "https":
-        raise PluginInstallError("URL должен начинаться с https://")
-    if parsed.username or parsed.password:
-        raise PluginInstallError("URL с учётными данными не допускается")
-    if not parsed.hostname:
-        raise PluginInstallError("В URL нет хоста")
 
 
 def _find_plugin_root(extracted: Path) -> Path:
@@ -218,57 +205,3 @@ def restore_backup(plugin_id: str, plugins_dir: Path | None = None) -> bool:
 def drop_backup(plugin_id: str, plugins_dir: Path | None = None) -> None:
     plugins_dir = plugins_dir or resolve_plugins_dir()
     shutil.rmtree(plugins_dir / f"{BACKUP_PREFIX}{plugin_id}", ignore_errors=True)
-
-
-def download_plugin_zip(url: str, dest_dir: Path | None = None) -> Path:
-    """Скачивает zip по HTTPS во временный/указанный каталог."""
-    _require_https_url(url)
-
-    dest_dir = dest_dir or app_paths.cache_dir() / "downloads"
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    dest = dest_dir / "plugin.zip"
-
-    req = Request(url.strip(), headers={"User-Agent": "Quantis/1.0"})
-    try:
-        with urlopen(req, timeout=60) as resp:
-            final = urlparse(resp.geturl())
-            if final.scheme != "https":
-                raise PluginInstallError("Редирект на не-HTTPS отклонён")
-            length = resp.headers.get("Content-Length")
-            if length:
-                try:
-                    if int(length) > _MAX_ZIP_BYTES:
-                        raise PluginInstallError("Скачиваемый файл слишком большой")
-                except ValueError:
-                    pass
-            written = 0
-            with open(dest, "wb") as out:
-                while True:
-                    chunk = resp.read(_READ_CHUNK)
-                    if not chunk:
-                        break
-                    written += len(chunk)
-                    if written > _MAX_ZIP_BYTES:
-                        out.close()
-                        dest.unlink(missing_ok=True)
-                        raise PluginInstallError("Скачиваемый файл слишком большой")
-                    out.write(chunk)
-    except PluginInstallError:
-        dest.unlink(missing_ok=True)
-        raise
-    except Exception as exc:
-        dest.unlink(missing_ok=True)
-        raise PluginInstallError(f"Не удалось скачать: {exc}") from exc
-
-    if dest.stat().st_size < 32:
-        dest.unlink(missing_ok=True)
-        raise PluginInstallError("Скачанный файл пуст или слишком маленький")
-    return dest
-
-
-def install_plugin_from_url(url: str, *, overwrite: bool = True) -> str:
-    zip_path = download_plugin_zip(url)
-    try:
-        return install_plugin_from_zip(zip_path, overwrite=overwrite)
-    finally:
-        zip_path.unlink(missing_ok=True)

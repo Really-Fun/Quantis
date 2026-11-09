@@ -701,7 +701,13 @@ class QuantisMainWindow(QMainWindow):
 
     def _ensure_plugins_page(self) -> PluginsPage:
         if self._plugins_page is None:
-            self._plugins_page = PluginsPage(self._bridge)
+            self._plugins_page = PluginsPage(
+                self._bridge,
+                account=self._bundle.account,
+                updates=self._plugin_updates,
+                notify=self._show_notification,
+                open_accounts=lambda: self._goto_page(self.PAGE_MEMBER),
+            )
             self._replace_stack_page(self.PAGE_PLUGINS, self._plugins_page)
         return self._plugins_page
 

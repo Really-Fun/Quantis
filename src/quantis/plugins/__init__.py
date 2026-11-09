@@ -4,7 +4,6 @@ from .base import BasePlugin
 from .event_bus import EventBus
 from .installer import (
     PluginInstallError,
-    install_plugin_from_url,
     install_plugin_from_zip,
 )
 from .loader import PluginLoader, PluginMeta
@@ -18,6 +17,5 @@ __all__ = [
     "PluginMeta",
     "PluginRegistry",
     "PluginInfo",
-    "install_plugin_from_url",
     "install_plugin_from_zip",
 ]

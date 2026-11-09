@@ -1,4 +1,4 @@
-"""Безопасная установка плагинов: zip-slip, HTTPS, лимиты размера."""
+"""Безопасная установка плагинов: zip-slip, лимиты размера."""
 
 from __future__ import annotations
 
@@ -11,7 +11,6 @@ import pytest
 from quantis.plugins.installer import (
     PluginInstallError,
     _safe_member_path,
-    download_plugin_zip,
     install_plugin_from_zip,
 )
 
@@ -76,13 +75,3 @@ def test_installs_nested_plugin_folder(tmp_path: Path, monkeypatch) -> None:
     plugin_id = install_plugin_from_zip(zip_path)
     assert plugin_id == "hello_plugin"
     assert (plugins / "hello_plugin" / "plugin.py").is_file()
-
-
-def test_download_rejects_http() -> None:
-    with pytest.raises(PluginInstallError, match="https"):
-        download_plugin_zip("http://example.com/plugin.zip")
-
-
-def test_download_rejects_credentials_in_url() -> None:
-    with pytest.raises(PluginInstallError, match="учётными"):
-        download_plugin_zip("https://user:pass@example.com/plugin.zip")
