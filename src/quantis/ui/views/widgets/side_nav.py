@@ -5,7 +5,6 @@ from PySide6.QtCore import (
     QEasingCurve,
     QPropertyAnimation,
     QRect,
-    QRectF,
     QSize,
     Qt,
     QTimer,
@@ -14,10 +13,8 @@ from PySide6.QtCore import (
 from PySide6.QtGui import (
     QColor,
     QIcon,
-    QLinearGradient,
     QPainter,
     QPainterPath,
-    QPixmap,
 )
 from PySide6.QtWidgets import (
     QButtonGroup,
@@ -33,53 +30,11 @@ from quantis.ui import resources
 from quantis.ui.corners import corner
 from quantis.ui.design_tokens import ACCENT_FALLBACK
 from quantis.ui.ui_extensions import UiExtensionHost
-from quantis.ui.views.widgets.cover_art import (
-    load_cover_pixmap,
-    playlist_cover_path,
-    screen_dpr,
-)
 
 _COLLAPSED_W = 72
 _EXPANDED_W = 224
-_PLAYLIST_LIMIT = 6
-"""Сколько плейлистов в меню: остальные — на главной («Все»)."""
-_PLAYLIST_COVER = 28
-
-
-def _playlist_icon(playlist) -> QIcon:
-    """Обложка плейлиста квадратиком со скруглением; без обложки — градиент
-    с первой буквой (как на главной)."""
-    size = _PLAYLIST_COVER
-    dpr = screen_dpr()
-    canvas = QPixmap(round(size * dpr), round(size * dpr))
-    canvas.setDevicePixelRatio(dpr)
-    canvas.fill(Qt.GlobalColor.transparent)
-    painter = QPainter(canvas)
-    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-    painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
-    clip = QPainterPath()
-    clip.addRoundedRect(QRectF(0, 0, size, size), corner(7), corner(7))
-    painter.setClipPath(clip)
-    cover = load_cover_pixmap(playlist_cover_path(playlist), size)
-    if cover is not None and not cover.isNull():
-        painter.drawPixmap(QRectF(0, 0, size, size), cover, QRectF(cover.rect()))
-    else:
-        name = str(getattr(playlist, "name", "") or "?")
-        hue = sum(map(ord, name)) % 360
-        gradient = QLinearGradient(0, 0, size, size)
-        gradient.setColorAt(0, QColor.fromHsl(hue, 150, 120))
-        gradient.setColorAt(1, QColor.fromHsl((hue + 40) % 360, 140, 70))
-        painter.fillRect(QRectF(0, 0, size, size), gradient)
-        font = painter.font()
-        font.setPixelSize(13)
-        font.setBold(True)
-        painter.setFont(font)
-        painter.setPen(QColor(255, 255, 255, 230))
-        painter.drawText(
-            QRectF(0, 0, size, size), Qt.AlignmentFlag.AlignCenter, name[:1].upper()
-        )
-    painter.end()
-    return QIcon(canvas)
+PAGE_PLUGINS = 4
+"""Страница «Менеджер плагинов» в стеке окна."""
 
 
 class _NavItem(QToolButton):
@@ -146,38 +101,20 @@ class _NavItem(QToolButton):
         self.updateGeometry()
 
 
-class _PlaylistItem(_NavItem):
-    """Плейлист в меню: обложка вместо значка, не выделяется как раздел."""
-
-    def __init__(self, playlist, parent: QWidget | None = None) -> None:
-        super().__init__(
-            "",
-            str(getattr(playlist, "name", "")),
-            -1,
-            icon_obj=_playlist_icon(playlist),
-            parent=parent,
-        )
-        self.playlist = playlist
-        self.setCheckable(False)
-        self.setProperty("playlistItem", True)
-        self.setIconSize(QSize(_PLAYLIST_COVER, _PLAYLIST_COVER))
-
-
 class SideNavRail(QFrame):
     """Меню слева: свёрнуто — значки (72 px), развёрнуто — подписи (224 px).
     Переключается кнопкой в шапке, состояние хранится в UiPreferences."""
 
     page_changed = Signal(int)
     expanded_changed = Signal(bool)
-    playlist_activated = Signal(object)
 
     CORE_TOP = (
         ("home.svg", "Главная", 0),
         ("wave.svg", "Моя волна", 8),
         ("library.svg", "Библиотека", 2),
         ("chart.svg", "Статистика", 3),
-        ("plugins.svg", "Плагины", 4),
     )
+    MANAGER = ("plugins.svg", "Менеджер плагинов", PAGE_PLUGINS)
     CORE_BOTTOM = (
         ("user.svg", "Аккаунты", 5),
         ("sliders.svg", "Настройки", 6),
@@ -206,10 +143,16 @@ class SideNavRail(QFrame):
         self._group.setExclusive(True)
         self._buttons: dict[int, _NavItem] = {}
         self._plugin_buttons: list[_NavItem] = []
-        self._playlists: list = []
-        self._playlist_widgets: list[QWidget] = []
-        self._playlist_label: QLabel | None = None
-        self._playlist_divider: QFrame | None = None
+        self._section_label = QLabel("Плагины", self)
+        self._section_label.setObjectName("navSectionLabel")
+        self._section_divider = QFrame(self)
+        self._section_divider.setObjectName("navDivider")
+        self._section_divider.setFixedHeight(1)
+        self._updates_badge = QLabel(self)
+        self._updates_badge.setObjectName("navBadge")
+        self._updates_badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._updates_badge.hide()
+        self._updates_count = 0
         self._accent = QColor(ACCENT_FALLBACK)
         self._text = QColor("#B4BCC8")
         self._extensions = UiExtensionHost.instance()
@@ -289,36 +232,39 @@ class SideNavRail(QFrame):
         self.expanded_changed.emit(expanded)
         QTimer.singleShot(30, self._sync_indicator)
 
+    def _item_alignment(self) -> Qt.AlignmentFlag:
+        return (
+            Qt.AlignmentFlag.AlignLeft
+            if self._expanded
+            else Qt.AlignmentFlag.AlignHCenter
+        )
+
     def _apply_expanded_ui(self, expanded: bool) -> None:
         self.setProperty("expanded", expanded)
-        align = (
-            Qt.AlignmentFlag.AlignLeft if expanded else Qt.AlignmentFlag.AlignHCenter
-        )
-        for button in [*self._buttons.values(), *self._playlist_items()]:
+        for button in self._buttons.values():
             button.set_expanded(expanded)
-            self._items_layout.setAlignment(button, align)
-        if self._playlist_label is not None and self._playlist_divider is not None:
-            self._playlist_label.setVisible(expanded)
-            self._playlist_divider.setVisible(not expanded)
-            self._fit_playlists()
+            self._items_layout.setAlignment(button, self._item_alignment())
+        # Развёрнутое меню — подпись «Плагины», свёрнутое — тонкая линия.
+        self._section_label.setVisible(expanded)
+        self._section_divider.setVisible(not expanded)
         style = self.style()
         style.unpolish(self)
         style.polish(self)
         self._items_layout.invalidate()
         self.updateGeometry()
         self.update()
+        QTimer.singleShot(0, self._place_badge)
 
     def _clear_items(self) -> None:
         while self._items_layout.count():
             item = self._items_layout.takeAt(0)
             widget = item.widget()
             if widget is not None:
+                if widget in (self._section_label, self._section_divider):
+                    continue  # живут всё время, их только переставляем
                 if isinstance(widget, _NavItem):
                     self._group.removeButton(widget)
                 widget.deleteLater()
-        self._playlist_widgets.clear()
-        self._playlist_label = None
-        self._playlist_divider = None
         self._buttons.clear()
         self._plugin_buttons.clear()
 
@@ -328,62 +274,20 @@ class SideNavRail(QFrame):
             self._items_layout.addWidget(
                 self._make_button(icon, label, page_id, from_plugin=False)
             )
-        self._items_layout.addStretch(1)
-        self._rebuild_playlists()
+        # Раздел «Плагины»: страницы включённых плагинов и менеджер последним.
+        self._items_layout.addSpacing(6)
+        self._items_layout.addWidget(self._section_divider)
+        self._items_layout.addWidget(self._section_label)
+        icon, label, page_id = self.MANAGER
+        self._manager = self._make_button(icon, label, page_id, from_plugin=False)
+        self._items_layout.addWidget(self._manager)
         self._rebuild_plugin_nav()
+        self._items_layout.addStretch(1)
         for icon, label, page_id in self.CORE_BOTTOM:
             self._items_layout.addWidget(
                 self._make_button(icon, label, page_id, from_plugin=False)
             )
         self._apply_expanded_ui(self._expanded)
-
-    # ------------------------------------------------------------ playlists
-
-    def _playlist_items(self) -> list[_PlaylistItem]:
-        return [w for w in self._playlist_widgets if isinstance(w, _PlaylistItem)]
-
-    def set_playlists(self, playlists) -> None:
-        """Плейлисты под разделами (первые _PLAYLIST_LIMIT)."""
-        playlists = list(playlists)[:_PLAYLIST_LIMIT]
-        keys = [(getattr(p, "name", ""), playlist_cover_path(p)) for p in playlists]
-        old = [
-            (getattr(p, "name", ""), playlist_cover_path(p)) for p in self._playlists
-        ]
-        self._playlists = playlists
-        for widget, playlist in zip(self._playlist_items(), playlists, strict=False):
-            widget.playlist = playlist  # свежий объект (новые треки) — без пересборки
-        if keys != old:
-            self._rebuild_playlists()
-
-    def _rebuild_playlists(self) -> None:
-        for widget in self._playlist_widgets:
-            self._items_layout.removeWidget(widget)
-            widget.deleteLater()
-        self._playlist_widgets.clear()
-        self._playlist_label = None
-        self._playlist_divider = None
-        if not self._playlists:
-            return
-        insert_at = len(self.CORE_TOP)
-        divider = QFrame(self)
-        divider.setObjectName("navDivider")
-        divider.setFixedHeight(1)
-        label = QLabel("Плейлисты", self)
-        label.setObjectName("navSectionLabel")
-        widgets: list[QWidget] = [divider, label]
-        for playlist in self._playlists:
-            item = _PlaylistItem(playlist, self)
-            item.clicked.connect(
-                lambda _=False, w=item: self.playlist_activated.emit(w.playlist)
-            )
-            widgets.append(item)
-        for offset, widget in enumerate(widgets):
-            self._items_layout.insertWidget(insert_at + offset, widget)
-        self._playlist_widgets = widgets
-        self._playlist_label = label
-        self._playlist_divider = divider
-        self._apply_expanded_ui(self._expanded)
-        self._fit_playlists()
 
     def _rebuild_plugin_nav(self, *_args) -> None:
         for button in list(self._plugin_buttons):
@@ -393,7 +297,7 @@ class SideNavRail(QFrame):
             button.deleteLater()
         self._plugin_buttons.clear()
 
-        insert_at = max(0, self._items_layout.count() - len(self.CORE_BOTTOM))
+        insert_at = self._items_layout.indexOf(self._manager)
         for ext in self._extensions.nav_items():
             button = self._make_button(
                 "",
@@ -404,10 +308,36 @@ class SideNavRail(QFrame):
             )
             button.set_expanded(self._expanded)
             self._items_layout.insertWidget(insert_at, button)
+            self._items_layout.setAlignment(button, self._item_alignment())
             self._plugin_buttons.append(button)
             insert_at += 1
             if ext.on_click is not None:
                 button.clicked.connect(ext.on_click)
+        QTimer.singleShot(0, self._place_badge)
+
+    # ------------------------------------------------------------ обновления
+
+    def set_updates_count(self, count: int) -> None:
+        """Число доступных обновлений плагинов — бейдж на «Менеджере»."""
+        self._updates_count = max(0, int(count))
+        self._updates_badge.setText(str(self._updates_count))
+        self._updates_badge.setVisible(self._updates_count > 0)
+        suffix = f" · обновлений: {self._updates_count}" if self._updates_count else ""
+        self._manager.setToolTip(self.MANAGER[1] + suffix)
+        self._place_badge()
+
+    def _place_badge(self) -> None:
+        if not self._updates_count:
+            return
+        badge = self._updates_badge
+        badge.adjustSize()
+        side = max(18, badge.sizeHint().height())
+        badge.setFixedSize(max(side, badge.sizeHint().width() + 8), side)
+        # На угол значка: подпись «Менеджер плагинов» бейдж не закрывает.
+        geo = self._manager.geometry()
+        icon_left = geo.left() + (14 if self._expanded else (geo.width() - 20) // 2)
+        badge.move(icon_left + 20 - badge.width() // 2, geo.top() + 3)
+        badge.raise_()
 
     def _make_button(
         self,
@@ -474,39 +404,13 @@ class SideNavRail(QFrame):
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
-        self._fit_playlists()
         self._sync_indicator()
-
-    def _fit_playlists(self) -> None:
-        """Плейлистов показываем столько, сколько влезает по высоте: на
-        невысоком окне (ноутбук, 150 %) меню не должно вылезать за край."""
-        items = self._playlist_items()
-        if not items:
-            return
-
-        def tall(button: QWidget) -> int:
-            # у свёрнутых кнопок высота задана жёстко, sizeHint её не знает
-            return max(button.sizeHint().height(), button.minimumHeight())
-
-        fixed = sum(
-            tall(button) + self._items_layout.spacing()
-            for button in self._buttons.values()
-        )
-        margins = self._root.contentsMargins()
-        fixed += margins.top() + margins.bottom() + 40  # подпись/линия раздела
-        row = tall(items[0]) + self._items_layout.spacing()
-        room = max(0, (self.height() - fixed) // max(1, row))
-        for index, item in enumerate(items):
-            item.setVisible(index < room)
-        for widget in self._playlist_widgets:
-            if not isinstance(widget, _PlaylistItem):
-                widget.setVisible(
-                    room > 0 and ((widget is self._playlist_label) == self._expanded)
-                )
+        self._place_badge()
 
     def showEvent(self, event) -> None:
         super().showEvent(event)
         self._sync_indicator()
+        QTimer.singleShot(0, self._place_badge)
 
     def paintEvent(self, event) -> None:
         super().paintEvent(event)

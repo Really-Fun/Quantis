@@ -38,7 +38,11 @@ QFrame#navDivider {
     margin: 0 16px;
 }
 
-QToolButton#navIconButton[playlistItem="true"] {
-    padding: 6px 10px;
-    font-weight: 500;
+QLabel#navBadge {
+    background: rgb(${hl_rgb});
+    color: #FFFFFF;
+    border-radius: ${r9};
+    font-size: 11px;
+    font-weight: 700;
+    padding: 0 5px;
 }

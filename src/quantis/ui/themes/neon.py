@@ -86,10 +86,6 @@ QToolButton#navIconButton:checked {
     color: #F2F4F8;
 }
 
-QToolButton#navIconButton[plugin="true"] {
-    border: 1px solid rgba(138, 146, 166, 0.22);
-}
-
 #controlButton[plugin="true"] {
     border: 1px solid rgba(138, 146, 166, 0.35);
 }
