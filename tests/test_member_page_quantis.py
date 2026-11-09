@@ -8,7 +8,6 @@ import pytest
 from PySide6.QtCore import QObject, Signal
 from PySide6.QtWidgets import QLabel, QLineEdit, QPushButton
 
-import quantis.models  # noqa: F401  — до providers (давний цикл импортов)
 from quantis.services.quantis_account import AccountError
 from quantis.ui.views import member_page
 from quantis.ui.views.member_page import _QuantisCard
@@ -141,7 +140,9 @@ def test_site_link_opens_server(card, monkeypatch) -> None:
     widget, account = card
     opened: list[str] = []
     monkeypatch.setattr(
-        member_page.QDesktopServices, "openUrl", lambda url: opened.append(url.toString())
+        member_page.QDesktopServices,
+        "openUrl",
+        lambda url: opened.append(url.toString()),
     )
     widget._site_link.linkActivated.emit("site")
     assert opened == [account.server_url]

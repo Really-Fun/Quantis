@@ -45,6 +45,7 @@ def _fresh_yandex_token_cache():
 @pytest.fixture(autouse=True)
 def _isolated_library_index(tmp_path):
     """Индекс библиотеки не должен читать и писать каталог данных пользователя."""
+    import quantis.models  # noqa: F401  — до providers: providers↔models импортируют друг друга
     from quantis.providers.library_index import LibraryIndex
 
     LibraryIndex.reset_instance()

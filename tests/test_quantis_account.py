@@ -10,7 +10,6 @@ from aiohttp import web
 from keyring.errors import KeyringError
 from PySide6.QtCore import QSettings
 
-import quantis.models  # noqa: F401  — до providers (давний цикл импортов providers↔models)
 from quantis.config import credentials
 from quantis.services import quantis_account
 from quantis.services.quantis_account import AccountError, QuantisAccount
@@ -62,9 +61,9 @@ async def _serve(state: dict) -> tuple[web.AppRunner, str]:
         return web.json_response({"detail": "Неверный логин или пароль"}, status=400)
 
     async def me(request: web.Request) -> web.Response:
-        if request.headers.get("Authorization") == f"Token {GOOD_TOKEN}" and not state.get(
-            "revoked"
-        ):
+        if request.headers.get(
+            "Authorization"
+        ) == f"Token {GOOD_TOKEN}" and not state.get("revoked"):
             return web.json_response({"username": "u"})
         return web.json_response({"detail": "bad"}, status=401)
 
@@ -191,7 +190,9 @@ async def test_verify_offline_keeps_token(vault, settings) -> None:
 
 
 @pytest.mark.asyncio
-async def test_login_without_keyring_keeps_token_in_memory(server, vault, settings) -> None:
+async def test_login_without_keyring_keeps_token_in_memory(
+    server, vault, settings
+) -> None:
     url, _ = server
     vault.fail = True
     account = _account(settings, url)
@@ -210,7 +211,11 @@ def test_auth_headers(vault, settings) -> None:
 
 def test_default_server(vault, settings) -> None:
     account = QuantisAccount(settings=settings)
-    assert account.server_url == quantis_account.DEFAULT_SERVER == "https://212-87-190-34.nip.io"
+    assert (
+        account.server_url
+        == quantis_account.DEFAULT_SERVER
+        == "https://212-87-190-34.nip.io"
+    )
     account.set_server_url("https://example.org/ ")
     assert account.server_url == "https://example.org"
     assert QuantisAccount(settings=settings).server_url == "https://example.org"

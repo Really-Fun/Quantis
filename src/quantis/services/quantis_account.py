@@ -135,7 +135,9 @@ class QuantisAccount(QObject):
                             self._settings.setValue(_KEY_USERNAME, name)
                             self.account_changed.emit()
         except (aiohttp.ClientError, TimeoutError):
-            logger.info("Аккаунт Quantis: сервер недоступен, проверку токена пропускаем")
+            logger.info(
+                "Аккаунт Quantis: сервер недоступен, проверку токена пропускаем"
+            )
         return True
 
     def handle_unauthorized(self) -> None:
