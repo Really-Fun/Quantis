@@ -402,9 +402,10 @@ class PlaybackController:
         def announce() -> None:
             # Иначе прошлый трек продолжает играть, а ползунок тикает его время,
             # пока yt-dlp резолвит YouTube.
+            # quiet: это смена трека, а не пауза — кнопка и плагины её не видят.
             stop = getattr(self.player, "stop", None)
             if callable(stop):
-                stop()
+                stop(quiet=True)
             self.player.current_track = track
             if self._event_bus is not None:
                 self._event_bus.track_changed.emit(track)

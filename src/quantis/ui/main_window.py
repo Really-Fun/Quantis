@@ -1359,7 +1359,10 @@ class QuantisMainWindow(QMainWindow):
         try:
             info = await fetch_latest_release()
         except Exception as exc:
-            logging.getLogger(__name__).warning("Проверка обновлений: %s", exc)
+            logging.getLogger(__name__).warning(
+                "Проверка обновлений не удалась: %s",
+                exc.__class__.__name__ + (f": {exc}" if str(exc) else ""),
+            )
             return
         self._bridge.invoke_main(lambda i=info: self._on_update_check_ok(i))
 

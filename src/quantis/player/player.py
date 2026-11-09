@@ -190,7 +190,9 @@ class Player:
         for callback in self._playback_resumed_callbacks:
             callback()
 
-    def stop(self) -> None:
+    def stop(self, *, quiet: bool = False) -> None:
+        """Остановить звук. quiet — смена трека: прошлый глушим, но «паузу»
+        не объявляем, иначе кнопка мигает ▶, пока грузится следующий."""
         self.on_pause = True
         self._paused_at_ms = 0
         self._paused_at_mono = 0.0
@@ -198,6 +200,8 @@ class Player:
         self._was_playing = False
         self._finish_emitted = True
         self._engine.stop_media()
+        if quiet:
+            return
         for callback in self._playback_paused_callbacks:
             callback()
 

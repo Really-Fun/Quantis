@@ -414,3 +414,18 @@ def test_quick_skip_does_not_freeze_new_track_at_zero() -> None:
     for position in (0, 300, 1_500, 2_500, 4_000):
         engine._position = position
         assert player.time == position
+
+
+def test_quiet_stop_on_track_switch_does_not_announce_pause() -> None:
+    engine = StubEngine()
+    player = Player(engine=engine)
+    paused: list[bool] = []
+    player.on_playback_paused(lambda: paused.append(True))
+    player.play("/tmp/old.mp3")
+
+    player.stop(quiet=True)
+    assert paused == []
+    assert not engine.is_playing()
+
+    player.stop()
+    assert paused == [True]

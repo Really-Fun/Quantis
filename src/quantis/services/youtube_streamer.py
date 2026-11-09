@@ -74,6 +74,26 @@ def slim_youtube_info(info: dict[str, Any] | None) -> dict[str, Any] | None:
     return slim
 
 
+def _is_network_error(exc: BaseException) -> bool:
+    """Ошибка связи (таймаут, обрыв, DNS), а не поломка извлечения."""
+    seen: set[int] = set()
+    current: BaseException | None = exc
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        if isinstance(current, (TimeoutError, ConnectionError)):
+            return True
+        if type(current).__name__ in {"TransportError", "ReadTimeoutError"}:
+            return True
+        # DownloadError yt-dlp хранит исходную ошибку в exc_info.
+        inner = getattr(current, "exc_info", None)
+        if isinstance(inner, tuple) and len(inner) > 1:
+            if isinstance(inner[1], BaseException) and id(inner[1]) not in seen:
+                current = inner[1]
+                continue
+        current = current.__cause__ or current.__context__
+    return False
+
+
 class AsyncYoutubeStreamer(AsyncStreamerInterface):
     def __init__(self, executor: ThreadPoolExecutor) -> None:
         self._common = {
@@ -474,7 +494,14 @@ class AsyncYoutubeStreamer(AsyncStreamerInterface):
                     track_id,
                     exc_info=True,
                 )
-        if last_exc is not None:
+        if last_exc is not None and _is_network_error(last_exc):
+            # Таймаут или обрыв связи с youtube.com — не баг, трейсбек не нужен.
+            logger.warning(
+                "YouTube недоступен (сеть), поток %s не получен: %s",
+                track_id,
+                last_exc,
+            )
+        elif last_exc is not None:
             logger.error(
                 "Не удалось получить URL потока YouTube: %s",
                 track_id,
