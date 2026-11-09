@@ -9,7 +9,7 @@ from pathlib import Path
 
 import aiohttp
 from PySide6.QtCore import Qt, QUrl
-from PySide6.QtGui import QDesktopServices, QPixmap, QShowEvent
+from PySide6.QtGui import QDesktopServices, QImage, QResizeEvent, QShowEvent
 from PySide6.QtWidgets import (
     QButtonGroup,
     QFileDialog,
@@ -30,7 +30,7 @@ from quantis.plugins import PluginRegistry
 from quantis.plugins.installer import PluginInstallError, install_plugin_from_zip
 from quantis.plugins.loader import resolve_plugins_dir
 from quantis.plugins.store import StoreError, StorePlugin, download_plugin, store_action
-from quantis.ui import resources
+from quantis.ui.views.widgets.cover_view import CardGrid, CoverView
 from quantis.ui.views.widgets.page_layout import (
     CONTENT_MAX_W,
     PageTitle,
@@ -44,8 +44,24 @@ logger = logging.getLogger(__name__)
 Notify = Callable[..., None]
 Download = Callable[[object, StorePlugin, Path], Awaitable[Path]]
 
-_COVER_SIZE = 48
+_THUMB_SIZE = 56
 _MAX_COVER_BYTES = 2 * 1024 * 1024
+_STORE_CARD_MIN_W = 250
+
+
+async def fetch_cover(url: str) -> bytes:
+    """Байты обложки из магазина; пусто при любой ошибке или слишком большом файле."""
+    try:
+        timeout = aiohttp.ClientTimeout(total=15)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.get(url) as response:
+                if response.status != 200:
+                    return b""
+                data = await response.content.read(_MAX_COVER_BYTES + 1)
+    except (aiohttp.ClientError, TimeoutError):
+        logger.debug("Обложка плагина %s не загрузилась", url, exc_info=True)
+        return b""
+    return data if len(data) <= _MAX_COVER_BYTES else b""
 
 
 def _label(text: str, name: str, *, wrap: bool = False) -> QLabel:
@@ -108,7 +124,10 @@ class PluginsPage(QWidget):
         self._open_accounts = open_accounts or (lambda: None)
         self._busy: set[str] = set()
         self._toggles: dict[str, Switch] = {}
-        self._covers: dict[str, bytes] = {}
+        # Обложки по url: картинка уже декодирована — карточки пересобираются
+        # при каждом обновлении магазина, повторно сеть не трогаем.
+        self._covers: dict[str, QImage] = {}
+        self._cover_waiters: dict[str, list[CoverView]] = {}
         self.setObjectName("pluginsPage")
 
         scroll = QScrollArea()
@@ -246,9 +265,10 @@ class PluginsPage(QWidget):
 
     def _installed_card(self, info, update: StorePlugin | None) -> QFrame:
         meta = info.meta
-        card, row, col = self._card_frame(
-            resources.load_icon("puzzle.svg").pixmap(28, 28)
-        )
+        card, row, col = self._card_frame(meta.name)
+        store_item = self._store_items().get(meta.plugin_id)
+        if store_item is not None and store_item.cover_url:
+            self._load_cover(store_item.cover_url, card.property("cover"))
         col.addWidget(_label(meta.name, "pluginCardTitle"))
         bits = [f"v{meta.version}", meta.plugin_id]
         if meta.author and meta.author != "Unknown":
@@ -399,9 +419,8 @@ class PluginsPage(QWidget):
         actions.addWidget(self._retry_btn)
         actions.addStretch()
         layout.addLayout(actions)
-        self._store_cards = QVBoxLayout()
-        self._store_cards.setSpacing(10)
-        layout.addLayout(self._store_cards)
+        self._store_grid = CardGrid(_STORE_CARD_MIN_W)
+        layout.addWidget(self._store_grid)
         layout.addStretch()
         return page
 
@@ -410,8 +429,12 @@ class PluginsPage(QWidget):
             return False
         return not getattr(self._updates, "logged_out", False)
 
+    def _store_items(self) -> dict[str, StorePlugin]:
+        store = getattr(self._updates, "store", []) or []
+        return {item.plugin_id: item for item in store}
+
     def _refresh_store(self, *_args) -> None:
-        _clear(self._store_cards)
+        self._store_grid.set_cards([])
         updates = self._updates
         logged_in = self._logged_in()
         error = getattr(updates, "error", "") if updates is not None else ""
@@ -429,8 +452,12 @@ class PluginsPage(QWidget):
             self._show_store_message("В магазине пока пусто.")
         else:
             self._show_store_message("")
-        for item in sorted(store, key=lambda i: i.title.lower()):
-            self._store_cards.addWidget(self._store_card(item))
+        self._store_grid.set_cards(
+            [
+                self._store_card(item)
+                for item in sorted(store, key=lambda i: i.title.lower())
+            ]
+        )
 
     def _show_store_message(self, text: str) -> None:
         self._store_message.setText(text)
@@ -441,18 +468,21 @@ class PluginsPage(QWidget):
             self._bridge.schedule(self._updates.refresh())
 
     def _store_card(self, item: StorePlugin) -> QFrame:
-        cover = resources.load_icon("puzzle.svg").pixmap(_COVER_SIZE, _COVER_SIZE)
-        card, row, col = self._card_frame(cover)
-        col.addWidget(_label(item.title, "pluginCardTitle"))
+        card = _StoreCard(item.title)
+        layout = card.body
+        if item.cover_url:
+            self._load_cover(item.cover_url, card.cover)
+
+        layout.addWidget(_label(item.title, "pluginCardTitle"))
         bits = [f"v{item.version}"]
         if item.author:
             bits.append(item.author)
-        col.addWidget(_label(" · ".join(bits), "pluginCardAuthor"))
-        col.addWidget(
+        layout.addWidget(_label(" · ".join(bits), "pluginCardAuthor"))
+        layout.addWidget(
             _label(item.description or "Без описания", "pluginCardDesc", wrap=True)
         )
-        if item.cover_url:
-            self._load_cover(item.cover_url, card.property("coverLabel"))
+        layout.addStretch(1)  # кнопки в ряду карточек — на одной линии снизу
+        layout.addSpacing(8)
 
         action = store_action(item, self._registry.installed_version(item.plugin_id))
         if item.plugin_id in self._busy:
@@ -465,67 +495,61 @@ class PluginsPage(QWidget):
         else:
             button = _button("Установлено", "nowPlayingStubBtn", lambda: None)
             button.setEnabled(False)
-        row.addWidget(button, 0, Qt.AlignmentFlag.AlignTop)
+        layout.addWidget(button, 0, Qt.AlignmentFlag.AlignLeft)
         return card
 
-    def _card_frame(self, pixmap: QPixmap) -> tuple[QFrame, QHBoxLayout, QVBoxLayout]:
+    def _card_frame(self, title: str) -> tuple[QFrame, QHBoxLayout, QVBoxLayout]:
         card = QFrame()
         card.setObjectName("pluginCard")
         row = QHBoxLayout(card)
         row.setContentsMargins(14, 12, 14, 12)
         row.setSpacing(12)
-        icon = QLabel()
-        icon.setFixedSize(_COVER_SIZE, _COVER_SIZE)
-        icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        icon.setPixmap(pixmap)
-        row.addWidget(icon, 0, Qt.AlignmentFlag.AlignTop)
-        card.setProperty("coverLabel", icon)
+        cover = CoverView(title, radius=12)
+        cover.setFixedSize(_THUMB_SIZE, _THUMB_SIZE)
+        row.addWidget(cover, 0, Qt.AlignmentFlag.AlignTop)
+        card.setProperty("cover", cover)
         col = QVBoxLayout()
         col.setSpacing(2)
         row.addLayout(col, stretch=1)
         return card, row, col
 
-    def _load_cover(self, url: str, label: QLabel) -> None:
+    def _load_cover(self, url: str, view: CoverView) -> None:
+        """Картинка из ``cover_url`` API магазина, как превью комнат Together."""
         cached = self._covers.get(url)
         if cached is not None:
-            self._set_cover(label, cached)
+            view.set_image(cached)
             return
-        if self._bridge is None:
+        waiters = self._cover_waiters.get(url)
+        if waiters is not None:
+            waiters.append(view)  # уже качается — ждём тот же ответ
             return
+        bridge = self._bridge
+        if bridge is None:
+            return
+        self._cover_waiters[url] = [view]
 
         async def fetch() -> None:
-            try:
-                timeout = aiohttp.ClientTimeout(total=15)
-                async with aiohttp.ClientSession(timeout=timeout) as session:
-                    async with session.get(url) as response:
-                        if response.status != 200:
-                            return
-                        data = await response.content.read(_MAX_COVER_BYTES + 1)
-            except (aiohttp.ClientError, TimeoutError):
-                return
-            if len(data) > _MAX_COVER_BYTES:
-                return
-            self._covers[url] = data
-            self._bridge.invoke_main(lambda: self._set_cover(label, data))
+            data = await fetch_cover(url)
+            bridge.invoke_main(lambda: self._apply_cover(url, data))
 
-        self._bridge.schedule(fetch())
-
-    @staticmethod
-    def _set_cover(label: QLabel, data: bytes) -> None:
-        pixmap = QPixmap()
-        if not pixmap.loadFromData(data):
-            return
         try:
-            label.setPixmap(
-                pixmap.scaled(
-                    _COVER_SIZE,
-                    _COVER_SIZE,
-                    Qt.AspectRatioMode.KeepAspectRatioByExpanding,
-                    Qt.TransformationMode.SmoothTransformation,
-                )
-            )
-        except RuntimeError:
-            pass  # карточку уже пересобрали
+            bridge.schedule(fetch())
+        except Exception:
+            # Иначе url навсегда числился бы «качающимся» и обложка не пришла бы.
+            self._cover_waiters.pop(url, None)
+            logger.debug("Обложка плагина %s: не удалось запустить", url, exc_info=True)
+
+    def _apply_cover(self, url: str, data: bytes) -> None:
+        views = self._cover_waiters.pop(url, [])
+        image = QImage.fromData(data) if data else QImage()
+        if image.isNull():
+            return  # остаётся буква на градиенте; при следующем показе — повтор
+        self._covers[url] = image
+        for view in views:
+            try:
+                view.set_image(image)
+            except RuntimeError:
+                pass  # карточку уже пересобрали
 
     # ------------------------------------------------------------ установка
 
@@ -594,3 +618,23 @@ class PluginsPage(QWidget):
         if self._updates is not None:
             self._updates.recount()
         self._refresh_all()
+
+
+class _StoreCard(QFrame):
+    """Карточка магазина: превью 16:9 во всю ширину, текст и кнопка ниже."""
+
+    def __init__(self, title: str, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setObjectName("pluginCard")
+        self.body = QVBoxLayout(self)
+        self.body.setContentsMargins(12, 12, 12, 14)
+        self.body.setSpacing(4)
+        self.cover = CoverView(title, radius=12)
+        self.body.addWidget(self.cover)
+        self.body.addSpacing(8)
+
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        margins = self.body.contentsMargins()
+        width = self.width() - margins.left() - margins.right()
+        self.cover.setFixedHeight(max(80, int(width * 9 / 16)))
+        super().resizeEvent(event)

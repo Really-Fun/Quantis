@@ -130,8 +130,23 @@ class _Account(QObject):
 
 
 class _Bridge:
+    """Синхронный мост; корутины, запущенные изнутри другой, идут следом."""
+
+    def __init__(self) -> None:
+        self._pending: list = []
+        self._running = False
+
     def schedule(self, coro):
-        asyncio.run(coro)
+        if self._running:
+            self._pending.append(coro)
+            return
+        self._running = True
+        try:
+            asyncio.run(coro)
+            while self._pending:
+                asyncio.run(self._pending.pop(0))
+        finally:
+            self._running = False
 
     def invoke_main(self, fn) -> None:
         fn()
@@ -304,4 +319,49 @@ def test_no_download_by_url_button(page_env) -> None:
     page = make()
     assert _buttons(page, "Скачать по URL") == []
     assert _buttons(page, "Импорт из архива")
+    page.close()
+
+
+def _png() -> bytes:
+    from PySide6.QtCore import QBuffer, QIODevice
+    from PySide6.QtGui import QColor, QImage
+
+    image = QImage(32, 18, QImage.Format.Format_RGB32)
+    image.fill(QColor("#6C5CE7"))
+    buffer = QBuffer()
+    buffer.open(QIODevice.OpenModeFlag.WriteOnly)
+    image.save(buffer, "PNG")
+    return bytes(buffer.data())
+
+
+def test_store_covers_load_once_and_fill_cards(page_env, monkeypatch) -> None:
+    from quantis.ui.views.widgets.cover_view import CoverView
+
+    make, registry, updates, *_ = page_env
+    fetched: list[str] = []
+    png = _png()
+
+    async def fake_fetch(url: str) -> bytes:
+        fetched.append(url)
+        return png if url.endswith("ok.png") else b""
+
+    monkeypatch.setattr(plugins_page, "fetch_cover", fake_fetch)
+    with_cover = _item("cava", "1.0")
+    with_cover = with_cover.__class__(
+        **{**with_cover.__dict__, "cover_url": "https://x/ok.png"}
+    )
+    broken = _item("bad", "1.0")
+    broken = broken.__class__(**{**broken.__dict__, "cover_url": "https://x/404.png"})
+    registry.add("cava", "1.0")
+    updates.store = [with_cover, broken, _item("plain", "1.0")]
+    page = make()
+    page.show_store()
+    QApplication.processEvents()
+
+    covers = page.findChildren(CoverView)
+    # Карточки магазина + миниатюра установленного cava, у которого есть обложка.
+    assert sum(view.has_image for view in covers) == 2
+    assert fetched.count("https://x/ok.png") == 1
+    page._refresh_all()  # пересборка карточек берёт картинку из кэша
+    assert fetched.count("https://x/ok.png") == 1
     page.close()
