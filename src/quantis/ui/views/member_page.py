@@ -242,7 +242,9 @@ class _QuantisCard(_ServiceCard):
         form.addLayout(row)
         self._site_link = _label("", "memberDetail")
         self._site_link.setTextFormat(Qt.TextFormat.RichText)
-        self._site_link.setText(_with_links("<a href='site'>Нет аккаунта? Открыть сайт</a>"))
+        self._site_link.setText(
+            _with_links("<a href='site'>Нет аккаунта? Открыть сайт</a>")
+        )
         self._site_link.linkActivated.connect(self._open_site)
         form.addWidget(self._site_link)
         self.body.addWidget(self._form)
