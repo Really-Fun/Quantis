@@ -14,6 +14,7 @@ from quantis.player.player import Player
 from quantis.plugins.event_bus import EventBus
 from quantis.providers import PlaylistManager
 from quantis.services.music_service import MusicService
+from quantis.services.quantis_account import QuantisAccount
 from quantis.services.track_history import TrackHistoryService
 
 logger = logging.getLogger(__name__)
@@ -32,6 +33,7 @@ class ApplicationBundle:
     history: TrackHistoryService
     history_watcher: PlaybackHistoryWatcher
     plugin_host: PluginHost
+    account: QuantisAccount
 
 
 class _BusDownloadListener:
@@ -72,11 +74,15 @@ def build_application(bridge: AsyncBridge) -> ApplicationBundle:
         history=history,
         async_bridge=bridge,
     )
+    account = QuantisAccount()
+    if account.is_logged_in:
+        bridge.schedule(account.verify())
     plugin_host = PluginHost(
         event_bus=event_bus,
         playback=playback,
         music=music,
         async_bridge=bridge,
+        account=account,
     )
 
     music.add_download_listener(_BusDownloadListener(event_bus))
@@ -94,6 +100,7 @@ def build_application(bridge: AsyncBridge) -> ApplicationBundle:
         history=history,
         history_watcher=history_watcher,
         plugin_host=plugin_host,
+        account=account,
     )
 
 

@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from quantis.models import Track
     from quantis.plugins.event_bus import EventBus
     from quantis.services.music_service import MusicService
+    from quantis.services.quantis_account import QuantisAccount
 
 
 @dataclass
@@ -23,6 +24,12 @@ class PluginHost:
     playback: PlaybackController
     music: MusicService
     async_bridge: AsyncBridge | None = None
+    # Аккаунт сайта Quantis: адрес сервера, токен, сигнал changed.
+    account: QuantisAccount | None = None
+
+    def open_accounts(self) -> None:
+        """Открыть раздел «Аккаунты» (например, чтобы войти в Quantis)."""
+        self.event_bus.accounts_requested.emit()
 
     def notify(self, title: str, message: str = "", kind: str = "info") -> None:
         """Всплывающее уведомление в окне. kind: "info", "success" или "error".

@@ -34,6 +34,8 @@ class EventBus(QObject):
     # Уведомление в углу окна: заголовок, текст, вид ("info"/"success"/"error").
     # Можно слать из любого потока — UI получит его в главном.
     notification_requested = Signal(str, str, str)
+    # Плагин просит открыть «Аккаунты» (вход в аккаунт Quantis).
+    accounts_requested = Signal()
 
     def __init__(self) -> None:
         super().__init__()

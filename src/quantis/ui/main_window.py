@@ -353,6 +353,9 @@ class QuantisMainWindow(QMainWindow):
         bundle.event_bus.queue_extended.connect(self._on_queue_extended)
         bundle.event_bus.error_occurred.connect(self._show_error)
         bundle.event_bus.notification_requested.connect(self._show_notification)
+        bundle.event_bus.accounts_requested.connect(
+            lambda: self._goto_page(self.PAGE_MEMBER)
+        )
         self._download_toasts: dict[tuple[str, str], DownloadNotification] = {}
         bundle.event_bus.track_download_started.connect(self._on_download_started)
         bundle.event_bus.track_download_progress.connect(self._on_download_progress)

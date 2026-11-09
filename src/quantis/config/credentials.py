@@ -23,6 +23,7 @@ from keyring.errors import KeyringError, PasswordDeleteError
 
 from quantis.config.clients import Clients
 from quantis.config.constants import (
+    SERVICE_NAME_QUANTIS,
     SERVICE_NAME_YANDEX,
     SERVICE_NAME_YOUTUBE_COOKIE,
     USER,
@@ -460,6 +461,28 @@ def delete_yandex_token() -> None:
         raise RuntimeError(f"Не удалось удалить токен: {exc}") from exc
     reset_yandex_token_cache()
     Clients().reload_yandex_client()
+
+
+def save_quantis_token(token: str) -> None:
+    """Токен API сайта Quantis — в keyring. KeyringError пробрасывается."""
+    set_password(SERVICE_NAME_QUANTIS, USER, token)
+
+
+def load_quantis_token() -> str:
+    try:
+        return get_password(SERVICE_NAME_QUANTIS, USER) or ""
+    except KeyringError:
+        logger.warning("keyring недоступен — токен Quantis не прочитан")
+        return ""
+
+
+def delete_quantis_token() -> None:
+    try:
+        delete_password(SERVICE_NAME_QUANTIS, USER)
+    except PasswordDeleteError:
+        pass
+    except KeyringError:
+        logger.warning("keyring недоступен — токен Quantis не удалён")
 
 
 def save_youtube_cookie(cookie: str) -> None:
