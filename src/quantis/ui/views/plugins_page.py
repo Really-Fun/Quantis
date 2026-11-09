@@ -49,19 +49,34 @@ _MAX_COVER_BYTES = 2 * 1024 * 1024
 _STORE_CARD_MIN_W = 250
 
 
+async def read_limited(content: aiohttp.StreamReader, limit: int) -> bytes:
+    """Тело ответа целиком, но не больше ``limit`` байт; больше — пусто.
+
+    ``content.read(n)`` не годится: он отдаёт только то, что уже пришло по
+    сети (первые ~16 КБ), и картинка оказывается обрезанной.
+    """
+    data = bytearray()
+    async for chunk in content.iter_chunked(64 * 1024):
+        data += chunk
+        if len(data) > limit:
+            return b""
+    return bytes(data)
+
+
 async def fetch_cover(url: str) -> bytes:
     """Байты обложки из магазина; пусто при любой ошибке или слишком большом файле."""
     try:
-        timeout = aiohttp.ClientTimeout(total=15)
+        timeout = aiohttp.ClientTimeout(total=30)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             async with session.get(url) as response:
                 if response.status != 200:
                     return b""
-                data = await response.content.read(_MAX_COVER_BYTES + 1)
+                if (response.content_length or 0) > _MAX_COVER_BYTES:
+                    return b""
+                return await read_limited(response.content, _MAX_COVER_BYTES)
     except (aiohttp.ClientError, TimeoutError):
         logger.debug("Обложка плагина %s не загрузилась", url, exc_info=True)
         return b""
-    return data if len(data) <= _MAX_COVER_BYTES else b""
 
 
 def _label(text: str, name: str, *, wrap: bool = False) -> QLabel:

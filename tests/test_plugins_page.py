@@ -365,3 +365,31 @@ def test_store_covers_load_once_and_fill_cards(page_env, monkeypatch) -> None:
     page._refresh_all()  # пересборка карточек берёт картинку из кэша
     assert fetched.count("https://x/ok.png") == 1
     page.close()
+
+
+class _Chunks:
+    """Поток aiohttp, который отдаёт тело несколькими кусками."""
+
+    def __init__(self, chunks: list[bytes]) -> None:
+        self._chunks = chunks
+
+    def iter_chunked(self, _size: int):
+        async def gen():
+            for chunk in self._chunks:
+                yield chunk
+
+        return gen()
+
+
+def test_read_limited_reads_whole_body_not_first_chunk() -> None:
+    body = asyncio.run(
+        plugins_page.read_limited(
+            _Chunks([b"a" * 16_000, b"b" * 16_000, b"c"]), 100_000
+        )
+    )
+    assert len(body) == 32_001
+
+
+def test_read_limited_drops_oversized_body() -> None:
+    body = asyncio.run(plugins_page.read_limited(_Chunks([b"a" * 60, b"b" * 60]), 100))
+    assert body == b""
