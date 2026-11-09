@@ -46,6 +46,8 @@ Download = Callable[[object, StorePlugin, Path], Awaitable[Path]]
 
 _THUMB_SIZE = 56
 _MAX_COVER_BYTES = 2 * 1024 * 1024
+_COVER_ATTEMPTS = 3
+_COVER_RETRY_DELAY = 1.0
 _STORE_CARD_MIN_W = 250
 
 
@@ -63,20 +65,38 @@ async def read_limited(content: aiohttp.StreamReader, limit: int) -> bytes:
     return bytes(data)
 
 
-async def fetch_cover(url: str) -> bytes:
-    """Байты обложки из магазина; пусто при любой ошибке или слишком большом файле."""
-    try:
-        timeout = aiohttp.ClientTimeout(total=30)
-        async with aiohttp.ClientSession(timeout=timeout) as session:
-            async with session.get(url) as response:
-                if response.status != 200:
-                    return b""
-                if (response.content_length or 0) > _MAX_COVER_BYTES:
-                    return b""
-                return await read_limited(response.content, _MAX_COVER_BYTES)
-    except (aiohttp.ClientError, TimeoutError):
-        logger.debug("Обложка плагина %s не загрузилась", url, exc_info=True)
-        return b""
+async def _fetch_cover_once(url: str) -> tuple[bytes, str]:
+    timeout = aiohttp.ClientTimeout(total=30)
+    async with aiohttp.ClientSession(timeout=timeout) as session:
+        async with session.get(url) as response:
+            if response.status != 200:
+                return b"", f"HTTP {response.status}"
+            if (response.content_length or 0) > _MAX_COVER_BYTES:
+                return b"", "больше 2 МБ"
+            data = await read_limited(response.content, _MAX_COVER_BYTES)
+            return data, "" if data else "пустой ответ или больше 2 МБ"
+
+
+async def fetch_cover(url: str, attempts: int = _COVER_ATTEMPTS) -> bytes:
+    """Байты обложки из магазина; пусто, если не скачалась за ``attempts`` попыток.
+
+    Сетевой сбой на одном запросе из нескольких параллельных — обычное дело,
+    без повтора карточка осталась бы с буквой до следующего открытия менеджера.
+    """
+    reason = ""
+    for attempt in range(attempts):
+        if attempt:
+            await asyncio.sleep(_COVER_RETRY_DELAY * attempt)
+        try:
+            data, reason = await _fetch_cover_once(url)
+        except (aiohttp.ClientError, TimeoutError) as exc:
+            data, reason = b"", f"{type(exc).__name__}: {exc}"
+        if data:
+            return data
+        if reason.startswith("HTTP 4") or "2 МБ" in reason:
+            break  # повтор не поможет
+    logger.warning("Обложка плагина не загрузилась (%s): %s", reason, url)
+    return b""
 
 
 def _label(text: str, name: str, *, wrap: bool = False) -> QLabel:

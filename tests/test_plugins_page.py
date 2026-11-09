@@ -393,3 +393,33 @@ def test_read_limited_reads_whole_body_not_first_chunk() -> None:
 def test_read_limited_drops_oversized_body() -> None:
     body = asyncio.run(plugins_page.read_limited(_Chunks([b"a" * 60, b"b" * 60]), 100))
     assert body == b""
+
+
+def test_fetch_cover_retries_network_errors(monkeypatch) -> None:
+    import aiohttp
+
+    calls: list[int] = []
+
+    async def flaky(url: str):
+        calls.append(1)
+        if len(calls) < 3:
+            raise aiohttp.ClientOSError("SSL EOF")
+        return b"png", ""
+
+    monkeypatch.setattr(plugins_page, "_fetch_cover_once", flaky)
+    monkeypatch.setattr(plugins_page, "_COVER_RETRY_DELAY", 0.0)
+    assert asyncio.run(plugins_page.fetch_cover("https://x/c.png")) == b"png"
+    assert len(calls) == 3
+
+
+def test_fetch_cover_does_not_retry_404(monkeypatch) -> None:
+    calls: list[int] = []
+
+    async def missing(url: str):
+        calls.append(1)
+        return b"", "HTTP 404"
+
+    monkeypatch.setattr(plugins_page, "_fetch_cover_once", missing)
+    monkeypatch.setattr(plugins_page, "_COVER_RETRY_DELAY", 0.0)
+    assert asyncio.run(plugins_page.fetch_cover("https://x/c.png")) == b""
+    assert len(calls) == 1
