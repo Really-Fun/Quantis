@@ -196,3 +196,13 @@ async def test_download_rejects_plain_http_to_remote_host(tmp_path) -> None:
     item = _item("http://example.org")
     with pytest.raises(StoreError, match="https"):
         await download_plugin(_Account("http://example.org"), item, tmp_path)
+
+
+@pytest.mark.asyncio
+async def test_download_refuses_foreign_host(server, tmp_path) -> None:
+    """Токен аккаунта уходит только на сервер аккаунта, не по чужой ссылке."""
+    url, _ = server
+    item = _item("https://evil.example", download_url="https://evil.example/x.zip")
+    with pytest.raises(StoreError, match="чужой адрес"):
+        await download_plugin(_Account(url), item, tmp_path)
+    assert list(tmp_path.iterdir()) == []

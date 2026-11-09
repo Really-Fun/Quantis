@@ -112,6 +112,12 @@ def _require_safe_url(url: str) -> None:
     raise StoreError("Магазин работает только по https")
 
 
+def _origin(url: str) -> tuple[str, str, int | None]:
+    parsed = urlparse(url)
+    port = parsed.port or {"https": 443, "http": 80}.get(parsed.scheme)
+    return parsed.scheme, (parsed.hostname or "").lower(), port
+
+
 def _check_auth(account: StoreAccount) -> dict[str, str]:
     headers = account.auth_headers()
     if not headers:
@@ -179,6 +185,9 @@ async def download_plugin(
     if item.size > MAX_PLUGIN_BYTES:
         raise StoreError(f"Плагин «{item.title}» слишком большой")
     _require_safe_url(item.download_url)
+    if _origin(item.download_url) != _origin(account.server_url):
+        # Токен аккаунта — только серверу аккаунта, не по ссылке из ответа.
+        raise StoreError("Магазин дал ссылку на чужой адрес — скачивание отменено")
     headers = _check_auth(account)
     data = bytearray()
     try:
