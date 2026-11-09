@@ -356,6 +356,17 @@ class QuantisMainWindow(QMainWindow):
         bundle.event_bus.accounts_requested.connect(
             lambda: self._goto_page(self.PAGE_MEMBER)
         )
+        # Магазин плагинов: бейдж обновлений в панели и вкладка «Магазин».
+        from quantis.plugins import PluginRegistry
+        from quantis.plugins.updates import PluginUpdates
+
+        self._plugin_updates = PluginUpdates(bundle.account, PluginRegistry.instance())
+        bundle.account.account_changed.connect(
+            lambda: self._bridge.schedule(self._plugin_updates.refresh())
+        )
+        PluginRegistry.instance().plugin_changed.connect(
+            lambda _id: self._plugin_updates.recount()
+        )
         self._download_toasts: dict[tuple[str, str], DownloadNotification] = {}
         bundle.event_bus.track_download_started.connect(self._on_download_started)
         bundle.event_bus.track_download_progress.connect(self._on_download_progress)
@@ -1305,6 +1316,10 @@ class QuantisMainWindow(QMainWindow):
         self._notifications.push(
             Notification("Ошибка", message, kind="error", timeout_ms=7000)
         )
+
+    @property
+    def plugin_updates(self):
+        return self._plugin_updates
 
     def _show_notification(self, title: str, message: str, kind: str) -> None:
         title = (title or "").strip()

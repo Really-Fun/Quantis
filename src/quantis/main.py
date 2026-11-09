@@ -50,7 +50,14 @@ def main() -> None:
 
         # Без refresh() индекс не станет готов, а download_full ждёт готовности.
         bridge.schedule(LibraryIndex.instance().refresh())
-        bridge.schedule(PluginRegistry.instance().load_all(bundle.plugin_host))
+
+        async def start_plugins() -> None:
+            await PluginRegistry.instance().load_all(bundle.plugin_host)
+            # Версии установленных известны — можно сверить с магазином.
+            if bundle.account.is_logged_in:
+                await window.plugin_updates.refresh()
+
+        bridge.schedule(start_plugins())
         if os.environ.get("QUANTIS_ENABLE_ADAPTER", "1").lower() in (
             "1",
             "true",
