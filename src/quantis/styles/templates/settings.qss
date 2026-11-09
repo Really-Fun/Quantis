@@ -218,6 +218,10 @@ QLabel#memberDot[source="youtube"] {
     background: #FF3D3D;
 }
 
+QLabel#memberDot[source="quantis"] {
+    background: rgb(${hl_rgb});
+}
+
 QLabel#memberChip {
     border-radius: ${r11};
     padding: 4px 10px;

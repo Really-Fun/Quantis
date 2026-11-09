@@ -10,8 +10,8 @@ from __future__ import annotations
 import logging
 from collections.abc import Callable
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QAction, QShowEvent
+from PySide6.QtCore import Qt, QUrl
+from PySide6.QtGui import QAction, QDesktopServices, QShowEvent
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -207,10 +207,152 @@ class _ServiceCard(QFrame):
         self.detail.setText(status.detail)
 
 
+class _QuantisCard(_ServiceCard):
+    """Аккаунт сайта Quantis: вход по логину и паролю, хранится только токен."""
+
+    def __init__(self, account, bridge, parent: QWidget | None = None) -> None:
+        super().__init__("quantis", "Quantis", parent)
+        self._acct = account
+        self._bridge = bridge
+        self._busy = False
+        self.detail.setText(
+            "Магазин плагинов и совместное прослушивание («Вместе»). "
+            "Пароль не сохраняется — только токен в системном хранилище."
+        )
+
+        self._form = QWidget()
+        form = QVBoxLayout(self._form)
+        form.setContentsMargins(0, 0, 0, 0)
+        form.setSpacing(6)
+        form.addWidget(_label("Логин и пароль от сайта Quantis", "memberFieldLabel"))
+        row = QHBoxLayout()
+        row.setSpacing(8)
+        self._username = QLineEdit()
+        self._username.setObjectName("settingLineEdit")
+        self._username.setPlaceholderText("Логин")
+        self._password = QLineEdit()
+        self._password.setObjectName("settingLineEdit")
+        self._password.setPlaceholderText("Пароль")
+        self._password.setEchoMode(QLineEdit.EchoMode.Password)
+        self._password.returnPressed.connect(self._on_login)
+        self._login_btn = _button("Войти", "searchButton", self._on_login)
+        row.addWidget(self._username, stretch=1)
+        row.addWidget(self._password, stretch=1)
+        row.addWidget(self._login_btn)
+        form.addLayout(row)
+        self._site_link = _label("", "memberDetail")
+        self._site_link.setTextFormat(Qt.TextFormat.RichText)
+        self._site_link.setText(_with_links("<a href='site'>Нет аккаунта? Открыть сайт</a>"))
+        self._site_link.linkActivated.connect(self._open_site)
+        form.addWidget(self._site_link)
+        self.body.addWidget(self._form)
+
+        self._signed = QWidget()
+        signed = QHBoxLayout(self._signed)
+        signed.setContentsMargins(0, 0, 0, 0)
+        signed.setSpacing(8)
+        self._who = _label("", "memberAccount")
+        signed.addWidget(self._who, stretch=1)
+        self._logout_btn = _button("Выйти", "memberDanger", self._on_logout)
+        signed.addWidget(self._logout_btn)
+        self.body.addWidget(self._signed)
+
+        self._feedback = _label("", "memberFeedback", wrap=True)
+        self._feedback.setVisible(False)
+        self.body.addWidget(self._feedback)
+
+        self._advanced = QToolButton()
+        self._advanced.setObjectName("memberGuideToggle")
+        self._advanced.setText("Дополнительно")
+        self._advanced.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._advanced.clicked.connect(self._toggle_advanced)
+        self.body.addWidget(self._advanced, alignment=Qt.AlignmentFlag.AlignLeft)
+        self._server = QLineEdit()
+        self._server.setObjectName("settingLineEdit")
+        self._server.setPlaceholderText("Адрес сервера")
+        self._server.setText(account.server_url)
+        self._server.editingFinished.connect(self._on_server_edited)
+        self._server.setVisible(False)
+        self.body.addWidget(self._server)
+
+        account.account_changed.connect(self._sync)
+        self._sync()
+
+    def _sync(self) -> None:
+        logged_in = self._acct.is_logged_in
+        self._form.setVisible(not logged_in)
+        self._signed.setVisible(logged_in)
+        if logged_in:
+            self.chip.setText("Подключено")
+            _set_state(self.chip, "ok")
+            self._who.setText(f"Вы вошли как {self._acct.username}")
+            if not self._acct.token_persisted:
+                self._show_feedback(
+                    "Токен не сохранён: системное хранилище паролей недоступно — "
+                    "после перезапуска войдите снова."
+                )
+            else:
+                self._feedback.setVisible(False)
+        else:
+            self.chip.setText("Не подключено")
+            _set_state(self.chip, "off")
+
+    def _show_feedback(self, text: str) -> None:
+        self._feedback.setText(text)
+        self._feedback.setVisible(bool(text))
+
+    def _set_busy(self, busy: bool) -> None:
+        self._busy = busy
+        self._login_btn.setEnabled(not busy)
+        self._login_btn.setText("Вход…" if busy else "Войти")
+
+    def _on_login(self) -> None:
+        if self._busy:
+            return
+        username = self._username.text()
+        password = self._password.text()
+        self._set_busy(True)
+        self._show_feedback("")
+
+        async def run() -> None:
+            error = ""
+            try:
+                await self._acct.login(username, password)
+            except Exception as exc:  # AccountError и всё неожиданное — в карточку
+                error = str(exc) or "Не удалось войти"
+
+            def done() -> None:
+                self._set_busy(False)
+                if error:
+                    self._show_feedback(error)
+                else:
+                    self._password.clear()
+
+            self._bridge.invoke_main(done)
+
+        self._bridge.schedule(run())
+
+    def _on_logout(self) -> None:
+        self._bridge.schedule(self._acct.logout())
+
+    def _open_site(self, _link: str = "") -> None:
+        QDesktopServices.openUrl(QUrl(self._acct.server_url))
+
+    def _toggle_advanced(self) -> None:
+        self._server.setVisible(not self._server.isVisible())
+
+    def _on_server_edited(self) -> None:
+        url = self._server.text().strip()
+        if url and url != self._acct.server_url:
+            self._acct.set_server_url(url)
+            self._server.setText(self._acct.server_url)
+
+
 class MemberPage(QWidget):
     def __init__(
         self,
         bridge: AsyncBridge | None = None,
+        account=None,
         parent: QWidget | None = None,
     ) -> None:
         super().__init__(parent)
@@ -258,6 +400,10 @@ class MemberPage(QWidget):
         self._youtube = _ServiceCard("youtube", "YouTube Music")
         self._build_youtube_access(self._youtube.body)
         col.addWidget(self._youtube)
+
+        if account is not None and bridge is not None:
+            self._quantis = _QuantisCard(account, bridge)
+            col.addWidget(self._quantis)
 
         col.addStretch()
         layout.addWidget(panel)  # макс. ширина — прижат к левому краю

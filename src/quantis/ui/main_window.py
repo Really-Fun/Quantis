@@ -699,7 +699,7 @@ class QuantisMainWindow(QMainWindow):
 
     def _ensure_member_page(self) -> MemberPage:
         if self._member_page is None:
-            self._member_page = MemberPage(self._bridge)
+            self._member_page = MemberPage(self._bridge, self._bundle.account)
             self._replace_stack_page(self.PAGE_MEMBER, self._member_page)
         return self._member_page
 

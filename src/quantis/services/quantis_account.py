@@ -29,7 +29,7 @@ class AccountError(Exception):
 
 
 class QuantisAccount(QObject):
-    changed = Signal()
+    account_changed = Signal()
 
     def __init__(self, settings: QSettings | None = None) -> None:
         super().__init__()
@@ -100,7 +100,7 @@ class QuantisAccount(QObject):
         self._settings.setValue(_KEY_USERNAME, self._username)
         self._set_token(token)
         logger.info("Аккаунт Quantis: вошли как %s", self._username)
-        self.changed.emit()
+        self.account_changed.emit()
 
     async def logout(self) -> None:
         """Забывает токен; сервер просим его удалить, но не ждём успеха."""
@@ -133,7 +133,7 @@ class QuantisAccount(QObject):
                         if name and name != self._username:
                             self._username = name
                             self._settings.setValue(_KEY_USERNAME, name)
-                            self.changed.emit()
+                            self.account_changed.emit()
         except (aiohttp.ClientError, TimeoutError):
             logger.info("Аккаунт Quantis: сервер недоступен, проверку токена пропускаем")
         return True
@@ -159,7 +159,7 @@ class QuantisAccount(QObject):
         self._token = ""
         self._token_persisted = True
         credentials.delete_quantis_token()
-        self.changed.emit()
+        self.account_changed.emit()
 
 
 async def _json(response: aiohttp.ClientResponse) -> dict:

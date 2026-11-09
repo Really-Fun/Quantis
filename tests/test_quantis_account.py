@@ -105,7 +105,7 @@ async def test_login_saves_token_not_password(server, vault, settings) -> None:
     url, _ = server
     account = _account(settings, url)
     changes: list[bool] = []
-    account.changed.connect(lambda: changes.append(account.is_logged_in))
+    account.account_changed.connect(lambda: changes.append(account.is_logged_in))
     await account.login("u", "secret")
     assert account.is_logged_in
     assert account.username == "u"
@@ -173,7 +173,7 @@ async def test_401_logs_out(server, vault, settings) -> None:
     settings.setValue("account/username", "u")
     account = _account(settings, url)
     changes: list[bool] = []
-    account.changed.connect(lambda: changes.append(account.is_logged_in))
+    account.account_changed.connect(lambda: changes.append(account.is_logged_in))
     state["revoked"] = True
     assert not await account.verify()
     assert not account.is_logged_in
