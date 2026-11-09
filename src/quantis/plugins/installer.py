@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 import shutil
@@ -109,8 +110,34 @@ def _safe_extract_zip(zf: zipfile.ZipFile, dest: Path) -> None:
                 out.write(chunk)
 
 
-def install_plugin_from_zip(zip_path: str | Path, *, overwrite: bool = True) -> str:
-    """Распаковывает zip в plugins_dir. Возвращает plugin_id."""
+BACKUP_PREFIX = "_backup_"
+STAGING_PREFIX = "_new_"
+
+
+def _manifest_id(root: Path) -> str | None:
+    try:
+        data = json.loads((root / "manifest.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    value = data.get("id") if isinstance(data, dict) else None
+    return str(value) if value else None
+
+
+def install_plugin_from_zip(
+    zip_path: str | Path,
+    *,
+    overwrite: bool = True,
+    plugin_id: str | None = None,
+    plugins_dir: Path | None = None,
+    keep_backup: bool = False,
+) -> str:
+    """Распаковывает zip в plugins_dir. Возвращает plugin_id.
+
+    plugin_id — id из магазина: папка называется им, и id в manifest.json
+    обязан совпасть. Старая версия на время замены переезжает в
+    ``_backup_<id>``; с keep_backup она остаётся до ``drop_backup`` или
+    ``restore_backup`` (откат, если новая версия не запустилась).
+    """
     path = Path(zip_path)
     if not path.is_file():
         raise PluginInstallError(f"Файл не найден: {path}")
@@ -122,7 +149,7 @@ def install_plugin_from_zip(zip_path: str | Path, *, overwrite: bool = True) -> 
     except OSError as exc:
         raise PluginInstallError(f"Не удалось прочитать архив: {exc}") from exc
 
-    plugins_dir = resolve_plugins_dir()
+    plugins_dir = plugins_dir or resolve_plugins_dir()
     plugins_dir.mkdir(parents=True, exist_ok=True)
 
     with tempfile.TemporaryDirectory(prefix="quantis_plugin_") as tmp:
@@ -134,24 +161,63 @@ def install_plugin_from_zip(zip_path: str | Path, *, overwrite: bool = True) -> 
             raise PluginInstallError("Повреждённый zip-архив") from exc
 
         root = _find_plugin_root(tmp_path)
-        if root == tmp_path:
+        if plugin_id is not None:
+            plugin_id = _safe_plugin_id(plugin_id)
+            found = _manifest_id(root)
+            if found != plugin_id:
+                raise PluginInstallError(
+                    f"id в архиве ({found or 'нет'}) не совпадает с магазином ({plugin_id})"
+                )
+        elif root == tmp_path:
             plugin_id = _safe_plugin_id(path.stem)
         else:
             plugin_id = _safe_plugin_id(root.name)
 
         target = plugins_dir / plugin_id
-        if target.exists():
-            if not overwrite:
-                raise PluginInstallError(f"Плагин «{plugin_id}» уже установлен")
-            shutil.rmtree(target)
+        if target.exists() and not overwrite:
+            raise PluginInstallError(f"Плагин «{plugin_id}» уже установлен")
 
-        shutil.copytree(root, target, symlinks=False)
-        if not (target / "plugin.py").is_file():
-            shutil.rmtree(target, ignore_errors=True)
+        staging = plugins_dir / f"{STAGING_PREFIX}{plugin_id}"
+        backup = plugins_dir / f"{BACKUP_PREFIX}{plugin_id}"
+        shutil.rmtree(staging, ignore_errors=True)
+        shutil.copytree(root, staging, symlinks=False)
+        if not (staging / "plugin.py").is_file():
+            shutil.rmtree(staging, ignore_errors=True)
             raise PluginInstallError("После установки нет plugin.py")
 
-        logger.info("Плагин установлен: %s → %s", plugin_id, target)
-        return plugin_id
+        shutil.rmtree(backup, ignore_errors=True)
+        try:
+            if target.exists():
+                target.rename(backup)
+            staging.rename(target)
+        except OSError as exc:
+            shutil.rmtree(staging, ignore_errors=True)
+            if backup.exists() and not target.exists():
+                backup.rename(target)
+            raise PluginInstallError(f"Не удалось заменить плагин: {exc}") from exc
+
+    if not keep_backup:
+        drop_backup(plugin_id, plugins_dir)
+    logger.info("Плагин установлен: %s → %s", plugin_id, target)
+    return plugin_id
+
+
+def restore_backup(plugin_id: str, plugins_dir: Path | None = None) -> bool:
+    """Возвращает прежнюю версию из ``_backup_<id>``. False — бэкапа нет."""
+    plugins_dir = plugins_dir or resolve_plugins_dir()
+    backup = plugins_dir / f"{BACKUP_PREFIX}{plugin_id}"
+    if not backup.is_dir():
+        return False
+    target = plugins_dir / plugin_id
+    shutil.rmtree(target, ignore_errors=True)
+    backup.rename(target)
+    logger.info("Плагин %s откачен на прежнюю версию", plugin_id)
+    return True
+
+
+def drop_backup(plugin_id: str, plugins_dir: Path | None = None) -> None:
+    plugins_dir = plugins_dir or resolve_plugins_dir()
+    shutil.rmtree(plugins_dir / f"{BACKUP_PREFIX}{plugin_id}", ignore_errors=True)
 
 
 def download_plugin_zip(url: str, dest_dir: Path | None = None) -> Path:

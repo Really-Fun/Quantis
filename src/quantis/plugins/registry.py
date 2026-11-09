@@ -14,11 +14,20 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
+import shutil
 from dataclasses import dataclass
+from pathlib import Path
 
 from PySide6.QtCore import QObject, QSettings, Signal
 
+from quantis.plugins.installer import (
+    PluginInstallError,
+    drop_backup,
+    install_plugin_from_zip,
+    restore_backup,
+)
 from quantis.plugins.loader import PluginLoader, PluginMeta
 
 logger = logging.getLogger(__name__)
@@ -53,10 +62,14 @@ class PluginRegistry(QObject):
             cls._instance = cls()
         return cls._instance
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        loader: PluginLoader | None = None,
+        settings: QSettings | None = None,
+    ) -> None:
         super().__init__()
-        self._loader = PluginLoader()
-        self._settings = QSettings("ReallyFun", "Quantis")
+        self._loader = loader or PluginLoader()
+        self._settings = settings or QSettings("ReallyFun", "Quantis")
         self._infos: dict[str, PluginInfo] = {}
         self._active: dict[str, object] = {}  # plugin_id → BasePlugin instance
         self._host = None  # PluginHost, задаётся в load_all
@@ -147,6 +160,104 @@ class PluginRegistry(QObject):
                 info.error = "; ".join(meta.errors)
             self._infos[meta.plugin_id] = info
             self.plugin_changed.emit(meta.plugin_id)
+
+    # ── Установка из магазина ────────────────────────────────────────────────
+
+    def installed_version(self, plugin_id: str) -> str | None:
+        info = self._infos.get(plugin_id)
+        return info.meta.version if info is not None else None
+
+    def is_bundled(self, plugin_id: str) -> bool:
+        """Плагин из комплекта программы (не из пользовательской папки)."""
+        info = self._infos.get(plugin_id)
+        if info is None:
+            return False
+        try:
+            return not info.meta.path.resolve().is_relative_to(
+                self._loader.user_dir.resolve()
+            )
+        except (OSError, ValueError):
+            return True
+
+    async def install(self, zip_path: Path, plugin_id: str) -> bool:
+        """Ставит или обновляет плагин без перезапуска.
+
+        Новый плагин включается сразу; обновлённый — если был включён. Если
+        новая версия не запустилась, возвращаем прежние файлы и включаем
+        старую версию; результат — False. PluginInstallError (битый архив,
+        чужой id) пробрасывается, ничего не тронув.
+        """
+        user_dir = self._loader.user_dir
+        previous = self._infos.get(plugin_id)
+        was_active = plugin_id in self._active
+        is_new = previous is None or self.is_bundled(plugin_id)
+
+        # Работающий плагин гасим до замены файлов; битый архив или чужой id
+        # ничего не заменяют — тогда включаем его обратно.
+        target = user_dir / plugin_id
+        if was_active:
+            await self.disable(plugin_id)
+        try:
+            await asyncio.to_thread(
+                install_plugin_from_zip,
+                zip_path,
+                plugin_id=plugin_id,
+                plugins_dir=user_dir,
+                keep_backup=True,
+            )
+        except PluginInstallError:
+            if was_active:
+                await self.enable(plugin_id)
+            raise
+
+        self._loader.forget_modules(plugin_id, target)
+        if previous is not None:
+            self._loader.forget_modules(plugin_id, previous.meta.path)
+        self._register_meta(self._loader.read_meta(target))
+
+        if not (is_new or was_active):
+            await asyncio.to_thread(drop_backup, plugin_id, user_dir)
+            return True
+        if await self.enable(plugin_id):
+            await asyncio.to_thread(drop_backup, plugin_id, user_dir)
+            return True
+
+        error = self._infos[plugin_id].error
+        logger.warning(
+            "Плагин '%s' не запустился после установки: %s", plugin_id, error
+        )
+        restored = await asyncio.to_thread(restore_backup, plugin_id, user_dir)
+        self._loader.forget_modules(plugin_id, target)
+        if restored:
+            self._register_meta(self._loader.read_meta(target))
+            if was_active:
+                await self.enable(plugin_id)
+            self._infos[plugin_id].error = error
+            self.plugin_changed.emit(plugin_id)
+        return False
+
+    async def uninstall(self, plugin_id: str) -> None:
+        info = self._infos.get(plugin_id)
+        if info is None:
+            return
+        if self.is_bundled(plugin_id):
+            raise PluginInstallError("Встроенный плагин удалить нельзя")
+        await self.disable(plugin_id)
+        path = info.meta.path
+        self._loader.forget_modules(plugin_id, path)
+        await asyncio.to_thread(shutil.rmtree, path, True)
+        self._infos.pop(plugin_id, None)
+        # Под ним мог лежать одноимённый плагин из комплекта — показываем его.
+        self.rescan()
+        self.plugin_changed.emit(plugin_id)
+        logger.info("Плагин '%s' удалён", plugin_id)
+
+    def _register_meta(self, meta: PluginMeta) -> None:
+        info = PluginInfo(meta=meta)
+        if not meta.is_valid:
+            info.error = "; ".join(meta.errors)
+        self._infos[meta.plugin_id] = info
+        self.plugin_changed.emit(meta.plugin_id)
 
     # ── Внутренние методы ─────────────────────────────────────────────────────
 

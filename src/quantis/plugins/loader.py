@@ -80,9 +80,21 @@ class PluginMeta:
 class PluginLoader:
     """Обнаруживает и загружает плагины."""
 
-    def __init__(self, plugin_dir: Path | None = None) -> None:
+    def __init__(
+        self, plugin_dir: Path | None = None, *, dirs: list[Path] | None = None
+    ) -> None:
         # Явный путь снаружи — только он, иначе пользовательский + из комплекта
-        self._dirs = [plugin_dir] if plugin_dir is not None else plugin_search_dirs()
+        if dirs is not None:
+            self._dirs = list(dirs)
+        elif plugin_dir is not None:
+            self._dirs = [plugin_dir]
+        else:
+            self._dirs = plugin_search_dirs()
+
+    @property
+    def user_dir(self) -> Path:
+        """Записываемый каталог: сюда ставятся плагины из магазина."""
+        return self._dirs[0]
 
     @property
     def _dir(self) -> Path:
@@ -131,6 +143,38 @@ class PluginLoader:
         module = self._import_module(meta)
         plugin_class = self._find_plugin_class(module, meta.plugin_id)
         return plugin_class
+
+    def read_meta(self, plugin_dir: Path) -> PluginMeta:
+        """Метаданные одной папки плагина (после установки или обновления)."""
+        return self._read_meta(plugin_dir)
+
+    @staticmethod
+    def forget_modules(plugin_id: str, plugin_dir: Path) -> None:
+        """Выгружает из sys.modules всё, что импортировано из папки плагина.
+
+        Без этого обновлённый плагин подхватил бы старые ``client``/``page``
+        из кэша модулей вместо новых файлов.
+        """
+        package = f"{_PLUGIN_PACKAGE}.{plugin_id}"
+        try:
+            root = plugin_dir.resolve()
+        except OSError:
+            root = plugin_dir
+        for name in list(sys.modules):
+            module = sys.modules.get(name)
+            if name == package or name.startswith(package + "."):
+                sys.modules.pop(name, None)
+                continue
+            origin = PluginLoader._module_origin(module) if module is not None else None
+            if origin is None:
+                continue
+            try:
+                inside = origin.is_relative_to(root)
+            except (OSError, ValueError):
+                inside = False
+            if inside:
+                sys.modules.pop(name, None)
+        importlib.invalidate_caches()
 
     # ── Внутренние методы ─────────────────────────────────────────────────────
 
