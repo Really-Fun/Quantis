@@ -34,7 +34,11 @@ from quantis.ui.views.widgets.now_playing_stage import (
     UpNextPanel,
 )
 from quantis.ui.views.widgets.page_layout import PAGE_MARGINS
-from quantis.ui.views.widgets.playlist_card import PlaylistShelf, QuickPickShelf
+from quantis.ui.views.widgets.playlist_card import (
+    PlaylistShelf,
+    QuickPickShelf,
+    mix_card,
+)
 from quantis.ui.views.widgets.track_card import TrackCardDelegate
 from quantis.ui.views.widgets.wave_card import WaveCard
 
@@ -127,6 +131,14 @@ class HomePage(QWidget):
         self._quick_section.add_widget_block(self._quick_shelf)
         self._layout.addWidget(self._quick_section)
 
+        self._mix_section = HomeSection("Миксы для тебя", "Собраны из твоей истории")
+        self._mix_shelf = PlaylistShelf(card_factory=mix_card, empty_text="")
+        self._mix_shelf.playlist_activated.connect(self._on_playlist)
+        self._mix_shelf.play_requested.connect(self._on_playlist_play)
+        self._mix_section.add_widget_block(self._mix_shelf)
+        self._mix_section.hide()
+        self._layout.addWidget(self._mix_section)
+
         self._recommend_section = HomeSection(
             "Рекомендации",
             "5 треков с YouTube · в конце подгрузим ещё",
@@ -204,6 +216,7 @@ class HomePage(QWidget):
         self._library_section.set_header_action(actions)
         self._playlist_shelf = PlaylistShelf()
         self._playlist_shelf.playlist_activated.connect(self._on_playlist)
+        self._playlist_shelf.play_requested.connect(self._on_playlist_play)
         self._all_playlists_btn.clicked.connect(
             lambda: self._playlist_shelf.set_expanded(not self._playlist_shelf.expanded)
         )
@@ -221,6 +234,7 @@ class HomePage(QWidget):
 
         self._vm.home_changed.connect(self._rebuild)
         self._vm.recent_changed.connect(self._on_recent_changed)
+        self._vm.mixes_changed.connect(self._on_mixes_changed)
         self._vm.wave_moods_changed.connect(self._sync_wave_moods)
         self._relayout_lists()
         self._sync_stage()
@@ -455,6 +469,22 @@ class HomePage(QWidget):
             self._on_recommendations_open()
             return
         self.playlist_open_requested.emit(self._vm.resolve_playlist(playlist))
+
+    def _on_mixes_changed(self) -> None:
+        mixes = list(self._vm.mixes)
+        self._mix_shelf.set_playlists(mixes)
+        self._mix_section.setVisible(bool(mixes))
+
+    def _on_playlist_play(self, playlist: object) -> None:
+        if self._bridge is None or not isinstance(playlist, Playlist):
+            return
+        schedule(self._play_playlist_async(playlist), self._bridge)
+
+    async def _play_playlist_async(self, playlist: Playlist) -> None:
+        if not await self._vm.play_card(playlist):
+            # Треков в карточке нет (плейлист ещё не прочитан) — просто открыть.
+            if self._bridge is not None:
+                self._bridge.invoke_main(lambda: self._on_playlist(playlist))
 
     def _on_wave_open(self) -> None:
         if self._bridge is None:

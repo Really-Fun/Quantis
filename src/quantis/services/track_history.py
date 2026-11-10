@@ -3,12 +3,17 @@
 from __future__ import annotations
 
 import asyncio
-from time import monotonic
+from time import monotonic, time
 
 from quantis.database import sync_history
-from quantis.database.sync_history import ListeningSummary
+from quantis.database.sync_history import (
+    ArtistStat,
+    ListeningRhythm,
+    ListeningSummary,
+)
 from quantis.models import RecentlyPlayedPlaylist, Track
 from quantis.providers import TrackManager
+from quantis.services.mixes import MixPlaylist, build_mixes, plan_mixes
 from quantis.services.track_builder import (
     build_track_key,
     build_tracks_from_entries,
@@ -136,6 +141,30 @@ class TrackHistoryService:
             self._track_manager,
             include_listen_count=True,
         )
+
+    async def get_top_artists(self, limit: int = 8) -> list[ArtistStat]:
+        return await asyncio.to_thread(sync_history.fetch_top_artists, limit)
+
+    async def get_listening_rhythm(self) -> ListeningRhythm:
+        return await asyncio.to_thread(sync_history.fetch_listening_rhythm)
+
+    async def get_mixes(self, liked: list[Track]) -> list[MixPlaylist]:
+        """Миксы из истории: «На повторе», по артистам, «Забытое»."""
+        entries = await asyncio.to_thread(sync_history.fetch_history_entries)
+        if not entries:
+            return []
+        liked_keys = {build_track_key(t) for t in liked}
+        specs = plan_mixes(entries, liked_keys, now=time())
+        wanted = {key for spec in specs for key in spec.keys}
+        rows = [e for e in entries if e["track_key"] in wanted]
+        tracks = await asyncio.to_thread(
+            build_tracks_from_entries,
+            rows,
+            self._track_manager,
+            include_listen_count=True,
+        )
+        by_key = {build_track_key(t): t for t in tracks}
+        return build_mixes(specs, by_key)
 
     async def close(self) -> None:
         """Заглушка для совместимости при завершении приложения."""

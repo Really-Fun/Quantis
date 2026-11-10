@@ -1,6 +1,8 @@
-"""Горизонтальные бары топа прослушиваний."""
+"""Горизонтальные бары топа: обложка, название, подпись и полоса значения."""
 
 from __future__ import annotations
+
+from dataclasses import dataclass
 
 from PySide6.QtCore import QRect, QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QLinearGradient, QPainter, QPainterPath
@@ -9,28 +11,73 @@ from PySide6.QtWidgets import QSizePolicy, QWidget
 from quantis.models import Track
 from quantis.ui.corners import corner
 from quantis.ui.design_tokens import ACCENT_FALLBACK
+from quantis.ui.fonts import app_font
 from quantis.ui.preferences import UiPreferences
+from quantis.ui.views.widgets.cover_art import (
+    CoverDecoder,
+    CoverEvents,
+    paint_rounded_cover,
+    request_track_cover,
+)
 from quantis.ui.views.widgets.delegate_paint_kit import paint_colors
 
-_ROW_H = 44
+_ROW_H = 54
 _PAD = 4
+_COVER = 40
+
+
+@dataclass(frozen=True)
+class RankRow:
+    title: str
+    subtitle: str
+    value: int
+    value_text: str = ""
+    cover_track: Track | None = None
+    round_cover: bool = False
+    """Круглая обложка — у артистов, как фото профиля."""
+
+
+def track_rows(tracks: list[Track]) -> list[RankRow]:
+    return [
+        RankRow(
+            title=t.title or "Без названия",
+            subtitle=t.author or "",
+            value=max(0, t.listen_count),
+            cover_track=t,
+        )
+        for t in tracks
+    ]
 
 
 class ListenBars(QWidget):
     track_activated = Signal(int)
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        parent: QWidget | None = None,
+        *,
+        empty_text: str = "Пока нет завершённых прослушиваний",
+        clickable: bool = True,
+    ) -> None:
         super().__init__(parent)
         self.setObjectName("listenBars")
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._clickable = clickable
+        if clickable:
+            self.setCursor(Qt.CursorShape.PointingHandCursor)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
-        self._tracks: list[Track] = []
+        self._rows: list[RankRow] = []
+        self._empty_text = empty_text
         self._hover = -1
         self._accent = QColor(ACCENT_FALLBACK)
         self._prefs = UiPreferences()
         self._prefs.theme_changed.connect(self.update)
+        CoverDecoder.instance().ready.connect(self.update)
+        CoverEvents.instance().cover_ready.connect(self._on_cover_file)
         self.setMouseTracking(True)
         self._sync_height()
+
+    def _on_cover_file(self, _path: str) -> None:
+        self.update()
 
     def set_accent(self, color: QColor) -> None:
         if color.isValid():
@@ -38,20 +85,23 @@ class ListenBars(QWidget):
             self.update()
 
     def set_tracks(self, tracks: list[Track]) -> None:
-        self._tracks = list(tracks)
+        self.set_rows(track_rows(tracks))
+
+    def set_rows(self, rows: list[RankRow]) -> None:
+        self._rows = list(rows)
         self._hover = -1
         self._sync_height()
         self.update()
 
     def _sync_height(self) -> None:
-        rows = max(1, len(self._tracks))
+        rows = max(1, len(self._rows))
         self.setFixedHeight(rows * _ROW_H + _PAD * 2)
 
     def _index_at(self, y: int) -> int:
-        if not self._tracks:
+        if not self._rows:
             return -1
         row = (y - _PAD) // _ROW_H
-        if 0 <= row < len(self._tracks):
+        if 0 <= row < len(self._rows):
             return int(row)
         return -1
 
@@ -68,7 +118,7 @@ class ListenBars(QWidget):
             self.update()
 
     def mouseReleaseEvent(self, event) -> None:
-        if event.button() == Qt.MouseButton.LeftButton:
+        if self._clickable and event.button() == Qt.MouseButton.LeftButton:
             index = self._index_at(int(event.position().y()))
             if index >= 0:
                 self.track_activated.emit(index)
@@ -77,80 +127,121 @@ class ListenBars(QWidget):
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        painter.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
         colors = paint_colors(self._prefs.theme)
-        if not self._tracks:
+        if not self._rows:
             painter.setPen(colors.empty)
             painter.setFont(QFont(self.font().family(), 12))
             painter.drawText(
                 self.rect().adjusted(12, 0, -12, 0),
                 Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
-                "Пока нет завершённых прослушиваний",
+                self._empty_text,
             )
             painter.end()
             return
 
-        peak = max((max(0, t.listen_count) for t in self._tracks), default=1) or 1
-        title_font = QFont(self.font().family(), 12)
-        title_font.setWeight(QFont.Weight.DemiBold)
-        meta_font = QFont(self.font().family(), 10)
-        count_font = QFont(self.font().family(), 11)
-        count_font.setWeight(QFont.Weight.Bold)
+        peak = max((row.value for row in self._rows), default=1) or 1
+        title_font = app_font(12, QFont.Weight.DemiBold)
+        meta_font = app_font(10)
+        index_font = app_font(11, QFont.Weight.Bold)
+        count_font = app_font(12, QFont.Weight.Bold)
 
         width = self.width()
-        bar_left = 36
+        cover_left = 40
+        text_left = cover_left + _COVER + 12
         bar_right = width - 72
-        bar_span = max(40, bar_right - bar_left)
+        bar_span = max(40, bar_right - text_left)
 
-        for index, track in enumerate(self._tracks):
+        for index, item in enumerate(self._rows):
             y = _PAD + index * _ROW_H
-            row = QRect(8, y, width - 16, _ROW_H - 4)
+            row = QRect(8, y + 2, width - 16, _ROW_H - 4)
             if index == self._hover:
                 hover = QPainterPath()
-                hover.addRoundedRect(QRectF(row), corner(10), corner(10))
+                hover.addRoundedRect(QRectF(row), corner(12), corner(12))
                 painter.fillPath(hover, colors.bg_hover)
 
-            painter.setPen(colors.meta)
-            painter.setFont(meta_font)
+            # Первые три места — цветом акцента, как пьедестал.
+            painter.setPen(self._accent if index < 3 else colors.meta)
+            painter.setFont(index_font)
             painter.drawText(
-                QRect(12, y, 22, _ROW_H - 4),
-                Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
+                QRect(12, y, 24, _ROW_H),
+                Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignCenter,
                 str(index + 1),
             )
 
-            ratio = max(0.06, min(1.0, track.listen_count / peak))
-            bar_w = int(bar_span * ratio)
-            bar_rect = QRectF(bar_left, y + 26, bar_w, 8)
-            path = QPainterPath()
-            path.addRoundedRect(bar_rect, corner(4), corner(4))
-            gradient = QLinearGradient(bar_rect.topLeft(), bar_rect.topRight())
-            accent = self._accent
-            gradient.setColorAt(
-                0.0,
-                QColor(accent.red(), accent.green(), accent.blue(), 220),
+            cover_rect = QRect(cover_left, y + (_ROW_H - _COVER) // 2, _COVER, _COVER)
+            pixmap = (
+                request_track_cover(item.cover_track, _COVER)
+                if item.cover_track is not None
+                else None
             )
-            gradient.setColorAt(
-                1.0,
-                QColor(accent.red(), accent.green(), accent.blue(), 80),
-            )
-            painter.fillPath(path, gradient)
+            if item.round_cover:
+                painter.save()
+                clip = QPainterPath()
+                clip.addEllipse(QRectF(cover_rect))
+                painter.setClipPath(clip)
+                paint_rounded_cover(
+                    painter,
+                    cover_rect,
+                    label=item.title,
+                    pixmap=pixmap,
+                    radius=_COVER // 2,
+                    with_badge=False,
+                )
+                painter.restore()
+            else:
+                paint_rounded_cover(
+                    painter,
+                    cover_rect,
+                    label=item.title,
+                    pixmap=pixmap,
+                    radius=8,
+                    with_badge=False,
+                )
 
             painter.setPen(colors.title)
             painter.setFont(title_font)
             painter.drawText(
-                QRect(bar_left, y + 2, bar_span, 22),
+                QRect(text_left, y + 6, bar_span, 20),
                 Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
                 painter.fontMetrics().elidedText(
-                    track.title or "Без названия",
-                    Qt.TextElideMode.ElideRight,
-                    bar_span,
+                    item.title, Qt.TextElideMode.ElideRight, bar_span
                 ),
             )
+            if item.subtitle:
+                painter.setPen(colors.subtitle)
+                painter.setFont(meta_font)
+                painter.drawText(
+                    QRect(text_left, y + 24, bar_span, 14),
+                    Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
+                    painter.fontMetrics().elidedText(
+                        item.subtitle, Qt.TextElideMode.ElideRight, bar_span
+                    ),
+                )
 
-            painter.setPen(colors.subtitle)
+            ratio = max(0.04, min(1.0, item.value / peak))
+            track_rect = QRectF(text_left, y + 41, bar_span, 4)
+            groove = QPainterPath()
+            groove.addRoundedRect(track_rect, 2, 2)
+            painter.fillPath(groove, colors.bg_hover)
+            bar_rect = QRectF(text_left, y + 41, bar_span * ratio, 4)
+            path = QPainterPath()
+            path.addRoundedRect(bar_rect, 2, 2)
+            gradient = QLinearGradient(bar_rect.topLeft(), bar_rect.topRight())
+            accent = self._accent
+            gradient.setColorAt(
+                0.0, QColor(accent.red(), accent.green(), accent.blue(), 235)
+            )
+            gradient.setColorAt(
+                1.0, QColor(accent.red(), accent.green(), accent.blue(), 110)
+            )
+            painter.fillPath(path, gradient)
+
+            painter.setPen(colors.title)
             painter.setFont(count_font)
             painter.drawText(
-                QRect(bar_right + 8, y, 56, _ROW_H - 4),
+                QRect(bar_right + 8, y, 56, _ROW_H),
                 Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight,
-                str(track.listen_count),
+                item.value_text or str(item.value),
             )
         painter.end()

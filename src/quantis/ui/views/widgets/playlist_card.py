@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
+
 from PySide6.QtCore import QSize, Qt, QTimer, Signal
 from PySide6.QtGui import (
     QColor,
@@ -24,6 +26,7 @@ from quantis.ui.corners import corner
 from quantis.ui.fonts import app_font
 from quantis.ui.preferences import UiPreferences
 from quantis.ui.themes.spec import qcolor
+from quantis.ui.views.widgets.art_card import ArtCard, CoverSource
 from quantis.ui.views.widgets.cover_art import (
     load_cover_pixmap,
     paint_rounded_cover,
@@ -187,72 +190,37 @@ def playlist_tracks_label(count: int) -> str:
     return f"{count} {suffix}"
 
 
-class PlaylistCard(QFrame):
-    """Карточка плейлиста: квадрат обложки + одна строка названия."""
+def playlist_card_covers(playlist: Playlist) -> CoverSource:
+    """Обложка плейлиста: своя картинка, иначе обложка первого трека."""
+    path = playlist_cover_path(playlist)
 
-    TITLE_H = 22
-    GAP = 8
+    def covers(size: int) -> list[QPixmap | None]:
+        return [load_cover_pixmap(path, size)]
 
-    activated = Signal(object)
+    return covers
 
-    def __init__(self, playlist: Playlist, parent=None) -> None:
-        super().__init__(parent)
-        self._playlist = playlist
-        self._title_text = playlist.name
-        self.setObjectName("playlistCard")
-        self.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(self.GAP)
+class PlaylistCard(ArtCard):
+    """Карточка плейлиста: обложка, название и число треков."""
 
-        self._cover = GradientCover(
-            playlist.name,
-            size=160,
-            image_path=playlist_cover_path(playlist),
-            radius=16,
+    TITLE_H = ArtCard.TITLE_H
+    GAP = ArtCard.GAP
+
+    def __init__(self, playlist: Playlist, parent: QWidget | None = None) -> None:
+        cover = playlist_cover_path(playlist)
+        super().__init__(
+            playlist,
+            title=playlist.name,
+            subtitle=playlist_tracks_label(len(playlist)),
+            covers=playlist_card_covers(playlist),
+            icon_cover=bool(cover) and str(cover).lower().endswith(".svg"),
+            parent=parent,
         )
-        layout.addWidget(self._cover)
-
-        self._title = QLabel(playlist.name)
-        self._title.setObjectName("playlistCardTitle")
-        self._title.setWordWrap(False)
-        self._title.setFixedHeight(self.TITLE_H)
-        layout.addWidget(self._title)
+        self.setObjectName("playlistCard")
 
     @property
     def playlist(self) -> Playlist:
-        return self._playlist
-
-    def apply_cell(self, width: int, height: int) -> None:
-        self._cover.set_display_size(width)
-        metrics = QFontMetrics(self._title.font())
-        self._title.setText(
-            metrics.elidedText(
-                self._title_text, Qt.TextElideMode.ElideRight, max(32, width - 2)
-            )
-        )
-        self.setFixedSize(width, height)
-
-    def mouseReleaseEvent(self, event) -> None:
-        if event.button() == Qt.MouseButton.LeftButton:
-            self.activated.emit(self._playlist)
-        super().mouseReleaseEvent(event)
-
-    def enterEvent(self, event) -> None:
-        self.setProperty("hovered", True)
-        self._cover.set_play_overlay(True)
-        self.style().unpolish(self)
-        self.style().polish(self)
-        super().enterEvent(event)
-
-    def leaveEvent(self, event) -> None:
-        self.setProperty("hovered", False)
-        self._cover.set_play_overlay(False)
-        self.style().unpolish(self)
-        self.style().polish(self)
-        super().leaveEvent(event)
+        return self._item  # type: ignore[return-value]
 
 
 class QuickPickTile(QFrame):
@@ -606,44 +574,79 @@ class QuickPickShelf(QWidget):
         return self._wave_tile
 
 
+def mix_card(mix: object) -> ArtCard:
+    """Карточка микса: название крупно на обложке, как у подборок стримингов."""
+    from quantis.services.mixes import MixPlaylist
+    from quantis.ui.views.widgets.cover_art import request_track_cover
+
+    assert isinstance(mix, MixPlaylist)
+    tracks = list(mix.get_tracks())
+    artist = mix.mix_id.startswith("artist:")
+    # У артиста — его самая слушаемая обложка целиком, у остальных — коллаж.
+    picks = tracks[:1] if artist else tracks[:4]
+
+    def covers(size: int) -> list[QPixmap | None]:
+        side = size if artist or len(picks) < 4 else max(32, size // 2)
+        return [request_track_cover(track, side) for track in picks]
+
+    card = ArtCard(
+        mix,
+        title=mix.name,
+        subtitle=mix.subtitle,
+        covers=covers,
+        kicker="АРТИСТ" if artist else "МИКС",
+        title_on_cover=True,
+    )
+    card.setObjectName("mixCard")
+    return card
+
+
 class PlaylistShelf(QWidget):
-    """Плейлисты одной лентой со стрелками; «Все» разворачивает сетку.
+    """Карточки одной лентой со стрелками; «Все» разворачивает сетку.
 
     Сетка из 18 плейлистов занимала три ряда и сдвигала главную вниз.
+    По умолчанию — плейлисты; ``card_factory`` даёт свои карточки (миксы).
     """
 
     playlist_activated = Signal(object)
+    play_requested = Signal(object)
     expanded_changed = Signal(bool)
-    RIBBON_CARD = 150
+    RIBBON_CARD = 164
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        parent: QWidget | None = None,
+        *,
+        card_factory: Callable[[object], ArtCard] | None = None,
+        empty_text: str = "Создай первый плейлист",
+    ) -> None:
         super().__init__(parent)
         self.setObjectName("playlistShelf")
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Maximum)
         self._expanded = False
-        self._playlists: list[Playlist] = []
+        self._playlists: list[object] = []
+        self._factory = card_factory or (lambda item: PlaylistCard(item))  # type: ignore[arg-type]
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
         outer.setSpacing(0)
 
-        self._empty = QLabel("Создай первый плейлист")
+        self._empty = QLabel(empty_text)
         self._empty.setObjectName("homeEmptyHint")
         self._empty.setWordWrap(True)
         self._empty.hide()
 
         from quantis.ui.views.widgets.scroll_ribbon import ScrollRibbon
 
-        caption = PlaylistCard.GAP + PlaylistCard.TITLE_H
-        self._ribbon = ScrollRibbon(spacing=14, object_name="playlistRibbon")
-        self._ribbon.setFixedHeight(self.RIBBON_CARD + caption)
+        self._ribbon = ScrollRibbon(spacing=8, object_name="playlistRibbon")
+        self._ribbon.setFixedHeight(self.RIBBON_CARD + ArtCard.ROW_EXTRA)
         self._ribbon.set_arrow_band(self.RIBBON_CARD)
-        self._ribbon_cards: list[PlaylistCard] = []
+        self._ribbon_cards: list[ArtCard] = []
 
         self._grid = WrapGrid(
-            min_item_width=136,
-            spacing=14,
-            caption_height=caption,
+            min_item_width=144,
+            spacing=8,
+            caption_height=ArtCard.ROW_EXTRA,
         )
         self._grid.setObjectName("playlistShelfHost")
         outer.addWidget(self._empty)
@@ -663,7 +666,7 @@ class PlaylistShelf(QWidget):
     def grid(self) -> WrapGrid:
         return self._grid
 
-    def ribbon_cards(self) -> list[PlaylistCard]:
+    def ribbon_cards(self) -> list[ArtCard]:
         return list(self._ribbon_cards)
 
     def count(self) -> int:
@@ -676,13 +679,14 @@ class PlaylistShelf(QWidget):
         self._rebuild()
         self.expanded_changed.emit(expanded)
 
-    def set_playlists(self, playlists: list[Playlist]) -> None:
+    def set_playlists(self, playlists: Sequence[object]) -> None:
         self._playlists = list(playlists)
         self._rebuild()
 
-    def _card(self, playlist: Playlist) -> PlaylistCard:
-        card = PlaylistCard(playlist)
+    def _card(self, item: object) -> ArtCard:
+        card = self._factory(item)
         card.activated.connect(self.playlist_activated.emit)
+        card.play_requested.connect(self.play_requested.emit)
         return card
 
     def _rebuild(self) -> None:
@@ -707,10 +711,9 @@ class PlaylistShelf(QWidget):
         self._grid.set_widgets([])
         self._grid.hide()
         size = self.RIBBON_CARD
-        height = size + PlaylistCard.GAP + PlaylistCard.TITLE_H
         for index, playlist in enumerate(playlists):
             card = self._card(playlist)
-            card.setFixedSize(size, height)
+            card.setFixedSize(size, size + ArtCard.ROW_EXTRA)
             row.insertWidget(index, card)
             self._ribbon_cards.append(card)
         self._ribbon.show()

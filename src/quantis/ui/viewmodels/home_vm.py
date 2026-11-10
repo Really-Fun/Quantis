@@ -28,6 +28,7 @@ from quantis.services.async_wave import (
     WaveMood,
 )
 from quantis.services.liked_tracks import LikedTracksService
+from quantis.services.mixes import MixPlaylist
 from quantis.services.user_playlists import UserPlaylistsService
 from quantis.ui.cover_prefetch import schedule_cover_prefetch
 from quantis.ui.models import TrackListModel
@@ -106,6 +107,7 @@ class HomeViewModel(BaseViewModel):
     recent_changed = Signal()
     downloaded_changed = Signal()
     wave_moods_changed = Signal()
+    mixes_changed = Signal()
     """Колесо настроений «Моей волны» перечитано или сменилась активная волна."""
 
     def __init__(
@@ -133,6 +135,7 @@ class HomeViewModel(BaseViewModel):
             recent_tracks=(),
         )
         self._recommendation_playlist: RecommendationPlaylist | None = None
+        self._mixes: tuple[MixPlaylist, ...] = ()
         self._wave_playlist: WavePlaylist | None = None
         self._wave_moods: tuple[WaveMood, ...] = ()
         self._wave_mood_busy = False
@@ -157,6 +160,10 @@ class HomeViewModel(BaseViewModel):
     @property
     def liked_model(self) -> TrackListModel:
         return self._liked_model
+
+    @property
+    def mixes(self) -> tuple[MixPlaylist, ...]:
+        return self._mixes
 
     @property
     def snapshot(self) -> HomeSnapshot:
@@ -228,9 +235,12 @@ class HomeViewModel(BaseViewModel):
                 limit=32,
             )
 
-            recommendation_tracks, recommendation_playlist = (
-                await self._load_recommendations(recent_tracks, liked_tracks)
-            )
+            await self._load_mixes(liked_tracks, bridge)
+
+            (
+                recommendation_tracks,
+                recommendation_playlist,
+            ) = await self._load_recommendations(recent_tracks, liked_tracks)
             wave_playlist = await self._load_wave(recent_tracks, liked_tracks)
             full_snapshot = self._build_snapshot(
                 recent_tracks=recent_tracks,
@@ -271,6 +281,37 @@ class HomeViewModel(BaseViewModel):
             bridge.invoke_main(lambda: self.emit_error(message))
         finally:
             bridge.invoke_main(lambda: self.set_loading(False))
+
+    async def _load_mixes(self, liked: list[Track], bridge: AsyncBridge) -> None:
+        """Миксы из истории — без сети, сразу после быстрой части главной."""
+        try:
+            mixes = tuple(await self._history.get_mixes(liked))
+        except Exception:
+            logger.exception("Не удалось собрать миксы")
+            return
+
+        def apply() -> None:
+            # Миксы отдельно от снимка: снимок пересобирается во многих местах.
+            self._mixes = mixes
+            self.mixes_changed.emit()
+
+        bridge.invoke_main(apply)
+        covers = [t for mix in mixes for t in list(mix.get_tracks())[:4]]
+        if covers:
+            schedule_cover_prefetch(
+                covers,
+                self._music.downloader,
+                bridge,
+                on_done=lambda: self.mixes_changed.emit(),
+                limit=len(covers),
+            )
+
+    async def play_card(self, playlist: Playlist) -> bool:
+        """▶ на карточке: играть подборку с начала. False — треков в ней нет."""
+        if not list(self.resolve_playlist(playlist).tracks.values):
+            return False
+        await self.play_playlist(playlist, start_index=0)
+        return True
 
     def _build_snapshot(
         self,

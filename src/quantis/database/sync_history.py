@@ -10,6 +10,7 @@ from time import time
 from typing import Any
 
 from quantis.utils import app_paths
+from quantis.utils.artists import primary_artist
 
 # Между сохранениями прогресса не больше этого (тики 5–20 с).
 # Отсекает перемотку в конец, которая иначе засчитывала бы весь микс.
@@ -24,6 +25,31 @@ _schema_lock = threading.Lock()
 # файле, так что переключаем один раз на путь и под замком.
 _wal_lock = threading.Lock()
 _wal_ready: set[str] = set()
+
+
+@dataclass(frozen=True, slots=True)
+class ArtistStat:
+    author: str
+    listens: int
+    tracks: int
+    played_ms: int
+    top_track_key: str
+    top_track_title: str
+    top_track_source: str
+
+
+@dataclass(frozen=True, slots=True)
+class ListeningRhythm:
+    """Полные прослушивания по часам суток и дням недели (пн = 0)."""
+
+    hours: tuple[int, ...] = (0,) * 24
+    weekdays: tuple[int, ...] = (0,) * 7
+    exact: bool = True
+    """False — журнала ещё мало, посчитано по последнему запуску треков."""
+
+    @property
+    def total(self) -> int:
+        return sum(self.hours)
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,6 +126,20 @@ def _ensure_schema_locked(conn: sqlite3.Connection) -> None:
     conn.execute("""
         CREATE INDEX IF NOT EXISTS idx_liked_tracks_liked_at
         ON liked_tracks(liked_at DESC);
+        """)
+    # Журнал полных прослушиваний: когда слушаешь (по часам и дням недели).
+    # В track_history только последнее время трека, этого для графика мало.
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS listen_log (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            track_key TEXT NOT NULL,
+            author TEXT NOT NULL,
+            played_at INTEGER NOT NULL
+        );
+        """)
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_listen_log_played_at
+        ON listen_log(played_at);
         """)
     _ensure_played_ms_column(conn)
     conn.commit()
@@ -220,21 +260,14 @@ def fetch_listening_summary(db_path: Path | None = None) -> ListeningSummary:
                    COALESCE(SUM(played_ms), 0) AS listened_ms
             FROM track_history;
             """).fetchone()
-        artist = conn.execute("""
-            SELECT author, SUM(listen_count) AS listens
-            FROM track_history
-            WHERE trim(author) != ''
-            GROUP BY author
-            ORDER BY listens DESC, author ASC
-            LIMIT 1;
-            """).fetchone()
-        return ListeningSummary(
-            unique_tracks=int(totals["unique_tracks"] or 0),
-            total_listens=int(totals["total_listens"] or 0),
-            listened_ms=int(totals["listened_ms"] or 0),
-            top_artist=str(artist["author"]) if artist else "",
-            top_artist_listens=int(artist["listens"]) if artist else 0,
-        )
+    top = fetch_top_artists(1, db_path)
+    return ListeningSummary(
+        unique_tracks=int(totals["unique_tracks"] or 0),
+        total_listens=int(totals["total_listens"] or 0),
+        listened_ms=int(totals["listened_ms"] or 0),
+        top_artist=top[0].author if top else "",
+        top_artist_listens=top[0].listens if top else 0,
+    )
 
 
 def fetch_ranked_entries(
@@ -409,4 +442,121 @@ def upsert_progress(
                     _MAX_PLAY_DELTA_MS,
                 ),
             )
+        if increment > 0:
+            now = int(time())
+            conn.executemany(
+                "INSERT INTO listen_log (track_key, author, played_at) VALUES (?, ?, ?);",
+                [(track_key, author, now)] * increment,
+            )
         conn.commit()
+
+
+def fetch_history_entries(
+    limit: int = 2000,
+    db_path: Path | None = None,
+) -> list[dict[str, Any]]:
+    """Вся история (до ``limit``) — для миксов на главной."""
+    with _connect(db_path) as conn:
+        ensure_schema(conn)
+        cursor = conn.execute(
+            """
+            SELECT track_key, title, author, source, duration_ms,
+                   listen_count, last_played_at
+            FROM track_history
+            ORDER BY listen_count DESC, last_played_at DESC
+            LIMIT ?;
+            """,
+            (max(1, limit),),
+        )
+        return [dict(row) for row in cursor.fetchall()]
+
+
+def fetch_top_artists(limit: int = 8, db_path: Path | None = None) -> list[ArtistStat]:
+    """Артисты по числу полных прослушиваний, с их самым слушаемым треком.
+
+    Группируем по первому артисту: «Narvent, VØJ» и «Narvent» — один артист.
+    """
+    with _connect(db_path) as conn:
+        ensure_schema(conn)
+        rows = conn.execute("""
+            SELECT track_key, title, author, source, listen_count, played_ms,
+                   last_played_at
+            FROM track_history
+            WHERE trim(author) != '' AND listen_count > 0
+            ORDER BY listen_count DESC, last_played_at DESC;
+            """).fetchall()
+    groups: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        name = primary_artist(str(row["author"]))
+        if not name:
+            continue
+        group = groups.get(name.casefold())
+        if group is None:
+            # Первая строка группы — самый слушаемый трек (ORDER BY выше).
+            group = groups[name.casefold()] = {
+                "author": name,
+                "listens": 0,
+                "tracks": 0,
+                "played_ms": 0,
+                "top": row,
+            }
+        group["listens"] += int(row["listen_count"] or 0)
+        group["tracks"] += 1
+        group["played_ms"] += int(row["played_ms"] or 0)
+    ranked = sorted(
+        groups.values(), key=lambda g: (-g["listens"], g["author"].casefold())
+    )
+    return [
+        ArtistStat(
+            author=g["author"],
+            listens=g["listens"],
+            tracks=g["tracks"],
+            played_ms=g["played_ms"],
+            top_track_key=str(g["top"]["track_key"]),
+            top_track_title=str(g["top"]["title"]),
+            top_track_source=str(g["top"]["source"]),
+        )
+        for g in ranked[: max(1, limit)]
+    ]
+
+
+# Пока в журнале меньше этого, ритм берём из track_history.last_played_at:
+# у старых пользователей журнала нет, а график пустовал бы неделями.
+_RHYTHM_MIN_LOG = 50
+
+
+def _rhythm_from(
+    conn: sqlite3.Connection, table: str, column: str, where: str = ""
+) -> tuple[list[int], list[int]]:
+    hours = [0] * 24
+    weekdays = [0] * 7
+    for row in conn.execute(f"""
+        SELECT CAST(strftime('%H', {column}, 'unixepoch', 'localtime') AS INTEGER)
+                   AS hour,
+               CAST(strftime('%w', {column}, 'unixepoch', 'localtime') AS INTEGER)
+                   AS dow,
+               COUNT(*) AS n
+        FROM {table} {where} GROUP BY hour, dow;
+        """):
+        if row["hour"] is None or row["dow"] is None:
+            continue
+        hour, count = int(row["hour"]), int(row["n"])
+        if 0 <= hour < 24:
+            hours[hour] += count
+        # SQLite: воскресенье = 0; у нас неделя с понедельника.
+        weekdays[(int(row["dow"]) + 6) % 7] += count
+    return hours, weekdays
+
+
+def fetch_listening_rhythm(db_path: Path | None = None) -> ListeningRhythm:
+    """Сколько полных прослушиваний пришлось на каждый час и день недели."""
+    with _connect(db_path) as conn:
+        ensure_schema(conn)
+        logged = conn.execute("SELECT COUNT(*) AS n FROM listen_log;").fetchone()
+        if int(logged["n"] or 0) >= _RHYTHM_MIN_LOG:
+            hours, weekdays = _rhythm_from(conn, "listen_log", "played_at")
+            return ListeningRhythm(tuple(hours), tuple(weekdays), exact=True)
+        hours, weekdays = _rhythm_from(
+            conn, "track_history", "last_played_at", "WHERE listen_count > 0"
+        )
+        return ListeningRhythm(tuple(hours), tuple(weekdays), exact=False)
