@@ -1,6 +1,6 @@
 [project]
 name = "quantis"
-version = "0.4.3"
+version = "0.4.4"
 description = "A scalable, plugin-based async media application."
 authors = [
     {name = "ReallyFun",email = "ilyareztcov@gmail.com"}
@@ -17,6 +17,8 @@ dependencies = [
     "qasync (>=0.28.0,<0.29.0)",
     "aiosqlite (>=0.22.1,<0.23.0)",
     "aiohttp (>=3.14.1,<4.0.0)",
+    "aiohttp-socks (>=0.12.0,<1.0.0)",
+    "pysocks (>=1.7.1,<2.0.0)",
     "keyring (>=25.7.0,<26.0.0)",
     "aiofiles (>=25.1.0,<26.0.0)",
     "mpris-server>=0.9.6; sys_platform == 'linux'",
@@ -112,6 +114,7 @@ files = [
     "src/quantis/services/app_update.py",
     "src/quantis/services/cover_validate.py",
     "src/quantis/services/http_stream_proxy.py",
+    "src/quantis/services/mixes.py",
     "src/quantis/services/soundcloud.py",
     "src/quantis/services/soundcloud_finder.py",
     "src/quantis/services/track_history.py",
@@ -129,17 +132,21 @@ files = [
     "src/quantis/ui/ui_extensions.py",
     "src/quantis/ui/viewmodels/base_viewmodel.py",
     "src/quantis/ui/viewmodels/player_vm.py",
+    "src/quantis/ui/views/widgets/art_card.py",
     "src/quantis/ui/views/widgets/backdrop_compositor.py",
     "src/quantis/ui/views/widgets/backdrop_panel.py",
     "src/quantis/ui/views/widgets/brand_mark.py",
     "src/quantis/ui/views/widgets/cover_view.py",
     "src/quantis/ui/views/widgets/glass.py",
     "src/quantis/ui/views/widgets/now_playing_stage.py",
+    "src/quantis/ui/views/widgets/rhythm_chart.py",
+    "src/quantis/ui/views/widgets/segmented.py",
     "src/quantis/ui/views/widgets/source_badge.py",
-    "src/quantis/ui/views/widgets/waveform_seek.py",
     "src/quantis/ui/views/widgets/update_banner.py",
+    "src/quantis/ui/views/widgets/waveform_seek.py",
     "src/quantis/ui/wallpapers.py",
     "src/quantis/utils/app_paths.py",
+    "src/quantis/utils/artists.py",
     "src/quantis/utils/get_ru_words.py",
     "src/quantis/utils/resource_path.py",
     "src/quantis/version.py",
