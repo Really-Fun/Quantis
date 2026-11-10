@@ -82,6 +82,7 @@ from quantis.ui.views.widgets.backdrop_panel import (
 )
 from quantis.ui.views.widgets.background_frame import BackgroundFrame
 from quantis.ui.views.widgets.cover_art import CoverEvents, is_track_cover
+from quantis.ui.views.widgets.mini_player import MiniPlayer
 from quantis.ui.views.widgets.notifications import (
     DownloadNotification,
     Notification,
@@ -331,6 +332,9 @@ class QuantisMainWindow(QMainWindow):
             lambda: self._toggle_side_panel("lyrics")
         )
         self._player_bar.hide_ui_requested.connect(self._toggle_chrome_hidden)
+        self._player_bar.mini_player_requested.connect(self._open_mini_player)
+        self._mini_player: MiniPlayer | None = None
+        self._mini_from_maximized = False
         columns.addWidget(self._player_bar)
 
         body.addWidget(columns_host, stretch=1)
@@ -1253,7 +1257,35 @@ class QuantisMainWindow(QMainWindow):
         # и флаг «развёрнуто», иначе окно каждый раз открывается не на весь экран.
         if not (self.isMinimized() or self.isFullScreen()):
             self._ui_prefs.set_window_geometry(self.saveGeometry())
+        if self._mini_player is not None:
+            # иначе мини-плеер остался бы единственным окном закрытой программы
+            self._mini_player.restore_requested.disconnect(self._close_mini_player)
+            self._mini_player.close()
         super().closeEvent(event)
+
+    def _open_mini_player(self) -> None:
+        """Главное окно сворачивается, поверх остаётся мини-плеер."""
+        if self._mini_player is None:
+            # без родителя: окно-потомок свернулось бы вместе с главным
+            self._mini_player = MiniPlayer(self._player_vm, self._bundle.music.provider)
+            self._mini_player.restore_requested.connect(self._close_mini_player)
+        self._mini_from_maximized = self.isMaximized()
+        self._mini_player.sync()
+        self._mini_player.show()
+        self._mini_player.raise_()
+        self.showMinimized()
+
+    def _close_mini_player(self) -> None:
+        """Обратно в главное окно."""
+        if self._mini_player is not None:
+            self._mini_player.hide()
+        if self.isMinimized():
+            if self._mini_from_maximized:
+                self.showMaximized()
+            else:
+                self.showNormal()
+        self.raise_()
+        self.activateWindow()
 
     def _toggle_maximize(self) -> None:
         if self.isMaximized():
@@ -1271,6 +1303,10 @@ class QuantisMainWindow(QMainWindow):
             self._header.set_maximized(self.isMaximized())
             self._resize_grips.update_geometry()
             self._refresh_eco_state()
+            # Главное окно развернули с панели задач — мини-плеер больше не нужен.
+            mini = getattr(self, "_mini_player", None)
+            if mini is not None and mini.isVisible() and not self.isMinimized():
+                mini.hide()
         elif event.type() == QEvent.Type.ActivationChange:
             self._refresh_eco_state()
 

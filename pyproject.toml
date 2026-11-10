@@ -1,6 +1,6 @@
 [project]
 name = "quantis"
-version = "0.4.4"
+version = "0.4.5"
 description = "A scalable, plugin-based async media application."
 authors = [
     {name = "ReallyFun",email = "ilyareztcov@gmail.com"}

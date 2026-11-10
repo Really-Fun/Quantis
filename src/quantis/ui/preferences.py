@@ -52,6 +52,7 @@ class UiPreferences(QObject):
     _KEY_SIDE_PANEL = "ui/side_panel"
     _KEY_NAV_EXPANDED = "ui/nav_expanded"
     _KEY_BACKGROUND_ECO = "ui/background_eco"
+    _KEY_MINI_PLAYER = "ui/mini_player"
     _KEY_VOLUME = "playback/volume"
     _KEY_REPEAT_MODE = "playback/repeat_mode"
     _KEY_MUSIC_DIR = "storage/music_dir"
@@ -358,6 +359,19 @@ class UiPreferences(QObject):
             return
         self._settings.setValue(self._KEY_BACKDROP_BLUR, clamped)
         self._emit(self.wallpaper_changed)
+
+    @property
+    def mini_player_enabled(self) -> bool:
+        """Кнопка «Мини-плеер» в нижней панели. По умолчанию выключена."""
+        return self._read_bool(
+            self._settings.value(self._KEY_MINI_PLAYER, False), False
+        )
+
+    def set_mini_player_enabled(self, value: bool) -> None:
+        if self.mini_player_enabled == value:
+            return
+        self._settings.setValue(self._KEY_MINI_PLAYER, value)
+        self._emit(self.layout_changed)
 
     @property
     def background_eco_enabled(self) -> bool:

@@ -221,6 +221,19 @@ class SettingsPage(QWidget):
         eco_body.addWidget(self._eco_cb)
         self._add_row(group, eco_row)
 
+        mini_row, mini_body = self._row(
+            "Мини-плеер",
+            "Маленькое окно с обложкой, кнопками и перемоткой поверх других "
+            "окон. Открывается кнопкой в нижней панели, рядом с громкостью; "
+            "главное окно при этом сворачивается.",
+        )
+        self._mini_player_cb = QCheckBox("Показывать кнопку мини-плеера")
+        self._mini_player_cb.setObjectName("settingsCheck")
+        self._mini_player_cb.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._mini_player_cb.toggled.connect(self._prefs.set_mini_player_enabled)
+        mini_body.addWidget(self._mini_player_cb)
+        self._add_row(group, mini_row)
+
         group = self._begin_group(panel_layout, "Горячие клавиши")
         binds_row, binds_body = self._row(
             "Binds",
@@ -534,6 +547,10 @@ class SettingsPage(QWidget):
         self._eco_cb.blockSignals(True)
         self._eco_cb.setChecked(self._prefs.background_eco_enabled)
         self._eco_cb.blockSignals(False)
+
+        self._mini_player_cb.blockSignals(True)
+        self._mini_player_cb.setChecked(self._prefs.mini_player_enabled)
+        self._mini_player_cb.blockSignals(False)
 
         self._theme_combo.blockSignals(True)
         index = self._theme_combo.findData(self._prefs.ui_theme)

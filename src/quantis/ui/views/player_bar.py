@@ -105,6 +105,7 @@ class PlayerBar(QFrame):
     queue_toggle_requested = Signal()
     lyrics_toggle_requested = Signal()
     hide_ui_requested = Signal()
+    mini_player_requested = Signal()
 
     def __init__(
         self,
@@ -274,6 +275,10 @@ class PlayerBar(QFrame):
             "hide-ui-neon.svg", "Скрыть интерфейс (S)"
         )
         self._hide_ui_btn.clicked.connect(self.hide_ui_requested.emit)
+        self._mini_btn = self._make_button("mini-player.svg", "Мини-плеер")
+        self._mini_btn.clicked.connect(self.mini_player_requested.emit)
+        self._mini_btn.setVisible(UiPreferences().mini_player_enabled)
+        UiPreferences().layout_changed.connect(self._sync_mini_button)
         self._queue_btn = self._make_button("queue.svg", "Очередь")
         self._queue_btn.setCheckable(True)
         self._queue_btn.clicked.connect(self._on_queue_clicked)
@@ -310,6 +315,7 @@ class PlayerBar(QFrame):
             self._download_btn,
             self._playlist_btn,
             self._hide_ui_btn,
+            self._mini_btn,
             self._volume,
         ):
             self._right_layout.addWidget(widget)
@@ -347,6 +353,11 @@ class PlayerBar(QFrame):
         """Значок одним цветом — цветом текста темы (а не розово-голубой)."""
         color = qcolor(UiPreferences().theme.colors.text_dim)
         return resources.faded_when_disabled(resources.load_icon(icon_name, color))
+
+    def _sync_mini_button(self) -> None:
+        """Кнопку мини-плеера включают в настройках (по умолчанию её нет)."""
+        self._mini_btn.setVisible(UiPreferences().mini_player_enabled)
+        self._fit_sides()
 
     def _on_queue_clicked(self) -> None:
         # состояние кнопки выставит окно через set_queue_open
