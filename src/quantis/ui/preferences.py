@@ -31,6 +31,8 @@ class UiPreferences(QObject):
     # Панели главной и «Сейчас играет».
     layout_changed = Signal()
     eco_changed = Signal()
+    # Прокси для YouTube.
+    network_changed = Signal()
     volume_changed = Signal(int)
 
     _instance: UiPreferences | None = None
@@ -53,6 +55,7 @@ class UiPreferences(QObject):
     _KEY_VOLUME = "playback/volume"
     _KEY_REPEAT_MODE = "playback/repeat_mode"
     _KEY_MUSIC_DIR = "storage/music_dir"
+    _KEY_YOUTUBE_PROXY = "network/youtube_proxy"
     _KEY_WINDOW_GEOMETRY = "ui/window_geometry"
     _KEY_UPDATE_LAST_CHECK = "updates/last_check_at"
     _KEY_UPDATE_LAST_TAG = "updates/last_tag"
@@ -236,6 +239,20 @@ class UiPreferences(QObject):
             return
         self._settings.setValue(self._KEY_WALLPAPER, normalized)
         self._emit(self.wallpaper_changed)
+
+    @property
+    def youtube_proxy(self) -> str:
+        """Прокси для всего, что ходит к YouTube; пусто — напрямую."""
+        raw = self._settings.value(self._KEY_YOUTUBE_PROXY, "")
+        return str(raw).strip() if raw else ""
+
+    def set_youtube_proxy(self, value: str) -> None:
+        """Адрес уже проверен (``net_proxy.normalize_proxy``)."""
+        normalized = value.strip()
+        if normalized == self.youtube_proxy:
+            return
+        self._settings.setValue(self._KEY_YOUTUBE_PROXY, normalized)
+        self._emit(self.network_changed)
 
     @property
     def wallpaper_enabled(self) -> bool:

@@ -174,6 +174,9 @@ class PlaybackController:
                 track.title,
                 reason,
             )
+            hint = self._failure_hint(track, stalled=True)
+            if hint:
+                self._notify_error(hint)
             await self._failover_to_next()
             return
 
@@ -382,6 +385,31 @@ class PlaybackController:
             return None
         return path
 
+    def _failure_hint(self, track: Track, *, stalled: bool = False) -> str | None:
+        """Причина сбоя словами пользователя, если стример её знает
+        (YouTube закрыт в сети, прокси не отвечает)."""
+        hint = getattr(self.music.streamer, "failure_hint", None)
+        if not callable(hint):
+            return None
+        try:
+            message = hint(track, stalled=stalled)
+        except Exception:
+            logger.debug("failure_hint упал", exc_info=True)
+            return None
+        return message if isinstance(message, str) and message else None
+
+    def _notify_error(self, message: str) -> None:
+        if self._event_bus is None:
+            return
+
+        def notify() -> None:
+            self._event_bus.error_occurred.emit(message)
+
+        if self._bridge is not None:
+            self._bridge.invoke_main(notify)
+        else:
+            notify()
+
     async def _resolve_source(self, track: Track) -> str | None:
         if track.downloaded:
             local = self._local_path_if_ready(track)
@@ -427,17 +455,12 @@ class PlaybackController:
         if seq != self._play_seq:
             return
         if not source:
-            message = f"Не удалось получить источник для воспроизведения: {track.title}"
+            message = (
+                self._failure_hint(track)
+                or f"Не удалось получить источник для воспроизведения: {track.title}"
+            )
             logger.warning(message)
-            if self._event_bus is not None:
-
-                def notify() -> None:
-                    self._event_bus.error_occurred.emit(message)
-
-                if self._bridge is not None:
-                    self._bridge.invoke_main(notify)
-                else:
-                    notify()
+            self._notify_error(message)
             return
 
         def start_playback() -> None:

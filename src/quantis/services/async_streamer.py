@@ -10,6 +10,12 @@ from typing import Any
 
 from quantis.config.media_backend import resolve_media_backend
 from quantis.models import Track, TrackSource
+from quantis.services.net_proxy import (
+    is_youtube_url,
+    on_proxy_changed,
+    proxy_label,
+    youtube_proxy,
+)
 from quantis.services.soundcloud_streamer import AsyncSoundCloudStreamer
 from quantis.services.stream_cache import cached_stream_url
 from quantis.services.wallpaper_policy import WALLPAPER_DEFAULT_QUALITY
@@ -104,6 +110,37 @@ class AsyncStreamer(AsyncStreamerInterface):
         self._cache: OrderedDict[str, tuple[str, float]] = OrderedDict()
         # Трек Яндекса/SoundCloud → id клипа на YouTube (поиск — ~1 с).
         self._video_ids: OrderedDict[str, str | None] = OrderedDict()
+        on_proxy_changed(self._on_proxy_changed)
+
+    def _on_proxy_changed(self) -> None:
+        """Ссылки YouTube привязаны к IP — после смены прокси берём новые."""
+        self._cache.clear()
+
+    def failure_hint(self, track: Track, *, stalled: bool = False) -> str | None:
+        """Понятная причина, почему трек YouTube не играет, если дело в сети.
+
+        ``stalled`` — поток запускался, но обрывался раз за разом."""
+        if str(track.source).lower() != TrackSource.YOUTUBE:
+            return None
+        if not stalled and not self._youtube.failed_by_network(str(track.track_id)):
+            return None
+        where = "Настройки → Сеть"
+        if youtube_proxy():
+            return (
+                f"YouTube не отвечает через прокси {proxy_label()}: "
+                f"«{track.title}» не запустился. Проверьте, что прокси работает "
+                f"и адрес в разделе «{where}» верный."
+            )
+        if stalled:
+            return (
+                f"Поток YouTube обрывается: «{track.title}» не доиграл. Похоже, "
+                f"YouTube замедлен в вашей сети — укажите прокси в разделе «{where}»."
+            )
+        return (
+            f"YouTube недоступен в вашей сети: «{track.title}» не запустился. "
+            f"Если YouTube у вас закрыт или замедлен, укажите прокси в разделе "
+            f"«{where}»."
+        )
 
     async def _fetch_fresh_stream_url(self, track: Track) -> str | None:
         """Прямой URL без кэша фасада (для progressive buffer / recovery)."""
@@ -141,7 +178,10 @@ class AsyncStreamer(AsyncStreamerInterface):
                 "SoundCloud HLS «%s» — Qt Multimedia может не открыть поток",
                 track.title,
             )
-        if should_proxy_stream(track, url=url):
+        # С прокси YouTube плеер сам до googlevideo не дойдёт (или дойдёт с
+        # другого IP и получит 403) — поток несёт локальный прокси.
+        via_proxy = bool(youtube_proxy()) and is_youtube_url(url)
+        if via_proxy or should_proxy_stream(track, url=url):
             self._buffer_loop = get_running_loop()
             return await self._http_proxy.mount(track, url)
         return url

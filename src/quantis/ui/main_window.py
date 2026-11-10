@@ -33,6 +33,7 @@ from PySide6.QtWidgets import (
 from quantis.core.bootstrap import ApplicationBundle
 from quantis.core.eco_mode import EcoMode
 from quantis.services.lyrics import LyricsService
+from quantis.services.net_proxy import set_youtube_proxy
 from quantis.ui import resources
 from quantis.ui.accent import AccentStyles
 from quantis.ui.controllers.dynamic_wallpaper import DynamicWallpaperController
@@ -139,6 +140,11 @@ class QuantisMainWindow(QMainWindow):
         self.setWindowFlags(Qt.WindowType.Window | Qt.WindowType.FramelessWindowHint)
         self._fit_minimum_to_screen()
         self._ui_prefs = UiPreferences()
+        # До первого поиска и трека: всё, что ходит к YouTube, читает прокси отсюда.
+        set_youtube_proxy(self._ui_prefs.youtube_proxy)
+        self._ui_prefs.network_changed.connect(
+            lambda: set_youtube_proxy(self._ui_prefs.youtube_proxy)
+        )
         self._restore_window_geometry()
         self._resize_grips = WindowResizeGrips(self)
         self._current_page = -1
@@ -746,6 +752,14 @@ class QuantisMainWindow(QMainWindow):
             self._playlist_page = PlaylistPage(self._playlist_vm, self._bridge)
             self._playlist_page.back_requested.connect(self._close_playlist_page)
             self._replace_stack_page(self.PAGE_PLAYLIST, self._playlist_page)
+            # Арт — под интерфейсом и под слоями плагинов; до показа страницы
+            # скрыт (add_background_layer его показывает). Виден он только в
+            # режиме фона «Обложка»: клип и свою картинку не заслоняет.
+            art = self._playlist_page.art_layer
+            self._body_shell.add_background_layer(art)
+            art.lower()
+            art.hide()
+            art.bind_backdrop(self._shell.compositor)
         return self._playlist_page
 
     def _sync_plugin_pages(self) -> None:
@@ -986,7 +1000,9 @@ class QuantisMainWindow(QMainWindow):
         path = Path(self._bundle.music.provider.get_cover_path(track))
         cover = load_cover_image(path if path.is_file() else None)
         self._cover_palette = palette_from_image(cover)
-        self._shell.compositor.set_cover(cover)
+        self._shell.compositor.set_cover(
+            cover, str(path) if cover is not None else None
+        )
         self.apply_palette(self._palette_for(registry.get(self._applied_theme)))
 
     def _palette_for(self, theme) -> CoverPalette:  # type: ignore[no-untyped-def]

@@ -32,6 +32,17 @@ class Clients:
         self._youtube: YTMusic | None = None
         self._youtube_ready = False
         self._initialized = True
+        from quantis.services.net_proxy import on_proxy_changed
+
+        on_proxy_changed(self._apply_youtube_proxy)
+
+    def _apply_youtube_proxy(self) -> None:
+        """Прокси YouTube сменили: тот же клиент (его держат поиск и волна)
+        дальше ходит по-новому."""
+        from quantis.services.net_proxy import requests_proxies
+
+        if self._youtube is not None:
+            self._youtube.proxies = requests_proxies()
 
     def get_yandex_client(self) -> ClientAsync | None:
         if not self._yandex_ready:
@@ -75,17 +86,19 @@ class Clients:
         from ytmusicapi.exceptions import YTMusicError
 
         from quantis.config.credentials import yotube_cookie
+        from quantis.services.net_proxy import requests_proxies
 
+        proxies = requests_proxies()
         cookie = yotube_cookie()
         if cookie:
             try:
-                return YTMusic(auth=cookie, language="ru", location="")
+                return YTMusic(auth=cookie, language="ru", location="", proxies=proxies)
             except (YTMusicError, ValueError, TypeError, OSError) as e:
                 print(f"Ошибка инициализации YTMusic с auth: {e}")
             except Exception as e:
                 print(f"Ошибка инициализации YTMusic с auth: {e}")
         try:
-            return YTMusic(language="ru", location="")
+            return YTMusic(language="ru", location="", proxies=proxies)
         except YTMusicError as e:
             print(f"Ошибка инициализации YTMusic: {e}")
-            return YTMusic(language="ru", location="")
+            return YTMusic(language="ru", location="", proxies=proxies)

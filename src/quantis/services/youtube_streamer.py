@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import ssl
 from asyncio import get_running_loop
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
@@ -11,6 +12,11 @@ from typing import Any
 
 from quantis.models import Track
 from quantis.models.track import seconds_to_ms
+from quantis.services.net_proxy import (
+    on_proxy_changed,
+    proxy_label,
+    with_youtube_proxy,
+)
 from quantis.services.wallpaper_policy import (
     WALLPAPER_DEFAULT_QUALITY,
     clamp_wallpaper_quality,
@@ -80,9 +86,12 @@ def _is_network_error(exc: BaseException) -> bool:
     current: BaseException | None = exc
     while current is not None and id(current) not in seen:
         seen.add(id(current))
-        if isinstance(current, (TimeoutError, ConnectionError)):
+        if isinstance(current, (TimeoutError, ConnectionError, ssl.SSLError)):
             return True
-        if type(current).__name__ in {"TransportError", "ReadTimeoutError"}:
+        # TransportError yt-dlp и его наследники (SSLError, ProxyError,
+        # IncompleteRead): так выглядит и блокировка YouTube, и упавший прокси.
+        names = {cls.__name__ for cls in type(current).__mro__}
+        if names & {"TransportError", "ReadTimeoutError", "ProxyError"}:
             return True
         # DownloadError yt-dlp хранит исходную ошибку в exc_info.
         inner = getattr(current, "exc_info", None)
@@ -118,6 +127,14 @@ class AsyncYoutubeStreamer(AsyncStreamerInterface):
         # Звук, его предзагрузка и видео-фон одного ролика не гоняют yt-dlp
         # параллельно: второй ждёт первого и берёт ответ из кэша.
         self._id_locks: dict[str, Lock] = {}
+        # Ролики, до которых не достучались по сети, — для понятной ошибки.
+        self._network_failed: set[str] = set()
+        # Ссылки googlevideo привязаны к IP: после смены прокси они чужие.
+        on_proxy_changed(self.clear_cache)
+
+    def failed_by_network(self, track_id: str) -> bool:
+        """Последняя попытка взять поток упёрлась в сеть, а не в сам ролик."""
+        return str(track_id) in self._network_failed
 
     def _id_lock(self, track_id: str) -> Lock:
         with self._info_lock:
@@ -214,11 +231,13 @@ class AsyncYoutubeStreamer(AsyncStreamerInterface):
             if skip_player:
                 # Innertube android без webpage/player JS — обычно <2с.
                 youtube["player_skip"] = ["webpage", "configs"]
-            opts: dict[str, Any] = {
-                **self._common,
-                "format": format_id,
-                "extractor_args": {"youtube": youtube},
-            }
+            opts: dict[str, Any] = with_youtube_proxy(
+                {
+                    **self._common,
+                    "format": format_id,
+                    "extractor_args": {"youtube": youtube},
+                }
+            )
             if cookies and cookiefile:
                 opts["cookiefile"] = cookiefile
             return opts
@@ -476,6 +495,7 @@ class AsyncYoutubeStreamer(AsyncStreamerInterface):
                 self._store_info(track_id, info)
                 picked = self._pick_stream_url(info, prefer_video=False)
                 if picked:
+                    self._network_failed.discard(str(track_id))
                     logger.info(
                         "YouTube stream %s in %.2fs via format=%s clients=%s",
                         track_id,
@@ -494,10 +514,15 @@ class AsyncYoutubeStreamer(AsyncStreamerInterface):
                     track_id,
                     exc_info=True,
                 )
+        self._network_failed.discard(str(track_id))
         if last_exc is not None and _is_network_error(last_exc):
             # Таймаут или обрыв связи с youtube.com — не баг, трейсбек не нужен.
+            if len(self._network_failed) > 256:
+                self._network_failed.clear()
+            self._network_failed.add(str(track_id))
             logger.warning(
-                "YouTube недоступен (сеть), поток %s не получен: %s",
+                "YouTube недоступен (сеть%s), поток %s не получен: %s",
+                f", прокси {proxy_label()}" if proxy_label() else "",
                 track_id,
                 last_exc,
             )

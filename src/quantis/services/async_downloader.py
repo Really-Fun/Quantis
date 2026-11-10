@@ -486,7 +486,8 @@ class AsyncYandexDownloader(AsyncDownloaderInterface):
             PathProvider.ensure_storage_dirs()
             track_info = await self.client.tracks(int(track.track_id))
             dest = self.path_provider.get_cover_path(track)
-            await track_info[0].downloadCoverAsync(dest, "400x400")
+            # 1000×1000: обложка идёт и артом во весь фон страницы плейлиста
+            await track_info[0].downloadCoverAsync(dest, "1000x1000")
             if not cover_file_ok(dest):
                 logger.warning("Обложка Яндекса обрезана или пустая: %s", track)
         except Exception:
@@ -515,6 +516,7 @@ class AsyncYoutubeDownloader(AsyncDownloaderInterface):
         self._executor = get_worker_pool()
         self._owns_executor = False
         self._session: Optional[aiohttp.ClientSession] = None
+        self._session_proxy = ""
         self._semaphore = Semaphore(value=8)
 
     def _attempt_opts(self, outtmpl: str, *, video: bool = False) -> list[dict]:
@@ -658,8 +660,16 @@ class AsyncYoutubeDownloader(AsyncDownloaderInterface):
         logger.warning("Не удалось скачать видео-кэш для обоев: %s", track.track_id)
 
     async def get_session(self) -> aiohttp.ClientSession:
+        """Сессия для обложек YouTube — через прокси YouTube, если он задан."""
+        from quantis.services.net_proxy import aiohttp_connector, youtube_proxy
+
+        proxy = youtube_proxy()
+        if self._session is not None and self._session_proxy != proxy:
+            await self._session.close()
+            self._session = None
         if self._session is None:
-            self._session = aiohttp.ClientSession()
+            self._session = aiohttp.ClientSession(connector=aiohttp_connector())
+            self._session_proxy = proxy
         return self._session
 
     async def download_track(
@@ -708,7 +718,9 @@ class AsyncYoutubeDownloader(AsyncDownloaderInterface):
         if not is_youtube_video_id(str(track_id)):
             raise ValueError(f"Некорректный YouTube id: {track_id!r}")
 
-        with YoutubeDL(opts) as ydl:
+        from quantis.services.net_proxy import with_youtube_proxy
+
+        with YoutubeDL(with_youtube_proxy(opts)) as ydl:
             return ydl.extract_info(
                 f"https://youtube.com/watch?v={track_id}", download=download
             )

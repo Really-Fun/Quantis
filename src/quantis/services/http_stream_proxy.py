@@ -18,6 +18,7 @@ from aiohttp import ClientSession, ClientTimeout, web
 from aiohttp.client_exceptions import ClientConnectionError, ClientPayloadError
 
 from quantis.models import Track
+from quantis.services.net_proxy import aiohttp_connector, is_youtube_url, youtube_proxy
 
 logger = logging.getLogger(__name__)
 
@@ -84,6 +85,9 @@ class LocalHttpStreamProxy:
         self._runner: web.AppRunner | None = None
         self._port = 0
         self._client: ClientSession | None = None
+        # YouTube через прокси пользователя — отдельная сессия со своим коннектором
+        self._proxied: ClientSession | None = None
+        self._proxied_via = ""
         self._tracks: dict[str, Track] = {}
         self._urls: dict[str, tuple[str, float]] = {}
         # Видео-фон: свой способ взять свежую ссылку, а живёт она часами —
@@ -142,6 +146,9 @@ class LocalHttpStreamProxy:
         if self._client is not None:
             await self._client.close()
             self._client = None
+        if self._proxied is not None:
+            await self._proxied.close()
+            self._proxied = None
         if self._runner is not None:
             await self._runner.cleanup()
             self._runner = None
@@ -150,12 +157,24 @@ class LocalHttpStreamProxy:
         self._urls.clear()
         self._refreshers.clear()
 
-    async def _ensure_client(self) -> ClientSession:
+    async def _ensure_client(self, url: str = "") -> ClientSession:
+        """Сессия для ``url``: YouTube при заданном прокси идёт через него."""
+        timeout = ClientTimeout(total=None, sock_connect=10, sock_read=None)
+        proxy = youtube_proxy()
+        if proxy and is_youtube_url(url):
+            if self._proxied is not None and self._proxied_via != proxy:
+                await self._proxied.close()
+                self._proxied = None
+            if self._proxied is None or self._proxied.closed:
+                self._proxied = ClientSession(
+                    headers=_UPSTREAM_HEADERS,
+                    timeout=timeout,
+                    connector=aiohttp_connector(),
+                )
+                self._proxied_via = proxy
+            return self._proxied
         if self._client is None or self._client.closed:
-            self._client = ClientSession(
-                headers=_UPSTREAM_HEADERS,
-                timeout=ClientTimeout(total=None, sock_connect=10, sock_read=None),
-            )
+            self._client = ClientSession(headers=_UPSTREAM_HEADERS, timeout=timeout)
         return self._client
 
     async def _upstream_url(
@@ -182,19 +201,17 @@ class LocalHttpStreamProxy:
             raise web.HTTPNotFound()
 
         start, end = _parse_range(request.headers.get("Range"))
-        client = await self._ensure_client()
         url = await self._upstream_url(key, track)
         if not url:
             raise web.HTTPBadGateway(text="no upstream url")
 
         if request.method == "HEAD":
-            return await self._head(client, key, track, url, start, end)
+            return await self._head(key, track, url, start, end)
 
-        return await self._stream(request, client, key, track, start, end)
+        return await self._stream(request, key, track, start, end)
 
     async def _head(
         self,
-        client: ClientSession,
         key: str,
         track: Track,
         url: str,
@@ -204,6 +221,7 @@ class LocalHttpStreamProxy:
         range_end = str(start if end is None else end)
         headers = {"Range": f"bytes={start}-{range_end}"}
         for attempt in range(2):
+            client = await self._ensure_client(url)
             async with client.get(
                 url, headers=headers, allow_redirects=True, timeout=_CONNECT_TIMEOUT
             ) as upstream:
@@ -224,7 +242,6 @@ class LocalHttpStreamProxy:
     async def _stream(
         self,
         request: web.Request,
-        client: ClientSession,
         key: str,
         track: Track,
         start: int,
@@ -252,6 +269,7 @@ class LocalHttpStreamProxy:
                         chunk_end = min(chunk_end, limit - 1)
                     range_end = str(chunk_end)
                 headers = {"Range": f"bytes={offset}-{range_end}"}
+                client = await self._ensure_client(url)
                 async with client.get(
                     url, headers=headers, allow_redirects=True
                 ) as upstream:

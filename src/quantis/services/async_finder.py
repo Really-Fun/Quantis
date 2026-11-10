@@ -20,6 +20,7 @@ from quantis.config import Clients
 from quantis.config.credentials import yandex_token
 from quantis.models import Track, YoutubeTrack
 from quantis.models.track import clock_to_ms, seconds_to_ms
+from quantis.services.net_proxy import with_youtube_proxy
 from quantis.services.soundcloud_finder import AsyncSoundCloudFinder
 from quantis.services.url_resolver import is_youtube_video_id
 from quantis.services.yandex_finder import (
@@ -204,7 +205,7 @@ class AsyncYoutubeFinder(AsyncFinderInterface):
             "skip_download": True,
         }
         try:
-            with YoutubeDL(opts) as ydl:
+            with YoutubeDL(with_youtube_proxy(opts)) as ydl:
                 info = ydl.extract_info(f"ytsearch{value}:{query}", download=False)
         except Exception:
             logger.debug("ytsearch не ответил: %s", query, exc_info=True)
@@ -250,7 +251,7 @@ class AsyncYoutubeFinder(AsyncFinderInterface):
             "noplaylist": True,
         }
         try:
-            with YoutubeDL(opts) as yt:
+            with YoutubeDL(with_youtube_proxy(opts)) as yt:
                 info = yt.extract_info(url, download=False)
             if not info:
                 return self._sync_get_track(video_id)

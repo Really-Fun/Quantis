@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QPushButton,
     QScrollArea,
     QSpinBox,
@@ -30,6 +31,11 @@ from quantis.services.app_update import (
     fetch_latest_release,
     is_newer,
     is_safe_release_url,
+)
+from quantis.services.net_proxy import (
+    check_youtube,
+    normalize_proxy,
+    set_youtube_proxy,
 )
 from quantis.services.wallpaper_policy import (
     WALLPAPER_AV_DELAY_MAX_MS,
@@ -226,6 +232,8 @@ class SettingsPage(QWidget):
             binds_body.addWidget(line)
         self._add_row(group, binds_row)
 
+        self._build_network_group(panel_layout)
+
         group = self._begin_group(panel_layout, "Хранилище")
 
         music_row, music_body = self._row(
@@ -372,6 +380,85 @@ class SettingsPage(QWidget):
         super().showEvent(event)
         self._refresh_wallpapers()
 
+    def _build_network_group(self, panel_layout: QVBoxLayout) -> None:
+        group = self._begin_group(panel_layout, "Сеть")
+        row, body = self._row(
+            "Прокси для YouTube",
+            "Если YouTube у вас закрыт или замедлен, треки с него не запускаются "
+            "или заикаются. Укажите адрес прокси — например, локального клиента "
+            "обхода блокировок: через него пойдут поиск, звук, клипы и обложки "
+            "YouTube. Яндекс и SoundCloud по-прежнему идут напрямую. "
+            "Пустое поле — без прокси.",
+        )
+        self._proxy_edit = QLineEdit()
+        self._proxy_edit.setObjectName("settingLineEdit")
+        self._proxy_edit.setPlaceholderText("socks5://127.0.0.1:1080")
+        self._proxy_edit.setClearButtonEnabled(True)
+        self._proxy_edit.returnPressed.connect(self._on_proxy_save)
+        body.addWidget(self._proxy_edit)
+
+        buttons = QHBoxLayout()
+        buttons.setContentsMargins(0, 4, 0, 0)
+        buttons.setSpacing(8)
+        save = QPushButton("Сохранить")
+        save.setObjectName("settingsButton")
+        save.setCursor(Qt.CursorShape.PointingHandCursor)
+        save.clicked.connect(self._on_proxy_save)
+        buttons.addWidget(save)
+        self._proxy_check_btn = QPushButton("Проверить YouTube")
+        self._proxy_check_btn.setObjectName("settingsButton")
+        self._proxy_check_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._proxy_check_btn.clicked.connect(self._on_proxy_check)
+        buttons.addWidget(self._proxy_check_btn)
+        buttons.addStretch()
+        body.addLayout(buttons)
+
+        self._proxy_status = QLabel("")
+        self._proxy_status.setObjectName("settingsRowDesc")
+        self._proxy_status.setWordWrap(True)
+        self._proxy_status.setVisible(False)
+        body.addWidget(self._proxy_status)
+        self._add_row(group, row)
+
+    def _set_proxy_status(self, text: str) -> None:
+        self._proxy_status.setText(text)
+        self._proxy_status.setVisible(bool(text))
+
+    def _on_proxy_save(self) -> None:
+        try:
+            value = normalize_proxy(self._proxy_edit.text())
+        except ValueError as exc:
+            self._set_proxy_status(str(exc))
+            return
+        self._proxy_edit.setText(value)
+        self._prefs.set_youtube_proxy(value)
+        set_youtube_proxy(value)
+        self._set_proxy_status(
+            "Прокси сохранён." if value else "Прокси выключен: YouTube идёт напрямую."
+        )
+        self._on_proxy_check()
+
+    def _on_proxy_check(self) -> None:
+        """Проверяет сохранённый способ связи, а не текст в поле."""
+        if self._bridge is None or not self._proxy_check_btn.isEnabled():
+            return
+        self._proxy_check_btn.setEnabled(False)
+        self._set_proxy_status("Проверяю связь с YouTube…")
+        self._bridge.schedule(self._run_proxy_check())
+
+    async def _run_proxy_check(self) -> None:
+        try:
+            _ok, text = await check_youtube()
+        except Exception as exc:  # проверка не должна ронять страницу
+            text = f"Проверка не удалась: {exc}"
+
+        def finish() -> None:
+            self._proxy_check_btn.setEnabled(True)
+            self._set_proxy_status(text)
+
+        if self._bridge is not None:
+            self._bridge.invoke_main(finish)
+
     @staticmethod
     def _begin_group(parent: QVBoxLayout, title: str) -> QVBoxLayout:
         """Раздел: подпись и карточка, куда _add_row кладёт настройки."""
@@ -409,6 +496,8 @@ class SettingsPage(QWidget):
         return frame, col
 
     def _sync_from_preferences(self) -> None:
+        if not self._proxy_edit.hasFocus():
+            self._proxy_edit.setText(self._prefs.youtube_proxy)
 
         self._wallpaper_enabled_cb.blockSignals(True)
         self._wallpaper_enabled_cb.setChecked(self._prefs.wallpaper_enabled)
