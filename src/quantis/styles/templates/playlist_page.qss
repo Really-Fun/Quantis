@@ -2,14 +2,40 @@ QWidget#playlistPage {
     background: transparent;
 }
 
-#playlistCoverFrame {
-    background: ${chip_bg};
-    border: 1px solid rgba(${ink_rgb}, 0.08);
-    border-radius: ${r12};
+/* Кнопки на арте подборки: светлая «таблетка» и полупрозрачная рядом. */
+#heroPlay {
+    color: ${bg};
+    font-size: 14px;
+    font-weight: 700;
+    background: rgb(${ink_rgb});
+    border: none;
+    border-radius: ${r22};
+    padding: 0 28px;
+    min-width: 96px;
+}
+
+#heroPlay:hover {
+    background: rgba(${ink_rgb}, 0.86);
+}
+
+#heroGhost {
+    color: rgb(${ink_rgb});
+    font-size: 14px;
+    font-weight: 600;
+    background: rgba(${ink_rgb}, 0.1);
+    border: 1px solid rgba(${ink_rgb}, 0.12);
+    border-radius: ${r22};
+    padding: 0 24px;
+    min-width: 116px;
+}
+
+#heroGhost:hover {
+    background: rgba(${ink_rgb}, 0.18);
 }
 
 QTableView#trackListView {
     background: transparent;
+    selection-background-color: transparent;
     border: none;
     outline: none;
 }

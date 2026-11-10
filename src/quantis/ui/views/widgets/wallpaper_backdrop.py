@@ -405,7 +405,7 @@ class WallpaperBackdrop(QWidget):
             self._video_player.stop()
             self._video_player.setSource(QUrl())
         self._video_feed.clear()
-        self._compositor.set_cover(image)
+        self._compositor.set_cover(image, path)
         self._set_video_active(True)
 
     def has_picture(self) -> bool:

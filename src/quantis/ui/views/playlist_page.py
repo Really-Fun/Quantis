@@ -21,9 +21,10 @@ from quantis.models.playlist import RecommendationPlaylist, WavePlaylist
 from quantis.ui.async_ui import schedule
 from quantis.ui.playlist_actions import add_track_actions, show_add_to_playlist_menu
 from quantis.ui.viewmodels.playlist_vm import PlaylistViewModel
-from quantis.ui.views.widgets.cover_art import playlist_cover_path
+from quantis.ui.views.widgets.elided_label import ElidedLabel
 from quantis.ui.views.widgets.page_layout import PAGE_MARGINS
-from quantis.ui.views.widgets.playlist_card import GradientCover
+from quantis.ui.views.widgets.playlist_art import PlaylistArtLayer, pick_art_path
+from quantis.ui.views.widgets.playlist_card import playlist_tracks_label
 from quantis.ui.views.widgets.playlist_track_delegate import PlaylistTrackDelegate
 
 
@@ -67,6 +68,7 @@ class PlaylistTrackTable(QTableView):
 
 class PlaylistPage(QWidget):
     back_requested = Signal()
+    COLUMN_MAX_W = 680
 
     def __init__(
         self,
@@ -79,72 +81,55 @@ class PlaylistPage(QWidget):
         self._bridge = bridge
         self.setObjectName("playlistPage")
 
-        root = QVBoxLayout(self)
+        self.art_layer = PlaylistArtLayer()
+        """Фон страницы; окно монтирует его под интерфейсом."""
+
+        root = QHBoxLayout(self)
         root.setContentsMargins(*PAGE_MARGINS[:3], 16)
         root.setSpacing(0)
 
-        # Плейлист — сама страница, без панели-рамки вокруг списка.
-        panel = QWidget()
-        panel.setObjectName("playlistBody")
-        panel_layout = QVBoxLayout(panel)
-        panel_layout.setContentsMargins(0, 0, 0, 0)
-        panel_layout.setSpacing(0)
+        # Колонка слева: правая часть страницы остаётся арту.
+        column = QWidget()
+        column.setObjectName("playlistBody")
+        column.setMaximumWidth(self.COLUMN_MAX_W)
+        layout = QVBoxLayout(column)
+        layout.setContentsMargins(0, 8, 0, 0)
+        layout.setSpacing(0)
 
-        panel_layout.addLayout(self._build_header())
-        panel_layout.addSpacing(16)
-        panel_layout.addLayout(self._build_actions())
-        panel_layout.addSpacing(14)
+        layout.addLayout(self._build_tag_row())
+        layout.addSpacing(10)
+        self._name = ElidedLabel("—")
+        self._name.setObjectName("playlistName")
+        layout.addWidget(self._name)
+        layout.addSpacing(20)
+        layout.addLayout(self._build_actions())
+        layout.addSpacing(26)
+        self._count = QLabel("")
+        self._count.setObjectName("playlistCount")
+        layout.addWidget(self._count)
+        layout.addSpacing(10)
+        layout.addWidget(self._build_track_table(), stretch=1)
 
-        divider = QFrame()
-        divider.setObjectName("listDivider")
-        divider.setFixedHeight(1)
-        panel_layout.addWidget(divider)
-        panel_layout.addSpacing(10)
-
-        panel_layout.addLayout(self._build_column_headers())
-        panel_layout.addWidget(self._build_track_table(), stretch=1)
-
-        root.addWidget(panel, stretch=1)
+        root.addWidget(column, stretch=1)
+        root.addStretch(0)
 
         self._vm.playlist_changed.connect(self._sync_header)
         self._vm.covers_ready.connect(self._on_covers_ready)
 
-    def _build_header(self) -> QHBoxLayout:
+    def _build_tag_row(self) -> QHBoxLayout:
         row = QHBoxLayout()
-        row.setSpacing(18)
-
+        row.setSpacing(12)
         back = QPushButton("←")
         back.setObjectName("backButton")
         back.setFixedSize(40, 40)
         back.setCursor(Qt.CursorShape.PointingHandCursor)
+        back.setToolTip("Назад")
         back.clicked.connect(self.back_requested.emit)
-        row.addWidget(back, alignment=Qt.AlignmentFlag.AlignTop)
-
-        cover_frame = QFrame()
-        cover_frame.setObjectName("playlistCoverFrame")
-        cover_frame.setFixedSize(132, 132)
-        cover_layout = QVBoxLayout(cover_frame)
-        cover_layout.setContentsMargins(6, 6, 6, 6)
-        self._cover = GradientCover("", size=120)
-        cover_layout.addWidget(self._cover, alignment=Qt.AlignmentFlag.AlignCenter)
-        row.addWidget(cover_frame, alignment=Qt.AlignmentFlag.AlignTop)
-
-        meta = QVBoxLayout()
-        meta.setSpacing(6)
-        meta.setContentsMargins(0, 8, 0, 0)
+        row.addWidget(back)
         self._tag = QLabel("ПЛЕЙЛИСТ")
         self._tag.setObjectName("playlistTag")
-        meta.addWidget(self._tag)
-        self._name = QLabel("—")
-        self._name.setObjectName("playlistName")
-        self._name.setWordWrap(True)
-        meta.addWidget(self._name)
-        self._count = QLabel("")
-        self._count.setObjectName("playlistCount")
-        meta.addWidget(self._count)
-        meta.addStretch()
-        row.addLayout(meta, stretch=1)
-
+        row.addWidget(self._tag)
+        row.addStretch()
         return row
 
     def _build_actions(self) -> QHBoxLayout:
@@ -152,43 +137,19 @@ class PlaylistPage(QWidget):
         row.setSpacing(12)
 
         play = QPushButton("▶  Слушать")
-        play.setObjectName("actionButton")
-        play.setProperty("accent", True)
+        play.setObjectName("heroPlay")
         play.setCursor(Qt.CursorShape.PointingHandCursor)
-        play.setMinimumHeight(40)
+        play.setFixedHeight(44)
         play.clicked.connect(self._on_play_all)
         row.addWidget(play)
 
         shuffle = QPushButton("⇄  Перемешать")
-        shuffle.setObjectName("actionButton")
-        shuffle.setProperty("accent", False)
+        shuffle.setObjectName("heroGhost")
         shuffle.setCursor(Qt.CursorShape.PointingHandCursor)
-        shuffle.setMinimumHeight(40)
+        shuffle.setFixedHeight(44)
         shuffle.clicked.connect(self._on_shuffle)
         row.addWidget(shuffle)
         row.addStretch()
-        return row
-
-    def _build_column_headers(self) -> QHBoxLayout:
-        row = QHBoxLayout()
-        row.setContentsMargins(8, 0, 8, 4)
-        row.setSpacing(12)
-
-        num = QLabel("#")
-        num.setObjectName("colHeaderNum")
-        num.setFixedWidth(36)
-        num.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        row.addWidget(num)
-
-        title = QLabel("НАЗВАНИЕ")
-        title.setObjectName("colHeaderTitle")
-        row.addWidget(title, stretch=1)
-
-        source = QLabel("ИСТОЧНИК")
-        source.setObjectName("colHeaderSource")
-        source.setFixedWidth(52)
-        source.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        row.addWidget(source)
         return row
 
     def _build_track_table(self) -> PlaylistTrackTable:
@@ -207,6 +168,7 @@ class PlaylistPage(QWidget):
     def _sync_header(self) -> None:
         playlist = self._vm.playlist
         if playlist is None:
+            # арт не трогаем: страница закрывается, слой с ним плавно уходит
             self._name.setText("—")
             self._count.setText("")
             return
@@ -215,10 +177,12 @@ class PlaylistPage(QWidget):
             self._tag.setText("ВОЛНА")
         elif isinstance(playlist, RecommendationPlaylist) and playlist.infinite:
             self._tag.setText("ПОТОК")
+        elif isinstance(playlist, RecommendationPlaylist):
+            self._tag.setText("ПОДБОРКА")
         else:
             self._tag.setText("ПЛЕЙЛИСТ")
-        self._count.setText(self._tracks_label(self._vm.track_count))
-        self._cover.set_content(playlist.name, playlist_cover_path(playlist))
+        self._count.setText(playlist_tracks_label(self._vm.track_count))
+        self.art_layer.set_art(pick_art_path(playlist), playlist.name)
 
     def _on_covers_ready(self) -> None:
         self._sync_header()
@@ -226,18 +190,13 @@ class PlaylistPage(QWidget):
 
     def showEvent(self, event: QEvent) -> None:
         super().showEvent(event)
+        self.art_layer.set_shown(True)
         self._table._sync_column_width()
         self._table.viewport().update()
 
-    @staticmethod
-    def _tracks_label(count: int) -> str:
-        if count % 10 == 1 and count % 100 != 11:
-            suffix = "трек"
-        elif count % 10 in (2, 3, 4) and count % 100 not in (12, 13, 14):
-            suffix = "трека"
-        else:
-            suffix = "треков"
-        return f"{count} {suffix}"
+    def hideEvent(self, event: QEvent) -> None:
+        super().hideEvent(event)
+        self.art_layer.set_shown(False)
 
     def _on_play_all(self) -> None:
         if self._bridge is not None:

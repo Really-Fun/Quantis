@@ -63,8 +63,10 @@ class BackdropCompositor(QObject):
         # обложка трека: как есть (превью) и мягкая копия, и её дрейф
         self._cover_raw = QImage()
         self._cover = QImage()
+        self._cover_path: str | None = None
         self._drift = 0.0
         self._motion = True
+        self._cover_hidden = False
         # видео-фон
         self._video_active = False
         self._video = QImage()
@@ -194,10 +196,12 @@ class BackdropCompositor(QObject):
         if self._mode == "image":
             self._invalidate()
 
-    def set_cover(self, image: QImage | None) -> None:
+    def set_cover(self, image: QImage | None, path: str | None = None) -> None:
         """Обложка трека → мягкая насыщенная копия для режима «Обложка» и для
-        клипа, пока он грузится или если его нет."""
+        клипа, пока он грузится или если его нет. ``image`` маленькая (на пятна
+        цвета хватает); ``path`` — её файл для тех, кому нужна обложка целиком."""
         self._cover_raw = QImage() if image is None else image
+        self._cover_path = None if image is None else path
         self._cover = QImage() if image is None else soften_cover(image)
         if self._shows_cover():
             self._invalidate()
@@ -207,9 +211,19 @@ class BackdropCompositor(QObject):
             self._motion = enabled
             self._invalidate()
 
+    def set_cover_hidden(self, hidden: bool) -> None:
+        """Обложку заслонил арт страницы плейлиста: дрейф под ним не нужен."""
+        if hidden != self._cover_hidden:
+            self._cover_hidden = hidden
+            self.frame_changed.emit()  # хозяин пересмотрит таймер дрейфа
+
     # превью для панели «Фон»
     def cover_image(self) -> QImage:
         return self._cover_raw
+
+    def cover_path(self) -> str | None:
+        """Файл обложки в полном размере, если он известен."""
+        return self._cover_path
 
     def cover_preview(self) -> QImage:
         return self._cover
@@ -229,6 +243,7 @@ class BackdropCompositor(QObject):
             self._motion
             and not self._eco
             and not self._cinematic
+            and not self._cover_hidden
             and self._shows_cover()
             and not self._cover.isNull()
         )

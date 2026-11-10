@@ -1,12 +1,17 @@
-"""Делегат строки плейлиста: # / обложка+badge / название · источник."""
+"""Делегат строки плейлиста: # / обложка+badge / название · источник / длина.
 
-from PySide6.QtCore import QRect, QSize, Qt
+Строки лежат на арте подборки, поэтому у них своя скруглённая подложка."""
+
+from PySide6.QtCore import QRect, QRectF, QSize, Qt
 from PySide6.QtGui import QColor, QPainter
 from PySide6.QtWidgets import QStyle, QStyledItemDelegate
 
 from quantis.models.track import Track
+from quantis.ui.corners import corner
 from quantis.ui.models import TrackListModel
 from quantis.ui.preferences import UiPreferences
+from quantis.ui.resources import format_ms
+from quantis.ui.themes.spec import qcolor
 from quantis.ui.views.widgets.cover_art import (
     CoverDecoder,
     paint_rounded_cover,
@@ -23,6 +28,7 @@ class PlaylistTrackDelegate(QStyledItemDelegate):
     ROW_HEIGHT = 56
     INDEX_WIDTH = 36
     COVER_SIZE = 40
+    DURATION_WIDTH = 48
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -69,18 +75,24 @@ class PlaylistTrackDelegate(QStyledItemDelegate):
 
         colors = paint_colors(self._prefs.theme)
         fonts = paint_fonts(self._prefs.theme)
+        plate = QRectF(rect).adjusted(0, 1, 0, -1)
+        radius = corner(10)
+        painter.setPen(Qt.PenStyle.NoPen)
+        # Плашка цветом темы: текст читается и на светлом арте; через одну плотнее.
+        backing = qcolor(self._prefs.theme.colors.bg)
+        backing.setAlpha(120 if row % 2 == 0 else 64)
+        painter.setBrush(backing)
+        painter.drawRoundedRect(plate, radius, radius)
         if is_playing:
-            painter.fillRect(rect, colors.bg_playing)
-        elif hovered or selected:
-            painter.fillRect(rect, colors.bg_hover)
-        elif row % 2 == 1:
-            painter.fillRect(rect, colors.bg_alt)
-
-        if is_playing:
-            painter.fillRect(
-                QRect(rect.left(), rect.top() + 8, 3, rect.height() - 16),
-                colors.accent,
+            painter.setBrush(colors.bg_playing)
+            painter.drawRoundedRect(plate, radius, radius)
+            painter.setBrush(colors.accent)
+            painter.drawRoundedRect(
+                QRectF(rect.left(), rect.top() + 14, 3, rect.height() - 28), 1.5, 1.5
             )
+        elif hovered or selected:
+            painter.setBrush(colors.bg_hover)
+            painter.drawRoundedRect(plate, radius, radius)
 
         inner = rect.adjusted(8, 0, -8, 0)
         idx_rect = QRect(inner.left(), inner.top(), self.INDEX_WIDTH, inner.height())
@@ -91,7 +103,23 @@ class PlaylistTrackDelegate(QStyledItemDelegate):
             self.COVER_SIZE,
         )
         text_left = cover_rect.right() + 12
-        text_w = max(0, inner.right() - text_left)
+        text_right = inner.right()
+        if track.duration_ms > 0:
+            duration_rect = QRect(
+                inner.right() - self.DURATION_WIDTH - 4,
+                inner.top(),
+                self.DURATION_WIDTH,
+                inner.height(),
+            )
+            text_right = duration_rect.left() - 12
+            painter.setFont(fonts.author)
+            painter.setPen(colors.title_playing if is_playing else colors.title)
+            painter.drawText(
+                duration_rect,
+                Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter,
+                format_ms(track.duration_ms),
+            )
+        text_w = max(0, text_right - text_left)
 
         painter.setFont(fonts.index)
         painter.setPen(colors.index_playing if is_playing else colors.index)
