@@ -90,6 +90,10 @@ jobs:
       - name: Install Poetry
         run: pipx install poetry==2.4.1
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
       - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
@@ -182,6 +186,10 @@ jobs:
 
       - name: Install Poetry
         run: pipx install poetry==2.4.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
 
       - uses: actions/setup-python@v6
         with:

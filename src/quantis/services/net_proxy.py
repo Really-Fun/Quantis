@@ -13,8 +13,10 @@ IP, с которого её получили, поэтому через про�
 from __future__ import annotations
 
 import logging
+import sys
 import time
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -85,8 +87,14 @@ def youtube_proxy() -> str:
     return _proxy
 
 
-def on_proxy_changed(listener: Callable[[], None]) -> None:
+def on_proxy_changed(listener: Callable[[], None]) -> Callable[[], None]:
     _listeners.append(listener)
+
+    def unsubscribe() -> None:
+        if listener in _listeners:
+            _listeners.remove(listener)
+
+    return unsubscribe
 
 
 def proxy_label() -> str:
@@ -112,7 +120,17 @@ def ytdlp_proxy() -> str | None:
 def with_youtube_proxy(opts: dict[str, Any]) -> dict[str, Any]:
     """Опции yt-dlp с прокси YouTube, если он задан."""
     proxy = ytdlp_proxy()
-    return {**opts, "proxy": proxy} if proxy else opts
+    result = {"js_runtimes": {"deno": {}, "node": {}}, **opts}
+    bundled = getattr(sys, "_MEIPASS", None)
+    if bundled:
+        for name in ("node.exe", "node"):
+            runtime = Path(bundled) / name
+            if runtime.is_file():
+                result["js_runtimes"] = {"node": {"path": str(runtime)}}
+                break
+    if proxy:
+        result["proxy"] = proxy
+    return result
 
 
 def requests_proxies() -> dict[str, str] | None:

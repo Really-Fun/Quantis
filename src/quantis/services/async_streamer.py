@@ -146,6 +146,7 @@ class AsyncStreamer(AsyncStreamerInterface):
         """Прямой URL без кэша фасада (для progressive buffer / recovery)."""
         source_type = str(track.source).lower()
         if source_type == TrackSource.YOUTUBE:
+            self._youtube.invalidate(str(track.track_id))
             return await self._youtube.get_stream_url(track)
         if source_type == TrackSource.YANDEX:
             return await self._yandex.get_stream_url(track)

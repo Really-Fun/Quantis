@@ -113,10 +113,11 @@ class AsyncYoutubeStreamer(AsyncStreamerInterface):
             "quiet": True,
             "noplaylist": True,
             "extract_flat": False,
-            "no_warnings": True,
+            "no_warnings": False,
+            "logger": logger,
             "postprocessors": [],
             "skip_download": True,
-            "ignore_no_formats_error": True,
+            "ignore_no_formats_error": False,
             "socket_timeout": 8,
             "retries": 0,
         }
@@ -130,7 +131,10 @@ class AsyncYoutubeStreamer(AsyncStreamerInterface):
         # Ролики, до которых не достучались по сети, — для понятной ошибки.
         self._network_failed: set[str] = set()
         # Ссылки googlevideo привязаны к IP: после смены прокси они чужие.
-        on_proxy_changed(self.clear_cache)
+        self._unsubscribe_proxy = on_proxy_changed(self.clear_cache)
+
+    def close(self) -> None:
+        self._unsubscribe_proxy()
 
     def failed_by_network(self, track_id: str) -> bool:
         """Последняя попытка взять поток упёрлась в сеть, а не в сам ролик."""

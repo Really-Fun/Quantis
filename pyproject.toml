@@ -1,6 +1,6 @@
 [project]
 name = "quantis"
-version = "0.4.5"
+version = "0.4.6"
 description = "A scalable, plugin-based async media application."
 authors = [
     {name = "ReallyFun",email = "ilyareztcov@gmail.com"}
@@ -10,7 +10,7 @@ readme = "README.md"
 requires-python = ">=3.13, <3.15"
 packages = [{include = "quantis", from = "src"}]
 dependencies = [
-    "yt-dlp (>=2026.6.9,<2027.0.0)",
+    "yt-dlp[default] (>=2026.6.9,<2027.0.0)",
     "yandex-music (>=3.0.0,<4.0.0)",
     "pyside6 (>=6.11.1,<7.0.0)",
     "ytmusicapi (>=1.12.1,<2.0.0)",

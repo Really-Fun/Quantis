@@ -185,3 +185,40 @@ def test_music_service_wires_recommendation_with_youtube_finder() -> None:
 def test_music_service_shutdown_does_not_raise() -> None:
     service = MusicService()
     service.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_fresh_youtube_url_discards_rejected_cached_url():
+    streamer = AsyncStreamer()
+    track = YoutubeTrack(track_id="abcdefghijk", title="T", author="A")
+    streamer._youtube._store_info(
+        track.track_id,
+        {
+            "formats": [
+                {
+                    "url": "https://old.googlevideo.com/audio",
+                    "protocol": "https",
+                    "acodec": "aac",
+                    "vcodec": "none",
+                }
+            ]
+        },
+    )
+    with patch("yt_dlp.YoutubeDL") as factory:
+        factory.return_value.__enter__.return_value.extract_info.return_value = {
+            "formats": [
+                {
+                    "url": "https://new.googlevideo.com/audio",
+                    "protocol": "https",
+                    "acodec": "aac",
+                    "vcodec": "none",
+                }
+            ]
+        }
+        try:
+            assert (
+                await streamer._fetch_fresh_stream_url(track)
+                == "https://new.googlevideo.com/audio"
+            )
+        finally:
+            streamer.shutdown()

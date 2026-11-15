@@ -40,7 +40,8 @@ def test_normalize_rejects_bad_addresses(text: str) -> None:
 
 def test_proxy_reaches_ytdlp_and_requests_with_remote_dns() -> None:
     opts = {"quiet": True}
-    assert with_youtube_proxy(opts) is opts and requests_proxies() is None
+    assert with_youtube_proxy(opts)["quiet"] is True
+    assert requests_proxies() is None
     set_youtube_proxy("socks5://u:secret@127.0.0.1:1080")
     # имена разрешает прокси: местный DNS для YouTube может быть подменён
     assert ytdlp_proxy() == "socks5h://u:secret@127.0.0.1:1080"
@@ -130,3 +131,15 @@ def test_blocked_youtube_counts_as_network_error() -> None:
     wrapped = DownloadError("x", exc_info=(TransportError, TransportError("r"), None))
     assert _is_network_error(wrapped)
     assert not _is_network_error(ValueError("no formats"))
+
+
+def test_bundled_javascript_runtime_used_without_system_install(tmp_path, monkeypatch):
+    import sys
+
+    from quantis.services.net_proxy import with_youtube_proxy
+
+    runtime = tmp_path / "node.exe"
+    runtime.touch()
+    monkeypatch.setattr(sys, "_MEIPASS", str(tmp_path), raising=False)
+    opts = with_youtube_proxy({})
+    assert opts["js_runtimes"]["node"]["path"] == str(runtime)

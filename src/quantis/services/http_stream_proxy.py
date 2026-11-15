@@ -80,8 +80,11 @@ def _route_key(track: Track) -> str:
 class LocalHttpStreamProxy:
     """aiohttp на 127.0.0.1; Range к CDN, без записи файла."""
 
-    def __init__(self, url_fetcher: StreamUrlFetcher) -> None:
+    def __init__(
+        self, url_fetcher: StreamUrlFetcher, *, shutdown_timeout: float = 60.0
+    ) -> None:
         self._url_fetcher = url_fetcher
+        self._shutdown_timeout = shutdown_timeout
         self._runner: web.AppRunner | None = None
         self._port = 0
         self._client: ClientSession | None = None
@@ -107,7 +110,7 @@ class LocalHttpStreamProxy:
             return
         app = web.Application()
         app.router.add_get("/{key:.+}", self._handle)
-        self._runner = web.AppRunner(app)
+        self._runner = web.AppRunner(app, shutdown_timeout=self._shutdown_timeout)
         await self._runner.setup()
         site = web.TCPSite(self._runner, "127.0.0.1", 0)
         await site.start()
@@ -282,7 +285,7 @@ class LocalHttpStreamProxy:
                     if upstream.status == 416:
                         break
                     if upstream.status >= 400:
-                        logger.debug(
+                        logger.warning(
                             "HTTP proxy upstream %s at %s", upstream.status, offset
                         )
                         break
@@ -341,7 +344,7 @@ class LocalHttpStreamProxy:
                     self._urls.pop(key, None)
                 continue
             except Exception:
-                logger.debug("HTTP proxy pipe error @%s", offset, exc_info=True)
+                logger.warning("HTTP proxy pipe error @%s", offset, exc_info=True)
                 break
 
         if response is None:

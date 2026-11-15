@@ -43,6 +43,7 @@ from quantis.services.wallpaper_policy import (
     WALLPAPER_FPS_CHOICES,
     WALLPAPER_QUALITY_CHOICES,
 )
+from quantis.services.youtube_diagnostics import check_youtube_full
 from quantis.ui.preferences import UiPreferences
 from quantis.ui.resources import ui_theme_labels
 from quantis.ui.shortcuts import KEYBIND_HINTS
@@ -413,7 +414,7 @@ class SettingsPage(QWidget):
         buttons = QHBoxLayout()
         buttons.setContentsMargins(0, 4, 0, 0)
         buttons.setSpacing(8)
-        save = QPushButton("Сохранить")
+        save = self._proxy_save_btn = QPushButton("Сохранить")
         save.setObjectName("settingsButton")
         save.setCursor(Qt.CursorShape.PointingHandCursor)
         save.clicked.connect(self._on_proxy_save)
@@ -423,6 +424,14 @@ class SettingsPage(QWidget):
         self._proxy_check_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self._proxy_check_btn.clicked.connect(self._on_proxy_check)
         buttons.addWidget(self._proxy_check_btn)
+        self._proxy_full_btn = QPushButton("Полная проверка")
+        self._proxy_full_btn.setObjectName("settingsButton")
+        self._proxy_full_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._proxy_full_btn.setToolTip(
+            "Сохранить адрес и проверить соединение, ссылку на трек и загрузку аудио"
+        )
+        self._proxy_full_btn.clicked.connect(self._on_proxy_full_check)
+        buttons.addWidget(self._proxy_full_btn)
         buttons.addStretch()
         body.addLayout(buttons)
 
@@ -438,24 +447,28 @@ class SettingsPage(QWidget):
         self._proxy_status.setVisible(bool(text))
 
     def _on_proxy_save(self) -> None:
+        if self._save_proxy_value():
+            self._on_proxy_check()
+
+    def _save_proxy_value(self) -> bool:
         try:
             value = normalize_proxy(self._proxy_edit.text())
         except ValueError as exc:
             self._set_proxy_status(str(exc))
-            return
+            return False
         self._proxy_edit.setText(value)
         self._prefs.set_youtube_proxy(value)
         set_youtube_proxy(value)
         self._set_proxy_status(
             "Прокси сохранён." if value else "Прокси выключен: YouTube идёт напрямую."
         )
-        self._on_proxy_check()
+        return True
 
     def _on_proxy_check(self) -> None:
         """Проверяет сохранённый способ связи, а не текст в поле."""
         if self._bridge is None or not self._proxy_check_btn.isEnabled():
             return
-        self._proxy_check_btn.setEnabled(False)
+        self._set_proxy_busy(True)
         self._set_proxy_status("Проверяю связь с YouTube…")
         self._bridge.schedule(self._run_proxy_check())
 
@@ -466,11 +479,45 @@ class SettingsPage(QWidget):
             text = f"Проверка не удалась: {exc}"
 
         def finish() -> None:
-            self._proxy_check_btn.setEnabled(True)
+            self._set_proxy_busy(False)
             self._set_proxy_status(text)
 
         if self._bridge is not None:
             self._bridge.invoke_main(finish)
+
+    def _set_proxy_busy(self, busy: bool) -> None:
+        for widget in (
+            self._proxy_edit,
+            self._proxy_save_btn,
+            self._proxy_check_btn,
+            self._proxy_full_btn,
+        ):
+            widget.setEnabled(not busy)
+
+    def _on_proxy_full_check(self) -> None:
+        if self._bridge is None or not self._proxy_full_btn.isEnabled():
+            return
+        if not self._save_proxy_value():
+            return
+        self._set_proxy_busy(True)
+        self._set_proxy_status("Запускаю полную проверку YouTube…")
+        self._bridge.schedule(self._run_proxy_full_check())
+
+    async def _run_proxy_full_check(self) -> None:
+        def progress(text: str) -> None:
+            self._bridge.invoke_main(lambda: self._set_proxy_status(text))
+
+        try:
+            _ok, text = await check_youtube_full(progress)
+        except Exception:
+            logger.exception("Полная проверка YouTube не завершилась")
+            text = "Проверка не удалась. Подробности в quantis.log."
+
+        def finish() -> None:
+            self._set_proxy_busy(False)
+            self._set_proxy_status(text)
+
+        self._bridge.invoke_main(finish)
 
     @staticmethod
     def _begin_group(parent: QVBoxLayout, title: str) -> QVBoxLayout:

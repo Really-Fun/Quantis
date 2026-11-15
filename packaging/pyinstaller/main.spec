@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import shutil
 import sys
 from pathlib import Path
 
@@ -67,7 +68,16 @@ else:
 
 datas: list = []
 binaries: list = []
-hiddenimports: list[str] = []
+
+# YouTube signature challenges need both EJS scripts and a JS runtime.
+_ejs_datas, _ejs_binaries, _ejs_hidden = collect_all("yt_dlp_ejs")
+datas += _ejs_datas
+binaries += _ejs_binaries
+_node = shutil.which("node")
+if not _node:
+    raise RuntimeError("Install Node.js 22+ before building Quantis (YouTube runtime)")
+binaries.append((_node, "."))
+hiddenimports: list[str] = list(_ejs_hidden)
 runtime_hooks: list[str] = []
 
 # Версия из pyproject.toml — в бандл, чтобы exe не зависел от stale dist-info.
