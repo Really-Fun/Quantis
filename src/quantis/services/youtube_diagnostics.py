@@ -63,7 +63,10 @@ async def check_youtube_full(
                         f"{stage}: ошибка HTTP {response.status}. Подробности в quantis.log.",
                     )
                 content_type = response.headers.get("Content-Type", "").lower()
-                data = await response.content.read(65536)
+                try:
+                    data = await response.content.readexactly(65536)
+                except asyncio.IncompleteReadError as exc:
+                    data = exc.partial
                 if not data or "text/" in content_type or "json" in content_type:
                     return (
                         False,

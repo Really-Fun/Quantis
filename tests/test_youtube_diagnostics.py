@@ -1,3 +1,4 @@
+import asyncio
 from unittest.mock import AsyncMock, patch
 
 import pytest
@@ -38,7 +39,16 @@ async def test_reports_missing_audio_formats():
 )
 async def test_checks_actual_audio_through_player_proxy(payload, status, expected):
     async def audio(request):
-        return web.Response(body=payload, status=status, content_type="audio/mp4")
+        response = web.StreamResponse(
+            status=status,
+            headers={"Content-Type": "audio/mp4", "Content-Length": str(len(payload))},
+        )
+        await response.prepare(request)
+        await response.write(payload[:100])
+        await asyncio.sleep(0.01)
+        await response.write(payload[100:])
+        await response.write_eof()
+        return response
 
     app = web.Application()
     app.router.add_get("/audio", audio)
@@ -60,6 +70,8 @@ async def test_checks_actual_audio_through_player_proxy(payload, status, expecte
         ):
             ok, text = await diagnostic.check_youtube_full()
         assert ok is expected
+        if expected:
+            assert f"{len(payload)} байт" in text
         assert "3/3" in text
     finally:
         await runner.cleanup()

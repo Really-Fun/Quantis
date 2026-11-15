@@ -77,8 +77,10 @@ _node = shutil.which("node")
 if not _node:
     raise RuntimeError("Install Node.js 22+ before building Quantis (YouTube runtime)")
 binaries.append((_node, "."))
-hiddenimports: list[str] = list(_ejs_hidden)
+hiddenimports: list[str] = list(_ejs_hidden) + ["difflib"]
 runtime_hooks: list[str] = []
+if sys.platform == "win32":
+    runtime_hooks.append(str(HOOKS / "rthook_hide_ytdlp_console.py"))
 
 # Версия из pyproject.toml — в бандл, чтобы exe не зависел от stale dist-info.
 # VERSIONINFO (Windows Properties → Details) пишется в packaging/pyinstaller/.

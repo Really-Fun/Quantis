@@ -28,6 +28,7 @@ class BundleSmoke(BasePlugin):
         out: dict = {"imports": {}, "audio": {}}
         for mod in (
             "yt_dlp",
+            "difflib",
             "ytmusicapi",
             "yandex_music",
             "keyring",
