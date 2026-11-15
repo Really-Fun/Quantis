@@ -313,6 +313,11 @@ _DROP_QT = ("qtvirtualkeyboardplugin", "Qt6VirtualKeyboard", "qpdf", "Qt6Pdf")
 
 def _needed(entry) -> bool:
     name = os.path.basename(entry[0])
+    # Qt uses Windows' unsuffixed ICU API. A DLL of the same name from a
+    # toolchain on PATH (e.g. Poppler) can expose version-suffixed symbols
+    # instead, breaking QtCore at startup with "procedure not found".
+    if sys.platform == "win32" and name.lower() in ("icu.dll", "icuuc.dll", "icuin.dll"):
+        return False
     return not any(part in name for part in _DROP_QT)
 
 
