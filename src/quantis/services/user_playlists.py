@@ -50,6 +50,7 @@ class UserPlaylistsService:
             track.author,
             self.playlists_dir,
             str(track.source),
+            track.duration_ms,
         )
 
     async def remove_track(self, playlist_name: str, track: Track) -> bool:

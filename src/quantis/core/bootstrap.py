@@ -145,6 +145,8 @@ def wire_event_bus_navigation(
 def shutdown_application(bundle: ApplicationBundle) -> None:
     from quantis.plugins import PluginRegistry
 
+    # Сразу глушим звук: выгрузка плагинов ниже может ждать до трёх секунд.
+    bundle.player.stop(quiet=True)
     registry = PluginRegistry.instance()
     future = __import__("asyncio").run_coroutine_threadsafe(
         registry.unload_all(),

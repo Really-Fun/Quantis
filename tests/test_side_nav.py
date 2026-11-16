@@ -6,6 +6,7 @@ import pytest
 from PySide6.QtWidgets import QLabel, QToolButton
 
 from quantis.ui.ui_extensions import NavExtension, UiExtensionHost
+from quantis.ui.views.widgets.app_header import AppHeader
 from quantis.ui.views.widgets.side_nav import SideNavRail
 
 
@@ -109,3 +110,23 @@ def test_off_menu_page_clears_selection(extensions) -> None:
     assert nav._group.checkedButton() is not None
     nav.set_active_page(1)  # поиск — не в меню
     assert nav._group.checkedButton() is None
+
+
+def test_brand_lives_in_navigation_and_adapts_to_rail_width(extensions) -> None:
+    header = AppHeader()
+    nav = SideNavRail()
+    nav.show()
+    assert header.findChild(QLabel, "headerBrandMark") is None
+    assert header.findChild(QLabel, "headerBrandWordmark") is None
+
+    mark = nav.findChild(QLabel, "sideBrandMark")
+    wordmark = nav.findChild(QLabel, "sideBrandWordmark")
+    assert mark is not None and mark.pixmap() is not None
+    assert not mark.pixmap().isNull()
+    assert mark.size().width() <= nav.width() - 24
+    assert wordmark is not None and wordmark.isHidden()
+
+    nav.set_expanded(True, animate=False)
+    assert not wordmark.isHidden()
+    assert wordmark.text() == "QUANTIS"
+    nav.close()

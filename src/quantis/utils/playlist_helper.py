@@ -125,6 +125,7 @@ def add_track_to_user_playlist(
     author: str,
     playlists_dir: str = "playlists",
     source: str | None = None,
+    duration_ms: int = 0,
 ) -> bool:
     """Добавляет трек в пользовательский плейлист.
 
@@ -140,13 +141,15 @@ def add_track_to_user_playlist(
     if already_exists:
         return False
 
-    entry: dict[str, str] = {
+    entry: dict[str, str | int] = {
         "id": normalized_id,
         "title": title,
         "author": author,
     }
     if source:
         entry["source"] = str(source).lower()
+    if duration_ms > 0:
+        entry["duration_ms"] = duration_ms
     tracks.append(entry)
     playlist_path.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"

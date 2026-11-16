@@ -112,6 +112,7 @@ class Playlist(ABC):
                     track["title"],
                     track["author"],
                     source=track.get("source"),
+                    duration_ms=track.get("duration_ms", 0),
                 )
                 for track in playlist["tracks"]
             ]

@@ -74,8 +74,22 @@ class AsyncBridge(QObject):
 
     def shutdown(self) -> None:
         if self._loop.is_running():
+            future = asyncio.run_coroutine_threadsafe(self._cancel_pending(), self._loop)
+            try:
+                future.result(timeout=2.0)
+            except Exception:
+                logger.exception("Не удалось завершить фоновые задачи")
+                future.cancel()
             self._loop.call_soon_threadsafe(self._loop.stop)
         self._thread.join(timeout=2.0)
+
+    async def _cancel_pending(self) -> None:
+        current = asyncio.current_task()
+        pending = [task for task in asyncio.all_tasks() if task is not current]
+        for task in pending:
+            task.cancel()
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
 
     def _run_loop(self) -> None:
         asyncio.set_event_loop(self._loop)

@@ -1,33 +1,24 @@
 from __future__ import annotations
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QColor
 from PySide6.QtWidgets import QLabel, QWidget
 
 from quantis.ui import resources
 
 
 class BrandMark(QLabel):
-    """Компактный логотип Quantis из assets/icons/logo.png."""
+    """Векторный знак Quantis для узкой боковой панели."""
 
-    SIZE = 36
+    SIZE = 44
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setObjectName("headerBrandMark")
+        self.setObjectName("sideBrandMark")
         self.setFixedSize(self.SIZE, self.SIZE)
-        self.setScaledContents(False)
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.setAccessibleName("Quantis")
+        self.tint(QColor("#B4BCC8"))
 
-        pixmap = QPixmap(resources.icon_path("logo.png"))
-        if not pixmap.isNull():
-            self.setPixmap(
-                pixmap.scaled(
-                    self.SIZE,
-                    self.SIZE,
-                    Qt.AspectRatioMode.KeepAspectRatio,
-                    Qt.TransformationMode.SmoothTransformation,
-                )
-            )
-        else:
-            self.setText("Q")
+    def tint(self, color: QColor) -> None:
+        self.setPixmap(resources.load_icon("brand-mark.svg", color).pixmap(40, 40))

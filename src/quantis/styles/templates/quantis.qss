@@ -59,13 +59,18 @@ QLabel#headerSub {
     letter-spacing: 0.4px;
 }
 
-QLabel#headerBrandWordmark {
+QLabel#sideBrandWordmark {
     font-family: "Unbounded", ${font_display};
-    font-size: 13px;
+    font-size: 12px;
     font-weight: 600;
-    letter-spacing: 2.4px;
+    letter-spacing: 1.2px;
     color: ${title};
     background: transparent;
+}
+
+QLabel#sideBrandMark {
+    background: transparent;
+    border: none;
 }
 
 QToolButton#windowBackdropBtn,
@@ -93,11 +98,6 @@ QToolButton#windowCloseBtn:hover {
 
 QToolButton#windowCloseBtn:pressed {
     background: #bf0f1d;
-}
-
-QLabel#headerBrandMark {
-    background: transparent;
-    border: none;
 }
 
 QFrame#sideNavRail QToolButton#navIconButton {

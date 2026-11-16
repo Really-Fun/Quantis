@@ -27,7 +27,18 @@ class PlaylistViewModel(BaseViewModel):
     playlist_changed = Signal()
     covers_ready = Signal()
     tracks_mutated = Signal()
+    order_changed = Signal()
     PLAYLIST_BATCH_SIZE = 80
+    SORT_ORDERS = {
+        "original",
+        "title_asc",
+        "title_desc",
+        "artist_asc",
+        "artist_desc",
+        "duration_asc",
+        "duration_desc",
+        "shuffled",
+    }
 
     def __init__(
         self,
@@ -40,6 +51,8 @@ class PlaylistViewModel(BaseViewModel):
         self._bridge = bridge
         self._playlist: Playlist | None = None
         self._model = TrackListModel(batch_size=self.PLAYLIST_BATCH_SIZE)
+        self._sort_order = "original"
+        self._original_tracks: list[Track] = []
 
     @property
     def model(self) -> TrackListModel:
@@ -54,6 +67,10 @@ class PlaylistViewModel(BaseViewModel):
         if self._playlist is None:
             return 0
         return len(self._playlist)
+
+    @property
+    def sort_order(self) -> str:
+        return self._sort_order
 
     @property
     def can_remove_tracks(self) -> bool:
@@ -84,9 +101,33 @@ class PlaylistViewModel(BaseViewModel):
     def set_playlist(self, playlist: Playlist) -> None:
         from quantis.ui.views.widgets.cover_art import clear_cover_cache
 
+        previous = self._playlist
+        same_playlist = (
+            previous is not None
+            and type(previous) is type(playlist)
+            and previous.name == playlist.name
+        )
+        order = self._sort_order if same_playlist else "original"
+        visible = list(self._model.all_tracks()) if same_playlist else []
         self._playlist = playlist
         tracks = list(playlist.tracks.values)
+        self._sort_order = order
+        self._original_tracks = list(tracks)
+        if order == "shuffled":
+            by_id = {(str(t.source), str(t.track_id)): t for t in tracks}
+            kept = [
+                by_id[key]
+                for old in visible
+                if (key := (str(old.source), str(old.track_id))) in by_id
+            ]
+            kept_ids = {(str(t.source), str(t.track_id)) for t in kept}
+            tracks = kept + [
+                t for t in tracks if (str(t.source), str(t.track_id)) not in kept_ids
+            ]
+        elif order != "original":
+            tracks = self._sort_tracks(tracks, order)
         self._model.set_tracks(tracks)
+        self.order_changed.emit()
         clear_cover_cache()
         self.playlist_changed.emit()
         if self._bridge is not None and tracks:
@@ -103,12 +144,57 @@ class PlaylistViewModel(BaseViewModel):
         from quantis.ui.views.widgets.cover_art import clear_cover_cache
 
         self._playlist = None
+        self._sort_order = "original"
+        self._original_tracks = []
         self._model.set_tracks([])
+        self.order_changed.emit()
         clear_cover_cache()
         self.playlist_changed.emit()
 
     def set_playing_track(self, track: Track | None) -> None:
         self._model.set_playing_track(track)
+
+    def set_sort_order(self, order: str) -> None:
+        if order not in self.SORT_ORDERS:
+            raise ValueError(f"Unknown playlist sort order: {order}")
+        playlist = self._playlist
+        if playlist is None:
+            return
+        if order == "shuffled":
+            tracks = list(self._model.all_tracks())
+            random.shuffle(tracks)
+            if len(tracks) > 1 and tracks == self._model.all_tracks():
+                tracks = tracks[1:] + tracks[:1]
+        else:
+            tracks = self._sort_tracks(list(self._original_tracks), order)
+        self._sort_order = order
+        self._model.set_tracks(tracks)
+        self.order_changed.emit()
+
+    @staticmethod
+    def _sort_tracks(tracks: list[Track], order: str) -> list[Track]:
+        if order == "original":
+            return tracks
+        field, direction = order.split("_", 1)
+        if field == "duration":
+            # Unknown duration stays at the bottom in both directions.
+            return sorted(
+                tracks,
+                key=lambda track: (
+                    track.duration_ms <= 0,
+                    -track.duration_ms if direction == "desc" else track.duration_ms,
+                ),
+            )
+        key = (
+            (lambda track: track.title)
+            if field == "title"
+            else (lambda track: track.author)
+        )
+        return sorted(
+            tracks,
+            key=lambda track: key(track).casefold().replace("ё", "е"),
+            reverse=direction == "desc",
+        )
 
     def sync_appended(self) -> None:
         """Подтянуть новые треки, если очередь выросла."""
@@ -117,9 +203,17 @@ class PlaylistViewModel(BaseViewModel):
             return
         known = self._model.all_tracks()
         fresh = list(playlist.tracks.values)
-        if len(fresh) <= len(known):
+        known_ids = {(str(t.source), str(t.track_id)) for t in known}
+        added = [t for t in fresh if (str(t.source), str(t.track_id)) not in known_ids]
+        if not added:
             return
-        self._model.append_tracks(fresh[len(known) :])
+        self._original_tracks.extend(added)
+        if self._sort_order in ("original", "shuffled"):
+            self._model.append_tracks(added)
+        else:
+            self._model.set_tracks(
+                self._sort_tracks(list(self._original_tracks), self._sort_order)
+            )
         self.playlist_changed.emit()
         self.tracks_mutated.emit()
 
@@ -133,20 +227,14 @@ class PlaylistViewModel(BaseViewModel):
         playlist = self._playlist
         if playlist is None:
             return
-        tracks = list(playlist.tracks.values)
-        if not tracks:
-            return
-        random.shuffle(tracks)
-        working = self._clone_playlist(playlist, tracks)
-        working.set_current_track(0)
-        self._playback.playlist_manager.set_playlist(working)
-        await self._playback.play_track(tracks[0])
+        self.set_sort_order("shuffled")
+        await self._start_playlist(playlist, start_index=0)
 
     async def play_at(self, index: int) -> None:
         playlist = self._playlist
         if playlist is None:
             return
-        tracks = list(playlist.tracks.values)
+        tracks = self._model.all_tracks()
         if not tracks:
             return
         row = max(0, min(index, len(tracks) - 1))
@@ -171,6 +259,9 @@ class PlaylistViewModel(BaseViewModel):
             self.emit_error(str(exc))
             return False
         self._model.remove_track(index)
+        self._original_tracks = [
+            item for item in self._original_tracks if item != track
+        ]
         self._drop_from_playing_queue(track)
         self.playlist_changed.emit()
         self.tracks_mutated.emit()
@@ -188,14 +279,17 @@ class PlaylistViewModel(BaseViewModel):
         current.tracks.remove(track)
 
     async def _start_playlist(self, playlist: Playlist, *, start_index: int) -> None:
-        tracks = list(playlist.tracks.values)
+        tracks = list(self._model.all_tracks())
         if not tracks:
             return
         index = max(0, min(start_index, len(tracks) - 1))
-        if isinstance(playlist, RecommendationPlaylist) and playlist.infinite:
+        infinite = isinstance(playlist, RecommendationPlaylist) and playlist.infinite
+        if infinite and tuple(tracks) == playlist.tracks.values:
             working = playlist
         else:
             working = self._clone_playlist(playlist, tracks)
+        if infinite and working is not playlist:
+            self._playlist = working
         working.set_current_track(index)
         self._playback.playlist_manager.set_playlist(working)
         await self._playback.play_track(tracks[index])

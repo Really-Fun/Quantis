@@ -4,7 +4,6 @@ from PySide6.QtCore import QPoint, Qt, Signal
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
-    QLabel,
     QLineEdit,
     QToolButton,
     QWidget,
@@ -13,11 +12,10 @@ from PySide6.QtWidgets import (
 from quantis.ui import resources
 from quantis.ui.preferences import UiPreferences
 from quantis.ui.themes.spec import qcolor
-from quantis.ui.views.widgets.brand_mark import BrandMark
 
 
 class AppHeader(QFrame):
-    """Шапка: кнопка меню, бренд, поиск по центру, кнопки окна.
+    """Шапка: кнопка меню, поиск по центру, кнопки окна.
 
     Заголовок страницы виден в меню слева (и в заголовке окна), поэтому в
     шапке его нет."""
@@ -53,14 +51,13 @@ class AppHeader(QFrame):
             self.nav_toggle_requested.emit,
         )
         self._nav_btn.setFixedSize(40, 40)
-        row.addWidget(self._nav_btn, 0, Qt.AlignmentFlag.AlignVCenter)
-
-        self._brand = BrandMark()
-        row.addWidget(self._brand, 0, Qt.AlignmentFlag.AlignVCenter)
-
-        self._wordmark = QLabel("QUANTIS")
-        self._wordmark.setObjectName("headerBrandWordmark")
-        row.addWidget(self._wordmark, 0, Qt.AlignmentFlag.AlignVCenter)
+        left = QWidget(self)
+        left.setFixedWidth(218)
+        left_row = QHBoxLayout(left)
+        left_row.setContentsMargins(0, 0, 0, 0)
+        left_row.addWidget(self._nav_btn, 0, Qt.AlignmentFlag.AlignVCenter)
+        left_row.addStretch()
+        row.addWidget(left)
 
         self._title = ""
         row.addStretch(1)

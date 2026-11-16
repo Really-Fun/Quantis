@@ -19,6 +19,7 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import (
     QButtonGroup,
     QFrame,
+    QHBoxLayout,
     QLabel,
     QSizePolicy,
     QToolButton,
@@ -30,6 +31,7 @@ from quantis.ui import resources
 from quantis.ui.corners import corner
 from quantis.ui.design_tokens import ACCENT_FALLBACK
 from quantis.ui.ui_extensions import UiExtensionHost
+from quantis.ui.views.widgets.brand_mark import BrandMark
 
 _COLLAPSED_W = 72
 _EXPANDED_W = 224
@@ -134,6 +136,18 @@ class SideNavRail(QFrame):
         self._root.setContentsMargins(12, 8, 12, 14)
         self._root.setSpacing(6)
 
+        brand_row = QHBoxLayout()
+        brand_row.setContentsMargins(0, 0, 0, 0)
+        brand_row.setSpacing(8)
+        self._brand_mark = BrandMark(self)
+        brand_row.addWidget(self._brand_mark)
+        self._brand_wordmark = QLabel("QUANTIS", self)
+        self._brand_wordmark.setObjectName("sideBrandWordmark")
+        brand_row.addWidget(self._brand_wordmark)
+        brand_row.addStretch()
+        self._root.addLayout(brand_row)
+        self._root.addSpacing(10)
+
         self._items_layout = QVBoxLayout()
         self._items_layout.setSpacing(4)
         self._items_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
@@ -206,6 +220,7 @@ class SideNavRail(QFrame):
             self._retint()
 
     def _retint(self) -> None:
+        self._brand_mark.tint(self._text)
         for button in self._buttons.values():
             button.tint(self._text, self._accent)
 
@@ -241,6 +256,7 @@ class SideNavRail(QFrame):
 
     def _apply_expanded_ui(self, expanded: bool) -> None:
         self.setProperty("expanded", expanded)
+        self._brand_wordmark.setVisible(expanded)
         for button in self._buttons.values():
             button.set_expanded(expanded)
             self._items_layout.setAlignment(button, self._item_alignment())

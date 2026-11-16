@@ -29,6 +29,7 @@ def test_create_and_add_track(playlists_dir: str) -> None:
         "Artist",
         playlists_dir,
         source="yandex",
+        duration_ms=123_000,
     )
     assert added is True
     again = helper.add_track_to_user_playlist(
@@ -48,6 +49,7 @@ def test_create_and_add_track(playlists_dir: str) -> None:
     assert playlist is not None
     assert len(playlist) == 1
     assert playlist.tracks.values[0].title == "Song"
+    assert playlist.tracks.values[0].duration_ms == 123_000
 
     removed = helper.remove_track_from_user_playlist("Мой микс", 42, playlists_dir)
     assert removed is True
@@ -70,10 +72,11 @@ async def test_user_playlists_service(tmp_path: Path, monkeypatch) -> None:
     UserPlaylistsService._instance = None
     service = UserPlaylistsService()
     await service.create("Test")
-    track = YandexTrack(track_id=1, title="T", author="A")
+    track = YandexTrack(track_id=1, title="T", author="A", duration_ms=90_000)
     assert await service.add_track("Test", track) is True
     loaded = await service.load_all(include_empty=True)
-    assert any(p.name == "Test" for p in loaded)
+    match = next(p for p in loaded if p.name == "Test")
+    assert match.tracks.values[0].duration_ms == 90_000
     assert await service.remove_track("Test", track) is True
     loaded = await service.load_all(include_empty=True)
     match = next(p for p in loaded if p.name == "Test")

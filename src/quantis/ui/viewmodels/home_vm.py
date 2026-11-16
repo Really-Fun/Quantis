@@ -783,7 +783,8 @@ class HomeViewModel(BaseViewModel):
         if not isinstance(playlist, RecommendationPlaylist):
             return
         owned = self._recommendation_playlist
-        if owned is not None and playlist is not owned:
+        active = self._playback.playlist_manager.current_playlist
+        if owned is not None and playlist is not owned and playlist is not active:
             return
         self._recommendation_playlist = playlist
         tracks = list(playlist.tracks.values)

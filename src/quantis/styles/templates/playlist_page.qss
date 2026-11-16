@@ -18,7 +18,8 @@ QWidget#playlistPage {
     background: rgba(${ink_rgb}, 0.86);
 }
 
-#heroGhost {
+#heroGhost,
+#playlistSort {
     color: rgb(${ink_rgb});
     font-size: 14px;
     font-weight: 600;
@@ -29,7 +30,8 @@ QWidget#playlistPage {
     min-width: 116px;
 }
 
-#heroGhost:hover {
+#heroGhost:hover,
+#playlistSort:hover {
     background: rgba(${ink_rgb}, 0.18);
 }
 

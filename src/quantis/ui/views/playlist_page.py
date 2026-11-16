@@ -69,6 +69,25 @@ class PlaylistTrackTable(QTableView):
 class PlaylistPage(QWidget):
     back_requested = Signal()
     COLUMN_MAX_W = 680
+    SORT_LABELS = (
+        ("original", "Исходный порядок"),
+        ("title_asc", "Название: А → Я"),
+        ("title_desc", "Название: Я → А"),
+        ("artist_asc", "Исполнитель: А → Я"),
+        ("artist_desc", "Исполнитель: Я → А"),
+        ("duration_asc", "Длительность: короткие сначала"),
+        ("duration_desc", "Длительность: длинные сначала"),
+    )
+    SORT_BUTTON_LABELS = {
+        "original": "Исходный",
+        "title_asc": "Название ↑",
+        "title_desc": "Название ↓",
+        "artist_asc": "Исполнитель ↑",
+        "artist_desc": "Исполнитель ↓",
+        "duration_asc": "Длительность ↑",
+        "duration_desc": "Длительность ↓",
+        "shuffled": "Случайный",
+    }
 
     def __init__(
         self,
@@ -114,7 +133,9 @@ class PlaylistPage(QWidget):
         root.addStretch(0)
 
         self._vm.playlist_changed.connect(self._sync_header)
+        self._vm.order_changed.connect(self._sync_sort_button)
         self._vm.covers_ready.connect(self._on_covers_ready)
+        self._sync_sort_button()
 
     def _build_tag_row(self) -> QHBoxLayout:
         row = QHBoxLayout()
@@ -149,8 +170,27 @@ class PlaylistPage(QWidget):
         shuffle.setFixedHeight(44)
         shuffle.clicked.connect(self._on_shuffle)
         row.addWidget(shuffle)
+
+        sort_button = QPushButton()
+        sort_button.setObjectName("playlistSort")
+        sort_button.setCursor(Qt.CursorShape.PointingHandCursor)
+        sort_button.setFixedHeight(44)
+        menu = QMenu(sort_button)
+        vm = self._vm
+        for order, label in self.SORT_LABELS:
+            action = menu.addAction(label)
+            action.triggered.connect(
+                lambda checked=False, selected=order: vm.set_sort_order(selected)
+            )
+        sort_button.setMenu(menu)
+        self._sort_button = sort_button
+        row.addWidget(sort_button)
         row.addStretch()
         return row
+
+    def _sync_sort_button(self) -> None:
+        label = self.SORT_BUTTON_LABELS.get(self._vm.sort_order, "Исходный")
+        self._sort_button.setText(f"Сортировка: {label}")
 
     def _build_track_table(self) -> PlaylistTrackTable:
         table = PlaylistTrackTable(self)

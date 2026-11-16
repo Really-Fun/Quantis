@@ -39,9 +39,14 @@ class TrackManager:
         title: str,
         author: str,
         source: str | None = None,
+        duration_ms: int | str = 0,
     ) -> YandexTrack | YoutubeTrack | SoundCloudTrack:
         """Получаем трек по id / названию / автору (и опционально source)."""
         normalized_source = (source or "").lower().strip()
+        try:
+            duration = max(0, int(duration_ms))
+        except (TypeError, ValueError):
+            duration = 0
         downloaded = self.is_downloaded(str(track_id), source=normalized_source or None)
         if normalized_source in ("soundcloud", "sc"):
             numeric = parse_storage_id(str(track_id)) or track_id
@@ -50,6 +55,7 @@ class TrackManager:
                 title=title,
                 author=author,
                 downloaded=downloaded,
+                duration_ms=duration,
             )
         if normalized_source in ("youtube", "yt"):
             return YoutubeTrack(
@@ -57,6 +63,7 @@ class TrackManager:
                 title=title,
                 author=author,
                 downloaded=downloaded,
+                duration_ms=duration,
             )
         if normalized_source in ("yandex", "ya") or str(track_id).isdigit():
             return YandexTrack(
@@ -64,10 +71,12 @@ class TrackManager:
                 title=title,
                 author=author,
                 downloaded=downloaded,
+                duration_ms=duration,
             )
         return YoutubeTrack(
             track_id=track_id,
             title=title,
             author=author,
             downloaded=downloaded,
+            duration_ms=duration,
         )

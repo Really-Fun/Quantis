@@ -1,4 +1,4 @@
-#headerBrandWordmark {
+#sideBrandWordmark {
     color: ${text};
 }
 
