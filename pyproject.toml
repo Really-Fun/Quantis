@@ -112,6 +112,7 @@ files = [
     "src/quantis/plugins/base.py",
     "src/quantis/plugins/installer.py",
     "src/quantis/services/app_update.py",
+    "src/quantis/services/cover_storage.py",
     "src/quantis/services/cover_validate.py",
     "src/quantis/services/http_stream_proxy.py",
     "src/quantis/services/mixes.py",

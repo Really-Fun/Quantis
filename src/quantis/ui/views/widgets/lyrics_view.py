@@ -50,7 +50,6 @@ class LyricsView(QWidget):
         self.setMouseTracking(True)
         self._lyrics = Lyrics()
         self._state = "empty"
-        """empty — нет трека, loading, ready, missing — текста нет."""
         self._current = -1
         self._hover = -1
         self._scroll = 0.0
@@ -81,6 +80,9 @@ class LyricsView(QWidget):
 
     def set_empty(self) -> None:
         self._set(Lyrics(), "empty")
+
+    def set_translation_failed(self) -> None:
+        self._set(Lyrics(), "translation_failed")
 
     def set_lyrics(self, lyrics: Lyrics) -> None:
         self._set(lyrics, "ready" if lyrics.lines else "missing")
@@ -266,9 +268,13 @@ class LyricsView(QWidget):
     def _paint_message(self, painter: QPainter, colors) -> None:
         title, hint = {
             "loading": ("Ищем текст…", ""),
+            "translation_failed": (
+                "Не удалось загрузить перевод",
+                "Выберите этот язык ещё раз или откройте оригинал.",
+            ),
             "missing": (
                 "Текста не нашлось",
-                "Ни у Яндекс Музыки, ни в базе LRCLIB нет слов к этому треку.",
+                "Для выбранного трека и языка текст недоступен.",
             ),
         }.get(self._state, ("Ничего не играет", "Включи трек — здесь будут слова."))
         rect = QRectF(_PAD_X, 0, self.width() - 2 * _PAD_X, self.height() * 0.7)

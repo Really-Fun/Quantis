@@ -7,10 +7,31 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from quantis.controllers.playback_controller import PlaybackController
-from quantis.models import YandexTrack
+from quantis.models import YandexTrack, YoutubeTrack
 from quantis.models.playlist import RecommendationPlaylist, WavePlaylist
 from quantis.plugins.event_bus import EventBus
 from quantis.providers import PlaylistManager
+
+
+@pytest.mark.asyncio
+async def test_youtube_rate_limit_reaches_user_notification() -> None:
+    player = MagicMock()
+    music = MagicMock()
+    music.streamer.open_playback = AsyncMock(return_value=None)
+    music.streamer.failure_hint.return_value = "YouTube ограничил запросы"
+    event_bus = EventBus()
+    notices: list[str] = []
+    event_bus.error_occurred.connect(notices.append)
+    playback = PlaybackController(
+        player=player,
+        playlist_manager=PlaylistManager(),
+        music_service=music,
+        event_bus=event_bus,
+    )
+
+    await playback.play_track(YoutubeTrack("dQw4w9WgXcQ", "Song", "Artist"))
+
+    assert notices == ["YouTube ограничил запросы"]
 
 
 @pytest.mark.asyncio

@@ -204,6 +204,7 @@ class DownloadPlaylist(Playlist):
 
     def delete_track(self, track: Track) -> bool:
         from quantis.providers.library_index import LibraryIndex
+        from quantis.services.cover_storage import in_local_playlist
 
         provider = PathProvider()
         index = LibraryIndex.instance()
@@ -225,10 +226,11 @@ class DownloadPlaylist(Playlist):
                 continue  # файл остался — из индекса не убираем
             index.discard(path)
         super().delete_track(track)
-        try:
-            Path(provider.get_cover_path(track)).unlink(missing_ok=True)
-        except OSError:
-            pass
+        if not in_local_playlist(track):
+            try:
+                Path(provider.get_cover_path(track)).unlink(missing_ok=True)
+            except OSError:
+                pass
         track.downloaded = False
         return True
 

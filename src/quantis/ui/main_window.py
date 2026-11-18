@@ -285,7 +285,13 @@ class QuantisMainWindow(QMainWindow):
         self._side_panel.tab_requested.connect(self._ui_prefs.set_side_panel)
         self._side_panel.seek_requested.connect(self._player_vm.seek)
         self._player_vm.position_changed.connect(self._side_panel.lyrics.set_position)
+        self._side_panel.lyrics_language_requested.connect(
+            lambda language: self._load_lyrics(self._player_vm.current_track, language)
+        )
+        self._ui_prefs.youtube_captions_changed.connect(self._refresh_caption_setting)
         self._lyrics_service = LyricsService()
+        self._lyrics_language = ""
+        self._lyrics_request = 0
         self._lyrics_track = None
         """Трек, чей текст сейчас в панели (или грузится)."""
 
@@ -643,24 +649,47 @@ class QuantisMainWindow(QMainWindow):
         if open_ and tab == "lyrics":
             self._load_lyrics(self._bundle.playback.current_track)
 
-    def _load_lyrics(self, track) -> None:
-        """Текст грузим, только когда вкладка «Текст» открыта (и один раз на трек)."""
+    def _refresh_caption_setting(self) -> None:
+        self._lyrics_request += 1
+        self._lyrics_track = None
+        self._side_panel.set_lyrics_languages({})
+        if self._ui_prefs.side_panel == "lyrics":
+            self._load_lyrics(self._bundle.playback.current_track)
+
+    def _load_lyrics(self, track, language: str | None = None) -> None:
         view = self._side_panel.lyrics
+        if track != self._lyrics_track:
+            self._side_panel.set_lyrics_languages({})
+            language = ""
+        elif track is not None and (
+            language is None
+            or (
+                language == self._lyrics_language and view.state != "translation_failed"
+            )
+        ):
+            return
+        self._lyrics_request += 1
+        request = self._lyrics_request
+        self._lyrics_track = track
+        self._lyrics_language = language or ""
         if track is None:
-            self._lyrics_track = None
             view.set_empty()
             return
-        if track == self._lyrics_track:
-            return
-        self._lyrics_track = track
         view.set_loading()
+        captions = self._ui_prefs.youtube_captions_enabled
 
         async def run() -> None:
-            lyrics = await self._lyrics_service.fetch(track)
+            lyrics = await self._lyrics_service.fetch(track, language or "", youtube_captions=captions)
 
             def apply() -> None:
-                if track == self._lyrics_track:  # пока искали, трек сменили
-                    view.set_lyrics(lyrics)
+                if request != self._lyrics_request:
+                    return
+                if language and not lyrics.lines:
+                    view.set_translation_failed()
+                    return
+                if not language:
+                    self._side_panel.set_lyrics_languages(lyrics.translations)
+                view.set_lyrics(lyrics)
 
             self._bridge.invoke_main(apply)
 

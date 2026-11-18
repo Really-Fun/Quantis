@@ -30,6 +30,7 @@ class UiPreferences(QObject):
     wallpaper_changed = Signal()
     # Панели главной и «Сейчас играет».
     layout_changed = Signal()
+    youtube_captions_changed = Signal()
     eco_changed = Signal()
     # Прокси для YouTube.
     network_changed = Signal()
@@ -359,6 +360,15 @@ class UiPreferences(QObject):
             return
         self._settings.setValue(self._KEY_BACKDROP_BLUR, clamped)
         self._emit(self.wallpaper_changed)
+
+    @property
+    def youtube_captions_enabled(self) -> bool:
+        return self._read_bool(self._settings.value("beta/youtubeCaptions"), False)
+
+    def set_youtube_captions_enabled(self, enabled: bool) -> None:
+        if self.youtube_captions_enabled != enabled:
+            self._settings.setValue("beta/youtubeCaptions", enabled)
+            self._emit(self.youtube_captions_changed)
 
     @property
     def mini_player_enabled(self) -> bool:

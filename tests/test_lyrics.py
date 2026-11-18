@@ -58,6 +58,9 @@ def test_pick_search_prefers_close_duration_and_synced() -> None:
 
 @pytest.fixture
 def cache_dir(tmp_path, monkeypatch):
+    from quantis.services import youtube_captions
+
+    monkeypatch.setattr(youtube_captions, "fetch_captions", lambda *args: None)
     monkeypatch.setattr(lyrics_mod.app_paths, "cache_dir", lambda: tmp_path)
     return tmp_path
 

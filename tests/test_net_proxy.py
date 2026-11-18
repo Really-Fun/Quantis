@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -82,7 +83,7 @@ async def test_aiohttp_connector_follows_proxy() -> None:
 
 
 @pytest.mark.asyncio
-async def test_youtube_playback_goes_through_local_proxy_only_with_proxy() -> None:
+async def test_youtube_playback_goes_through_local_proxy_with_or_without_upstream_proxy() -> None:
     from quantis.services.async_streamer import AsyncStreamer
 
     streamer = AsyncStreamer(ThreadPoolExecutor(max_workers=1))
@@ -94,7 +95,8 @@ async def test_youtube_playback_goes_through_local_proxy_only_with_proxy() -> No
 
     streamer._youtube.get_stream_url = fake_url  # type: ignore[method-assign]
     try:
-        assert await streamer.open_playback(track) == direct
+        direct_route = await streamer.open_playback(track)
+        assert direct_route is not None and direct_route.startswith("http://127.0.0.1:")
         set_youtube_proxy("http://127.0.0.1:8080")  # и кэш ссылок сброшен
         local = await streamer.open_playback(track)
         assert local is not None and local.startswith("http://127.0.0.1:")
@@ -116,6 +118,24 @@ def test_failure_hint_names_the_cause() -> None:
     assert "через прокси socks5://127.0.0.1:1080" in hint and "secret" not in hint
     yandex = Track(1, "Song", "Artist", source=TrackSource.YANDEX)
     assert streamer.failure_hint(yandex, stalled=True) is None
+
+
+@pytest.mark.asyncio
+async def test_youtube_rate_limit_notifies_and_skips_wallpaper_lookup() -> None:
+    from quantis.services.async_streamer import AsyncStreamer
+
+    streamer = AsyncStreamer(ThreadPoolExecutor(max_workers=1))
+    track = Track("dQw4w9WgXcQ", "Song", "Artist", source=TrackSource.YOUTUBE)
+    streamer._youtube._start_rate_limit_cooldown()
+    hint = streamer.failure_hint(track)
+    assert hint is not None and "ограничил запросы" in hint
+    assert "5 мин" in hint
+    assert streamer.failure_hint(Track(1, "Y", "A", source=TrackSource.YANDEX)) is None
+
+    streamer._youtube.get_video_info = AsyncMock(return_value=("url", 10))  # type: ignore[method-assign]
+    assert await streamer.open_video(track) == (None, None, 0)
+    streamer._youtube.get_video_info.assert_not_awaited()
+    streamer.shutdown()
 
 
 def test_blocked_youtube_counts_as_network_error() -> None:

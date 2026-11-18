@@ -97,7 +97,7 @@ def test_download_playlist_delete_track_removes_files(
     monkeypatch.setattr(PathProvider, "MUSIC_FOLDER", str(music))
     monkeypatch.setattr(PathProvider, "COVERS_FOLDER", str(covers))
 
-    track = YandexTrack(track_id=99, title="Song", author="Artist")
+    track = YandexTrack(track_id=99, title="Song", author="Artist", downloaded=True)
     provider = PathProvider()
     audio = Path(provider.get_track_path(track))
     cover = Path(provider.get_cover_path(track))

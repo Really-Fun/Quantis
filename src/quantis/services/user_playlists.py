@@ -7,6 +7,7 @@ from pathlib import Path
 
 from quantis.models import Track, UserPlaylist
 from quantis.providers.path_provider import PathProvider
+from quantis.services.cover_storage import promote_cover
 from quantis.utils import playlist_helper as helper
 
 
@@ -42,7 +43,7 @@ class UserPlaylistsService:
 
     async def add_track(self, playlist_name: str, track: Track) -> bool:
         """True если трек добавлен, False если уже был в плейлисте."""
-        return await asyncio.to_thread(
+        added = await asyncio.to_thread(
             helper.add_track_to_user_playlist,
             playlist_name,
             track.track_id,
@@ -52,6 +53,8 @@ class UserPlaylistsService:
             str(track.source),
             track.duration_ms,
         )
+        await asyncio.to_thread(promote_cover, track)
+        return added
 
     async def remove_track(self, playlist_name: str, track: Track) -> bool:
         return await asyncio.to_thread(
@@ -96,8 +99,10 @@ class UserPlaylistsService:
                 continue
             if not include_empty and not playlist.tracks.values:
                 continue
+            for track in playlist.tracks.values:
+                promote_cover(track)
             if not playlist.cover_path and playlist.tracks.values:
                 first = playlist.tracks.values[0]
-                playlist.cover_path = provider.get_cover_path(first)
+                playlist.cover_path = str(provider.permanent_cover_path(first))
             result.append(playlist)
         return result

@@ -6,6 +6,7 @@ import logging
 from asyncio import get_running_loop
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
+from math import ceil
 from typing import Any
 
 from quantis.config.media_backend import resolve_media_backend
@@ -122,6 +123,15 @@ class AsyncStreamer(AsyncStreamerInterface):
         ``stalled`` — поток запускался, но обрывался раз за разом."""
         if str(track.source).lower() != TrackSource.YOUTUBE:
             return None
+        cooldown = self._youtube.rate_limit_remaining()
+        if cooldown > 0:
+            minutes = ceil(cooldown / 60)
+            return (
+                "YouTube ограничил запросы с вашего соединения. "
+                f"Повторите попытку примерно через {minutes} мин. "
+                "Если YouTube просит подтвердить, что вы не робот, "
+                "пройдите проверку в браузере через то же соединение."
+            )
         if not stalled and not self._youtube.failed_by_network(str(track.track_id)):
             return None
         where = "Настройки → Сеть"
@@ -166,7 +176,7 @@ class AsyncStreamer(AsyncStreamerInterface):
         raise ValueError(f"Неизвестный источник платформы у трека: {track.source!r}")
 
     async def open_playback(self, track: Track) -> str | None:
-        """Прямой URL. Qt Yandex/SoundCloud MP3 — через localhost-прокси."""
+        """Qt играет HTTP-потоки через localhost-прокси."""
         url = await self.get_stream_url(track)
         if not url:
             return None
@@ -179,10 +189,15 @@ class AsyncStreamer(AsyncStreamerInterface):
                 "SoundCloud HLS «%s» — Qt Multimedia может не открыть поток",
                 track.title,
             )
-        # С прокси YouTube плеер сам до googlevideo не дойдёт (или дойдёт с
-        # другого IP и получит 403) — поток несёт локальный прокси.
-        via_proxy = bool(youtube_proxy()) and is_youtube_url(url)
-        if via_proxy or should_proxy_stream(track, url=url):
+        # У yt-dlp и Qt разные сетевые стеки: успешно полученная ссылка ещё не
+        # означает, что Qt сможет открыть CDN напрямую. Локальный прокси также
+        # сохраняет один маршрут/IP при пользовательском YouTube-прокси.
+        youtube_via_local = (
+            (resolve_media_backend() != "vlc" or bool(youtube_proxy()))
+            and str(track.source).lower() == TrackSource.YOUTUBE
+            and is_youtube_url(url)
+        )
+        if youtube_via_local or should_proxy_stream(track, url=url):
             self._buffer_loop = get_running_loop()
             return await self._http_proxy.mount(track, url)
         return url
@@ -228,6 +243,11 @@ class AsyncStreamer(AsyncStreamerInterface):
         height: int = WALLPAPER_DEFAULT_QUALITY,
         exclude_itags: frozenset[str] | None = None,
     ) -> tuple[str | None, int]:
+        if (
+            str(track.source).lower() == TrackSource.YOUTUBE
+            and self._youtube.rate_limit_remaining() > 0
+        ):
+            return None, 0
         video_id = await self._resolve_youtube_video_id(track, finder)
         if not video_id:
             return None, 0
@@ -248,6 +268,11 @@ class AsyncStreamer(AsyncStreamerInterface):
         googlevideo идёт через локальный прокси — он берёт видео кусками,
         иначе YouTube урезает поток 480p+ ниже битрейта и фон встаёт.
         """
+        if (
+            str(track.source).lower() == TrackSource.YOUTUBE
+            and self._youtube.rate_limit_remaining() > 0
+        ):
+            return None, None, 0
         video_id = await self._resolve_youtube_video_id(track, finder)
         if not video_id:
             return None, None, 0
@@ -260,6 +285,11 @@ class AsyncStreamer(AsyncStreamerInterface):
             return url, url, duration
 
         async def refresh() -> str | None:
+            if (
+                str(track.source).lower() == TrackSource.YOUTUBE
+                and self._youtube.rate_limit_remaining() > 0
+            ):
+                return None
             self._youtube.invalidate(video_id)
             fresh, _ = await self._youtube.get_video_info(
                 video_id, height=height, exclude_itags=exclude_itags

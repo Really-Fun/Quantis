@@ -368,6 +368,17 @@ class SettingsPage(QWidget):
         about_body.addLayout(update_buttons)
         self._add_row(group, about_row)
 
+        group = self._begin_group(panel_layout, "Бета-функции")
+        row, body = self._row(
+            "Субтитры YouTube", "Оригинал и доступные переводы во вкладке «Текст»."
+        )
+        self._captions_cb = QCheckBox("Использовать субтитры YouTube")
+        self._captions_cb.setObjectName("settingsCheck")
+        self._captions_cb.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._captions_cb.toggled.connect(self._prefs.set_youtube_captions_enabled)
+        body.addWidget(self._captions_cb)
+        self._add_row(group, row)
+
         panel_layout.addStretch()
         layout.addWidget(panel)  # макс. ширина — прижат к левому краю
         layout.addStretch()
@@ -386,6 +397,7 @@ class SettingsPage(QWidget):
             self._prefs.theme_changed,
             self._prefs.wallpaper_changed,
             self._prefs.eco_changed,
+            self._prefs.youtube_captions_changed,
         ):
             signal.connect(self._sync_from_preferences)
         self._sync_from_preferences()
@@ -556,6 +568,7 @@ class SettingsPage(QWidget):
         return frame, col
 
     def _sync_from_preferences(self) -> None:
+        self._captions_cb.setChecked(self._prefs.youtube_captions_enabled)
         if not self._proxy_edit.hasFocus():
             self._proxy_edit.setText(self._prefs.youtube_proxy)
 

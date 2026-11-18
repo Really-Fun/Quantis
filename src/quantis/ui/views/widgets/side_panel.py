@@ -19,6 +19,7 @@ from PySide6.QtCore import (
 )
 from PySide6.QtGui import QColor, QPainter, QPainterPath, QPaintEvent, QPixmap
 from PySide6.QtWidgets import (
+    QComboBox,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -105,6 +106,8 @@ class SidePanel(QFrame):
     """Клик по вкладке: "queue" или "lyrics"."""
     seek_requested = Signal(int)
 
+    lyrics_language_requested = Signal(str)
+
     QUEUE_COUNT = 12
 
     def __init__(self, path_provider: PathProvider, parent: QWidget | None = None):
@@ -157,9 +160,25 @@ class SidePanel(QFrame):
         queue_col.setContentsMargins(0, 0, 0, 0)
         queue_col.setSpacing(10)
         self._pages.addWidget(queue_page)
+        lyrics_page = QWidget()
+        lyrics_col = QVBoxLayout(lyrics_page)
+        lyrics_col.setContentsMargins(0, 0, 0, 0)
+        self._language_combo = QComboBox()
+        self._language_combo.setObjectName("themeCombo")
+        self._language_combo.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._language_combo.setAccessibleName("Язык субтитров")
+        self._language_combo.setToolTip("Язык субтитров")
+        self._language_combo.activated.connect(
+            lambda index: self.lyrics_language_requested.emit(
+                self._language_combo.itemData(index)
+            )
+        )
+        self._language_combo.hide()
+        lyrics_col.addWidget(self._language_combo)
         self._lyrics = LyricsView()
         self._lyrics.seek_requested.connect(self.seek_requested.emit)
-        self._pages.addWidget(self._lyrics)
+        lyrics_col.addWidget(self._lyrics, 1)
+        self._pages.addWidget(lyrics_page)
 
         self._now_label = QLabel("Сейчас")
         self._now_label.setObjectName("sidePanelEyebrow")
@@ -283,8 +302,15 @@ class SidePanel(QFrame):
     def lyrics(self) -> LyricsView:
         return self._lyrics
 
+    def set_lyrics_languages(self, translations: dict[str, str]) -> None:
+        self._language_combo.clear()
+        self._language_combo.addItem("Оригинал", "")
+        for language, name in translations.items():
+            self._language_combo.addItem(name, language)
+        self._language_combo.setVisible(bool(translations))
+
     def tab(self) -> str:
-        return "lyrics" if self._pages.currentWidget() is self._lyrics else "queue"
+        return "lyrics" if self._pages.currentIndex() == 1 else "queue"
 
     def set_tab(self, key: str) -> None:
         self._pages.setCurrentIndex(1 if key == "lyrics" else 0)

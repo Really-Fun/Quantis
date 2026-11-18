@@ -2,7 +2,131 @@
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 from quantis.services.youtube_streamer import AsyncYoutubeStreamer, slim_youtube_info
+
+
+def test_youtube_429_stops_extract_attempts_until_cooldown_expires() -> None:
+    calls = []
+
+    class BlockedYoutubeDL:
+        def __init__(self, opts):
+            calls.append(opts)
+            self.opts = opts
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def extract_info(self, *_args, **_kwargs):
+            self.opts["logger"].warning("HTTP Error 429: Too Many Requests")
+            raise RuntimeError("Requested format is not available")
+
+    streamer = AsyncYoutubeStreamer(None)  # type: ignore[arg-type]
+    streamer._attempt_opts = lambda **_kwargs: [{"format": "audio"}]  # type: ignore[method-assign]
+    with patch("yt_dlp.YoutubeDL", BlockedYoutubeDL):
+        assert streamer.sync_stream("dQw4w9WgXcQ") == (None, 0)
+        assert len(calls) == 1
+        assert streamer.rate_limit_remaining() > 0
+        assert streamer.sync_stream("another1234") == (None, 0)
+        assert len(calls) == 1
+        streamer._rate_limit_until = 0
+        assert streamer.sync_stream("another1234") == (None, 0)
+        assert len(calls) == 2
+        assert streamer.rate_limit_remaining() > 5 * 60
+
+
+def test_youtube_video_429_arms_audio_cooldown() -> None:
+    calls = []
+
+    class BlockedYoutubeDL:
+        def __init__(self, opts):
+            calls.append(opts)
+            self.opts = opts
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def extract_info(self, *_args, **_kwargs):
+            self.opts["logger"].error("Sign in to confirm you’re not a bot")
+            raise RuntimeError("not a bot")
+
+    streamer = AsyncYoutubeStreamer(None)  # type: ignore[arg-type]
+    streamer._attempt_opts = lambda **_kwargs: [{"format": "video"}]  # type: ignore[method-assign]
+    with patch("yt_dlp.YoutubeDL", BlockedYoutubeDL):
+        assert streamer.sync_video_stream("dQw4w9WgXcQ") == (None, 0)
+    assert len(calls) == 1
+    assert streamer.rate_limit_remaining() > 0
+
+
+def test_youtube_429_allows_one_configured_cookie_attempt() -> None:
+    calls = []
+
+    class YoutubeDL:
+        def __init__(self, opts):
+            self.opts = opts
+            calls.append(opts)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def extract_info(self, *_args, **_kwargs):
+            if "cookiefile" not in self.opts:
+                self.opts["logger"].warning("HTTP Error 429: Too Many Requests")
+                raise RuntimeError("429")
+            return _INFO
+
+    streamer = AsyncYoutubeStreamer(None)  # type: ignore[arg-type]
+    streamer._attempt_opts = lambda **_kwargs: [  # type: ignore[method-assign]
+        {"format": "audio"},
+        {"format": "audio", "cookiefile": "cookies.txt"},
+    ]
+    with patch("yt_dlp.YoutubeDL", YoutubeDL):
+        url, _duration = streamer.sync_stream("dQw4w9WgXcQ")
+    assert url == "https://rr.example/audio.m4a"
+    assert len(calls) == 2
+    assert streamer.rate_limit_remaining() == 0
+
+
+def test_youtube_video_429_allows_one_configured_cookie_attempt() -> None:
+    calls = []
+
+    class YoutubeDL:
+        def __init__(self, opts):
+            self.opts = opts
+            calls.append(opts)
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return False
+
+        def extract_info(self, *_args, **_kwargs):
+            if "cookiefile" not in self.opts:
+                self.opts["logger"].warning("HTTP Error 429: Too Many Requests")
+                raise RuntimeError("429")
+            return _INFO
+
+    streamer = AsyncYoutubeStreamer(None)  # type: ignore[arg-type]
+    streamer._attempt_opts = lambda **_kwargs: [  # type: ignore[method-assign]
+        {"format": "video"},
+        {"format": "video", "cookiefile": "cookies.txt"},
+    ]
+    with patch("yt_dlp.YoutubeDL", YoutubeDL):
+        url, _duration = streamer.sync_video_stream("dQw4w9WgXcQ")
+    assert url == "https://rr.example/video-only.mp4"
+    assert len(calls) == 2
+    assert streamer.rate_limit_remaining() == 0
 
 
 def test_rejects_hls_and_dash_formats() -> None:

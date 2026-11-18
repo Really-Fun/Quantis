@@ -9,7 +9,7 @@ import random
 from abc import ABC, abstractmethod
 from asyncio import Semaphore, get_running_loop
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional, Protocol
 
@@ -26,7 +26,8 @@ from quantis.models.track import (
     strip_youtube_stats,
 )
 from quantis.providers import PathProvider
-from quantis.services.cover_validate import cover_bytes_ok, cover_file_ok
+from quantis.services.cover_storage import promote_cover, store_cover
+from quantis.services.cover_validate import cover_file_ok
 from quantis.services.track_tags import (
     TrackMeta,
     read_identity,
@@ -277,18 +278,6 @@ async def _read_http_body(response: aiohttp.ClientResponse, limit: int) -> bytes
     return data
 
 
-async def _write_cover_file(path: str, data: bytes) -> bool:
-    if not cover_bytes_ok(data):
-        return False
-    dest = Path(path)
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    tmp = dest.with_name(dest.name + ".part")
-    async with aiofiles.open(tmp, "wb") as file:
-        await file.write(data)
-    tmp.replace(dest)
-    return True
-
-
 ProgressCallback = Callable[[Track, "float | None"], None]
 """``(track, доля 0..1)``; None — сколько осталось, неизвестно."""
 
@@ -485,10 +474,9 @@ class AsyncYandexDownloader(AsyncDownloaderInterface):
         try:
             PathProvider.ensure_storage_dirs()
             track_info = await self.client.tracks(int(track.track_id))
-            dest = self.path_provider.get_cover_path(track)
             # 1000×1000: обложка идёт и артом во весь фон страницы плейлиста
-            await track_info[0].downloadCoverAsync(dest, "1000x1000")
-            if not cover_file_ok(dest):
+            data = await track_info[0].download_cover_bytes_async("1000x1000")
+            if not await asyncio.to_thread(store_cover, track, data):
                 logger.warning("Обложка Яндекса обрезана или пустая: %s", track)
         except Exception:
             logger.exception("Не удалось скачать обложку с Яндекс.Музыки: %s", track)
@@ -690,7 +678,6 @@ class AsyncYoutubeDownloader(AsyncDownloaderInterface):
         Args:
             track (YoutubeTrack): Трек с Ютуба
         """
-        cover_path = self.path_provider.get_cover_path(track)
         session = await self.get_session()
         thumbs = ("maxresdefault.jpg", "sddefault.jpg", "hqdefault.jpg")
 
@@ -704,7 +691,7 @@ class AsyncYoutubeDownloader(AsyncDownloaderInterface):
                         data = await _read_http_body(response, _MAX_COVER_BYTES)
                         if data is None:
                             continue
-                        if await _write_cover_file(cover_path, data):
+                        if await asyncio.to_thread(store_cover, track, data):
                             return
             except aiohttp.ClientError:
                 logger.exception("Ошибка при скачивании обложки для %s", track.track_id)
@@ -826,7 +813,6 @@ class AsyncSoundCloudDownloader(AsyncDownloaderInterface):
         if not cover_url or not _is_http_url(cover_url):
             return
 
-        cover_path = self.path_provider.get_cover_path(track)
         session = await self.get_session()
         async with self._semaphore:
             try:
@@ -836,7 +822,7 @@ class AsyncSoundCloudDownloader(AsyncDownloaderInterface):
                     data = await _read_http_body(response, _MAX_COVER_BYTES)
                     if data is None:
                         return
-                    await _write_cover_file(cover_path, data)
+                    await asyncio.to_thread(store_cover, track, data)
             except aiohttp.ClientError:
                 logger.exception(
                     "Ошибка при скачивании обложки SoundCloud для %s",
@@ -1019,7 +1005,9 @@ class AsyncDownloader(AsyncDownloaderInterface):
             except OSError:
                 logger.debug("Не удалось удалить битую обложку %s", cover_path)
         await self.download_cover(track)
-        return cover_file_ok(cover_path)
+        return cover_file_ok(
+            self._yandex_downloader.path_provider.get_cover_path(track)
+        )
 
     async def ensure_covers(self, tracks: list[Track], *, limit: int = 40) -> int:
         """Подгружает обложки для списка треков. Возвращает число скачанных."""
@@ -1142,7 +1130,11 @@ class AsyncDownloader(AsyncDownloaderInterface):
     async def _safe_cover(self, track: Track) -> bool:
         """ensure_cover, который не бросает: сбой обложки не ломает скачивание."""
         try:
-            return await self.ensure_cover(track)
+            # Аудио уже на диске, хотя запись в индексе появится после тегирования.
+            ok = await self.ensure_cover(replace(track, downloaded=True))
+            if ok:
+                await asyncio.to_thread(promote_cover, track)
+            return ok
         except Exception:
             logger.warning("Не удалось получить обложку: %s", track, exc_info=True)
             return False

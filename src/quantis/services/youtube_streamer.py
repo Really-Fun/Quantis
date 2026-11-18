@@ -30,6 +30,33 @@ from quantis.services.yandex_streamer import AsyncStreamerInterface
 
 logger = logging.getLogger(__name__)
 
+_RATE_LIMIT_COOLDOWN_SEC = 5 * 60
+_RATE_LIMIT_MAX_SEC = 30 * 60
+
+
+class _AttemptLogger:
+    """Запоминает ответ YouTube об ограничении, не теряя обычный лог yt-dlp."""
+
+    def __init__(self) -> None:
+        self.rate_limited = False
+
+    def _record(self, message: str) -> None:
+        lower = str(message).lower()
+        if "http error 429" in lower or "sign in to confirm you" in lower:
+            self.rate_limited = True
+
+    def debug(self, message: str) -> None:
+        self._record(message)
+        logger.debug("%s", message)
+
+    def warning(self, message: str) -> None:
+        self._record(message)
+        logger.warning("%s", message)
+
+    def error(self, message: str) -> None:
+        self._record(message)
+        logger.error("%s", message)
+
 # Ссылки googlevideo живут ~6 ч: 20 минут кэша — с большим запасом.
 _INFO_CACHE_TTL_SEC = 20 * 60.0
 _INFO_CACHE_MAX = 32
@@ -130,6 +157,8 @@ class AsyncYoutubeStreamer(AsyncStreamerInterface):
         self._id_locks: dict[str, Lock] = {}
         # Ролики, до которых не достучались по сети, — для понятной ошибки.
         self._network_failed: set[str] = set()
+        self._rate_limit_until = 0.0
+        self._rate_limit_failures = 0
         # Ссылки googlevideo привязаны к IP: после смены прокси они чужие.
         self._unsubscribe_proxy = on_proxy_changed(self.clear_cache)
 
@@ -139,6 +168,25 @@ class AsyncYoutubeStreamer(AsyncStreamerInterface):
     def failed_by_network(self, track_id: str) -> bool:
         """Последняя попытка взять поток упёрлась в сеть, а не в сам ролик."""
         return str(track_id) in self._network_failed
+
+    def rate_limit_remaining(self) -> float:
+        with self._info_lock:
+            return max(0.0, self._rate_limit_until - monotonic())
+
+    def _start_rate_limit_cooldown(self) -> None:
+        with self._info_lock:
+            duration = min(
+                _RATE_LIMIT_COOLDOWN_SEC * (2 ** self._rate_limit_failures),
+                _RATE_LIMIT_MAX_SEC,
+            )
+            self._rate_limit_failures += 1
+            self._rate_limit_until = monotonic() + duration
+        logger.warning("YouTube ограничил запросы: пауза %s с", duration)
+
+    def _clear_rate_limit_cooldown(self) -> None:
+        with self._info_lock:
+            self._rate_limit_until = 0.0
+            self._rate_limit_failures = 0
 
     def _id_lock(self, track_id: str) -> Lock:
         with self._info_lock:
@@ -154,6 +202,8 @@ class AsyncYoutubeStreamer(AsyncStreamerInterface):
         with self._info_lock:
             self._info_cache.clear()
             self._video_cache.clear()
+            self._rate_limit_until = 0.0
+            self._rate_limit_failures = 0
 
     def _cached_info(self, track_id: str) -> dict[str, Any] | None:
         return self._cached_from(self._info_cache, track_id)
@@ -489,16 +539,27 @@ class AsyncYoutubeStreamer(AsyncStreamerInterface):
         if picked and not wallpaper_source_has_video(picked):
             return picked, self._duration_ms_from_info(cached)
 
+        if self.rate_limit_remaining() > 0:
+            return None, 0
+
         url = f"https://www.youtube.com/watch?v={track_id}"
         last_exc: BaseException | None = None
         started = monotonic()
-        for opts in self._attempt_opts(video=False):
+        attempts = self._attempt_opts(video=False)
+        has_cookie_attempt = any(opts.get("cookiefile") for opts in attempts)
+        rate_limited_seen = False
+        for opts in attempts:
+            if rate_limited_seen and not opts.get("cookiefile"):
+                continue
+            attempt_logger = _AttemptLogger()
+            opts = {**opts, "logger": attempt_logger}
             try:
                 with YoutubeDL(opts) as yt:
                     info = yt.extract_info(url, download=False)
                 self._store_info(track_id, info)
                 picked = self._pick_stream_url(info, prefer_video=False)
                 if picked:
+                    self._clear_rate_limit_cooldown()
                     self._network_failed.discard(str(track_id))
                     logger.info(
                         "YouTube stream %s in %.2fs via format=%s clients=%s",
@@ -518,6 +579,14 @@ class AsyncYoutubeStreamer(AsyncStreamerInterface):
                     track_id,
                     exc_info=True,
                 )
+            if attempt_logger.rate_limited:
+                rate_limited_seen = True
+                if opts.get("cookiefile") or not has_cookie_attempt:
+                    self._start_rate_limit_cooldown()
+                    return None, 0
+        if rate_limited_seen:
+            self._start_rate_limit_cooldown()
+            return None, 0
         self._network_failed.discard(str(track_id))
         if last_exc is not None and _is_network_error(last_exc):
             # Таймаут или обрыв связи с youtube.com — не баг, трейсбек не нужен.
@@ -586,7 +655,14 @@ class AsyncYoutubeStreamer(AsyncStreamerInterface):
         url = f"https://www.youtube.com/watch?v={track_id}"
         muxed_fallback: str | None = None
         muxed_duration = 0
-        for opts in self._attempt_opts(video=True, height=height):
+        attempts = self._attempt_opts(video=True, height=height)
+        has_cookie_attempt = any(opts.get("cookiefile") for opts in attempts)
+        rate_limited_seen = False
+        for opts in attempts:
+            if rate_limited_seen and not opts.get("cookiefile"):
+                continue
+            attempt_logger = _AttemptLogger()
+            opts = {**opts, "logger": attempt_logger}
             try:
                 with YoutubeDL(opts) as yt:
                     info = yt.extract_info(url, download=False)
@@ -594,6 +670,7 @@ class AsyncYoutubeStreamer(AsyncStreamerInterface):
                 picked = pick(info, video_only=True)
                 duration = duration_of(info)
                 if picked:
+                    self._clear_rate_limit_cooldown()
                     logger.info(
                         "YouTube video %s: video-only via format=%s clients=%s",
                         track_id,
@@ -612,6 +689,12 @@ class AsyncYoutubeStreamer(AsyncStreamerInterface):
                 logger.debug(
                     "YouTube video attempt failed: %s", track_id, exc_info=True
                 )
+            if attempt_logger.rate_limited:
+                rate_limited_seen = True
+                if opts.get("cookiefile") or not has_cookie_attempt:
+                    break
+        if rate_limited_seen:
+            self._start_rate_limit_cooldown()
         if muxed_fallback:
             logger.info(
                 "YouTube video %s: только muxed, video-only нет",

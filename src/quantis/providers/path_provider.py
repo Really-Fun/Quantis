@@ -68,7 +68,7 @@ class PathProvider:
     PLAYLISTS_FOLDER: str | None = None
     _instance = None
 
-    def __new__(cls, *args, **kwargs):
+    def __new__(cls, *args: object, **kwargs: object) -> PathProvider:
         if cls._instance is None:
             cls._instance = super().__new__(cls, *args, **kwargs)
         return cls._instance
@@ -87,7 +87,12 @@ class PathProvider:
 
     @classmethod
     def ensure_storage_dirs(cls) -> None:
-        for folder in (cls.music_folder(), cls.covers_folder(), cls.playlists_folder()):
+        for folder in (
+            cls.music_folder(),
+            cls.covers_folder(),
+            cls.playlists_folder(),
+            cls.cover_cache_folder(),
+        ):
             Path(folder).mkdir(parents=True, exist_ok=True)
 
     @staticmethod
@@ -253,9 +258,32 @@ class PathProvider:
                 return str(candidate)
         return None
 
-    def get_cover_path(self, track: Track, extension: str = "jpg") -> str:
+    def permanent_cover_path(self, track: Track, extension: str = "jpg") -> Path:
         ext = self._sanitize_extension(extension)
-        return path.join(self.covers_folder(), f"{self.storage_id(track)}.{ext}")
+        return Path(self.covers_folder()) / f"{self.storage_id(track)}.{ext}"
+
+    @classmethod
+    def cover_cache_folder(cls) -> Path:
+        root = (
+            Path(cls.COVERS_FOLDER).parent / "cache"
+            if cls.COVERS_FOLDER
+            else app_paths.cache_dir()
+        )
+        return root / "covers"
+
+    def cached_cover_path(self, track: Track, extension: str = "jpg") -> Path:
+        source = self._sanitize_filename_part(str(track.source))
+        ext = self._sanitize_extension(extension)
+        return self.cover_cache_folder() / f"{source}-{self.storage_id(track)}.{ext}"
+
+    def get_cover_path(self, track: Track, extension: str = "jpg") -> str:
+        permanent = self.permanent_cover_path(track, extension)
+        if permanent.is_file():
+            return str(permanent)
+        cached = self.cached_cover_path(track, extension)
+        if track.downloaded and not cached.is_file():
+            return str(permanent)
+        return str(cached)
 
     def get_video_cache_path(
         self, track: Track, extension: str = "mp4", height: int | None = None

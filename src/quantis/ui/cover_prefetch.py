@@ -25,16 +25,17 @@ async def prefetch_track_covers(
     PathProvider.ensure_storage_dirs()
     track_list = list(tracks)[: max(0, limit)]
     missing = [
-        str(path)
-        for path in dict.fromkeys(track_cover_file(t) for t in track_list)
-        if not cover_file_ok(path)
+        track
+        for track in dict.fromkeys(track_list)
+        if not cover_file_ok(track_cover_file(track))
     ]
     if not missing:
         return []
     count = await downloader.ensure_covers(track_list, limit=limit)
     if not count:
         return []
-    return [path for path in missing if cover_file_ok(path)]
+    paths = dict.fromkeys(track_cover_file(track) for track in missing)
+    return [str(path) for path in paths if cover_file_ok(path)]
 
 
 def schedule_cover_prefetch(

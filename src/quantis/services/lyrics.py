@@ -1,13 +1,8 @@
-"""Тексты песен: Яндекс Музыка (для её треков), иначе открытая база lrclib.net.
-
-Перенос ``mobile/lyrics.py`` на асинхронный стек десктопа. Ответ — ``Lyrics``:
-строки с временем (LRC, синхронный текст) или без него. Найденное и
-«не нашлось» кладутся в кэш на диске, чтобы второй раз — и без сети — не
-спрашивать.
-"""
+"""Синхронные тексты песен из YouTube, Яндекс Музыки и LRCLIB."""
 
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import logging
@@ -42,7 +37,7 @@ _VERSION_WORDS = (
 _BRACKETS = re.compile(r"\s*[\(\[][^)\]]*[\)\]]")
 _DASH_VERSION = re.compile(rf"\s+[-–—]\s+[^-–—]*\b(?:{_VERSION_WORDS})[^-–—]*$", re.I)
 _FEAT = re.compile(r"\s+(?:feat\.?|ft\.?|featuring)\s.*$", re.I)
-_CACHE_VERSION = 2
+_CACHE_VERSION = 3
 """Записи «не нашлось» старее этой версии поиска спрашиваем заново."""
 
 
@@ -58,7 +53,8 @@ class Lyrics:
     lines: list[LyricLine] = field(default_factory=list)
     synced: bool = False
     source: str = ""
-    """«Яндекс Музыка», «LRCLIB» или "" — не нашлось."""
+    translations: dict[str, str] = field(default_factory=dict)
+    """Доступные языки субтитров YouTube, код → название."""
 
     def line_at(self, position_ms: int) -> int:
         """Индекс строки, которая звучит на ``position_ms`` (-1 — ещё ни одной)."""
@@ -118,28 +114,54 @@ def _main_artist(artist: str) -> str:
 # ------------------------------------------------------------------ cache
 
 
-def _cache_path(track: Track) -> Path:
+def _cache_path(track: Track, language: str = "") -> Path:
     folder = app_paths.cache_dir() / "lyrics"
     folder.mkdir(parents=True, exist_ok=True)
-    key = hashlib.sha1(f"{track.source}:{track.track_id}".encode()).hexdigest()
+    identity = f"{track.source}:{track.track_id}"
+    if language:
+        identity += f":caption:{language}"
+    key = hashlib.sha1(identity.encode()).hexdigest()
     return folder / f"{key}.json"
 
 
-def cached(track: Track) -> Lyrics | None:
+def cached(
+    track: Track, language: str = "", *, fallback: bool = False
+) -> Lyrics | None:
     try:
-        raw = json.loads(_cache_path(track).read_text(encoding="utf-8"))
+        raw = json.loads(_cache_path(track, language).read_text(encoding="utf-8"))
         lines = [LyricLine(int(line["t"]), str(line["text"])) for line in raw["lines"]]
-        if not lines and raw.get("v", 1) < _CACHE_VERSION:
-            return None  # промах старого поиска — новый может найти
-        return Lyrics(lines, bool(raw.get("synced")), str(raw.get("source", "")))
+        old = raw.get("v", 1) < _CACHE_VERSION
+        if old and not lines:
+            return None
+        if (
+            track.source == TrackSource.YOUTUBE
+            and not fallback
+            and (old or raw.get("retry_captions"))
+        ):
+            return None
+        return Lyrics(
+            lines,
+            bool(raw.get("synced")),
+            str(raw.get("source", "")),
+            dict(raw.get("translations", {})),
+        )
     except (OSError, ValueError, TypeError, KeyError):
         return None
 
 
-def _store(track: Track, lyrics: Lyrics) -> None:
+def _store(
+    track: Track, lyrics: Lyrics, language: str = "", *, retry_captions: bool = False
+) -> None:
     try:
-        _cache_path(track).write_text(
-            json.dumps({**asdict(lyrics), "v": _CACHE_VERSION}, ensure_ascii=False),
+        _cache_path(track, language).write_text(
+            json.dumps(
+                {
+                    **asdict(lyrics),
+                    "v": _CACHE_VERSION,
+                    "retry_captions": retry_captions,
+                },
+                ensure_ascii=False,
+            ),
             encoding="utf-8",
         )
     except OSError:
@@ -152,11 +174,38 @@ def _store(track: Track, lyrics: Lyrics) -> None:
 class LyricsService:
     """Текст трека: из кэша, иначе из сети (и в кэш)."""
 
-    async def fetch(self, track: Track) -> Lyrics:
-        found = cached(track)
+    async def fetch(
+        self, track: Track, language: str = "", *, youtube_captions: bool = False
+    ) -> Lyrics:
+        youtube = track.source == TrackSource.YOUTUBE
+        cache_key = language
+        if youtube and not youtube_captions:
+            if language:
+                return Lyrics()
+            cache_key = "lrclib-only"
+        found = cached(track, cache_key)
+        if found is None and youtube and not youtube_captions:
+            legacy = cached(track, fallback=True)
+            if legacy and legacy.source == "LRCLIB":
+                return legacy
         if found is not None:
             return found
         result: Lyrics | None = None
+        retry_captions = False
+        if youtube and youtube_captions:
+            from quantis.services.youtube_captions import fetch_captions
+
+            try:
+                result = await asyncio.to_thread(fetch_captions, track, language)
+            except Exception as exc:
+                logger.info("Субтитры YouTube недоступны: %s", type(exc).__name__)
+                retry_captions = True
+            if language:
+                if result and result.lines:
+                    _store(track, result, language)
+                return result or Lyrics()
+            if result is None:
+                result = cached(track, fallback=True)
         if str(track.source) == TrackSource.YANDEX:
             try:
                 result = await self._from_yandex(track)
@@ -170,7 +219,8 @@ class LyricsService:
                 logger.info("lrclib недоступен: %s", exc)
                 return Lyrics()
         lyrics = result or Lyrics()
-        _store(track, lyrics)
+        if lyrics.lines or not retry_captions:
+            _store(track, lyrics, cache_key, retry_captions=retry_captions)
         return lyrics
 
     async def _from_yandex(self, track: Track) -> Lyrics | None:

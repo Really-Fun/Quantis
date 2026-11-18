@@ -168,11 +168,18 @@ async def test_open_playback_yandex_uses_local_proxy() -> None:
 
 
 @pytest.mark.asyncio
-async def test_open_playback_youtube_uses_direct_url() -> None:
+async def test_open_playback_youtube_uses_local_proxy() -> None:
     streamer = AsyncStreamer()
     track = YoutubeTrack(track_id="abc123", title="T", author="A")
+    local = "http://127.0.0.1:1234/youtube/abc123"
 
     with (
+        patch.object(
+            streamer._http_proxy,
+            "mount",
+            new_callable=AsyncMock,
+            return_value=local,
+        ) as proxy_mock,
         patch.object(
             streamer._stream_buffer,
             "open",
@@ -187,7 +194,8 @@ async def test_open_playback_youtube_uses_direct_url() -> None:
     ):
         result = await streamer.open_playback(track)
 
-    assert result == "https://googlevideo.com/videoplayback"
+    assert result == local
+    proxy_mock.assert_awaited_once_with(track, "https://googlevideo.com/videoplayback")
     url_mock.assert_awaited_once_with(track)
     buffer_mock.assert_not_awaited()
     streamer.shutdown()
